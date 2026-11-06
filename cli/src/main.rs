@@ -293,6 +293,9 @@ impl Builder {
                     return self.elab_indexed(env, head, &l[1..]);
                 }
                 let f = atom(&l[0]).unwrap();
+                if f == "_" {
+                    return self.elab_bv_literal(l);
+                }
                 match f {
                     "let" => self.elab_let(env, l),
                     "!" => self.elab(env, &l[1]),
@@ -339,6 +342,31 @@ impl Builder {
                 Err(format!("unknown symbol {}", a))
             }
         }
+    }
+
+    /// `(_ bvN w)`: the decimal numeral `N` modulo `2^w`.
+    fn elab_bv_literal(&self, l: &[Sexp]) -> Result<(Term, Sort), String> {
+        let digits = match (l.len(), atom(&l[1]).and_then(|a| a.strip_prefix("bv"))) {
+            (3, Some(d)) if !d.is_empty() && d.chars().all(|c| c.is_ascii_digit()) => d,
+            _ => return Err(format!("unsupported term {:?}", l)),
+        };
+        let w = num(&l[2])?;
+        if w == 0 {
+            return Err("bit-vector width 0".into());
+        }
+        // Repeated halving of the decimal digits gives the bits, least significant first.
+        let mut ds: Vec<u32> = digits.chars().map(|c| c.to_digit(10).unwrap()).collect();
+        let mut bits = Vec::new();
+        for _ in 0..w {
+            let mut rem = 0;
+            for d in ds.iter_mut() {
+                let cur = rem * 10 + *d;
+                *d = cur / 2;
+                rem = cur % 2;
+            }
+            bits.push(rem == 1);
+        }
+        Ok((Term::Const(bits), Sort::Bv(w)))
     }
 
     fn elab_let(&mut self, env: &mut Vec<(String, Binding)>, l: &[Sexp]) -> Result<(Term, Sort), String> {

@@ -1613,6 +1613,7 @@ proof -
   note V = enc_vars_ok[OF A(2,3), simplified]
   note D = enc_defs_ok[OF A]
   note As = enc_asserts_ok[OF A]
+  note As2 = enc_asserts_ok[OF A, THEN conjunct2, THEN conjunct2, simplified]
   show ?thesis
     apply (crush_boot f: encode_def contract: encode_contract_def)
     apply (crush_base inline: len_def simp add: L cnf_of_init init_st_def addc_m_def)
@@ -1667,7 +1668,8 @@ proof -
               \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
             in wp_bounded_while_framedI\<close>)
           apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64
-              unat_word_Suc_simp antisym_conv L I As encode_m_eq)
+              unat_word_Suc_simp antisym_conv L I As As2 encode_m_eq)
+          apply (fastforce dest: As2)?
           done
         done
       done

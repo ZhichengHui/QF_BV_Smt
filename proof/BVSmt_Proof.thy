@@ -12,7 +12,7 @@ lemma fuel_bound_ge:
     \<open>\<forall>c \<in> set (snd s). length c + 2 \<le> fuel_bound p\<close>
     \<open>\<forall>w \<in> set (var_widths p). w + 2 \<le> fuel_bound p\<close>
     \<open>length (var_widths p) + 2 \<le> fuel_bound p\<close>
-  using assms by (auto simp add: fuel_bound_def Let_def intro!: Max_ge)
+  using assms by (auto intro!: fb_ge simp: fb_set_def intro: rev_image_eqI)
 
 text \<open>No assignment satisfies the CNF formula: no model satisfies the problem.\<close>
 lemma unsat_answer:
@@ -66,7 +66,7 @@ proof -
     assume wt: \<open>problem_wt p\<close>
     note w = encode_wf[OF wt e s64]
     have \<open>\<forall>ls \<in> set vs. length ls + 2 \<le> fuel_bound p\<close>
-      using w fb(4) by (auto simp add: in_set_conv_nth var_widths_def)
+      using w fb(4) by (auto simp add: in_set_conv_nth var_widths_def) (blast intro: nth_mem)
     moreover have \<open>length vs + 2 \<le> fuel_bound p\<close>
       using w fb(5) by (simp add: var_widths_def)
     ultimately show ?thesis

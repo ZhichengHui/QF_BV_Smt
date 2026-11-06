@@ -76,8 +76,9 @@ proof -
     apply (crush_boot f: solve_def contract: solve_contract_def)
     apply (crush_base specs add: encode_spec dpll_top_spec read_model_spec
         contracts add: encode_contract_def dpll_top_contract_def read_model_contract_def
-        simp add: e assms nv)
-    using dpll_pre rm_pre unsat_answer[OF _ e s64] sat_answer[OF _ e s64]
+        split: option.splits
+        simp add: e assms nv Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
+    using assms dpll_pre rm_pre unsat_answer[OF _ e s64] sat_answer[OF _ e s64]
     by (auto split: option.splits)
 qed
 

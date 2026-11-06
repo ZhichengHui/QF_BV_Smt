@@ -1532,6 +1532,9 @@ qed
 lemma cnf_of_init: \<open>make_Cnf 1 [] = cnf_of (1, [])\<close>
   by (simp add: cnf_of_def)
 
+lemma cnf_of_init_st: \<open>cnf_of init_st = cnf_of (Suc 0, [[lconst True]])\<close>
+  by (simp add: init_st_def)
+
 context BVSmt_ctx
 begin
 
@@ -1632,7 +1635,7 @@ proof -
           \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
       apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-          antisym_conv L I V)
+          antisym_conv L I V cnf_of_init_st)
       subgoal for gc gv gi i defs_ref j_ref
         apply (ucincl_discharge\<open>
           rule_tac
@@ -1672,7 +1675,9 @@ proof -
           apply (fastforce dest: As2)?
           done
         done
+      apply (simp add: cnf_of_init_st)?
       done
+    apply (simp add: cnf_of_init_st)?
     done
 qed
 

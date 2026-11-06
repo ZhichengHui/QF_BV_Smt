@@ -416,11 +416,16 @@ lemma dpll_rec_post:
      | Some a' \<Rightarrow> length a' = length x \<and> (\<forall>v<length a'. a' ! v \<noteq> None) \<and> cnf_sem (sigma_of a') cs\<close>
 proof (cases r)
   case None
-  then show ?thesis
-    using assms dpll_branch_unsat[of \<open>unat v\<close> x a cs] by simp
+  then have f: \<open>\<forall>\<sigma>. agrees (x[unat v := Some False]) \<sigma> \<longrightarrow> \<not> cnf_sem \<sigma> cs\<close>
+    using assms(5) by simp
+  have \<open>\<forall>\<sigma>. agrees a \<sigma> \<longrightarrow> \<not> cnf_sem \<sigma> cs\<close> by (rule dpll_branch_unsat[OF assms(2,3,4) f])
+  then show ?thesis using None by simp
 next
   case (Some a')
-  then show ?thesis using assms by simp
+  then have \<open>length a' = length (x[unat v := Some False]) \<and> (\<forall>v<length a'. a' ! v \<noteq> None) \<and>
+      cnf_sem (sigma_of a') cs\<close>
+    using assms(5) by simp
+  then show ?thesis using Some by simp
 qed
 
 lemma read_model_sigma:
@@ -562,8 +567,9 @@ lemma dpll_propagate_spec [crush_specs]:
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: option.splits prod.splits tnil.splits)
     apply (auto dest!: dpll_prop_step(1)[rotated 5] dpll_prop_step(2)[rotated 5] intro: dpll_nnone_fuel)
+    subgoal for r by (cases r) (auto simp: dpll_cs_ok_def)
     done
-  subgoal for r by (cases r) (auto simp: dpll_cs_ok_def)
+  apply (auto simp: dpll_cs_ok_def split: option.splits)?
   done
 
 definition dpll_find_unassigned_contract ::

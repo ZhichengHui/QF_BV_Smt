@@ -63,9 +63,10 @@ lemma unat_double2:
   assumes \<open>n < 9223372036854775808\<close>
   shows \<open>unat (2 * word_of_nat n :: 64 word) = n + n\<close>
 proof -
-  have \<open>n + n < 18446744073709551616\<close> using assms by simp
-  then have \<open>unat (word_of_nat (n + n) :: 64 word) = n + n\<close> by (rule unat_of_nat_64)
-  then show ?thesis by (simp add: mult_2)
+  have \<open>n + n < 18446744073709551616\<close> using assms by linarith
+  then have u: \<open>unat (word_of_nat (n + n) :: 64 word) = n + n\<close> by (rule unat_of_nat_64)
+  have \<open>(2 * word_of_nat n :: 64 word) = word_of_nat (n + n)\<close> by (simp only: of_nat_add mult_2)
+  then show ?thesis using u by (simp only:)
 qed
 
 subsection \<open>Folds over \<open>[0..<n]\<close>\<close>

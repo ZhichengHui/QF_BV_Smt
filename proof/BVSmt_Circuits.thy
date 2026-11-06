@@ -1131,8 +1131,6 @@ proof -
     have \<open>fst s + i < 2 ^ 64\<close> using sw that by linarith
     then show ?thesis by (rule unat_won)
   qed
-  have u: \<open>unat (word_of_nat (fst s) + word_of_nat i :: 64 word) = fst s + i\<close> if \<open>i < w\<close> for i
-    using u0[OF that] by simp
   have wf: \<open>wf_st s'\<close>
     using assms(1) unfolding wf_st_def e(1) by (auto intro: lits_lt_mono[OF _ le_add1])
   have ex: \<open>ext s s'\<close> unfolding ext_def
@@ -1146,8 +1144,9 @@ proof -
   have ll: \<open>lits_lt (fst s') r\<close> unfolding lits_lt_def
   proof
     fix l assume \<open>l \<in> set r\<close>
-    then obtain i where i: \<open>i < w\<close> \<open>l = make_Lit (word_of_nat (fst s + i)) False\<close> using e(2) by auto
-    then show \<open>unat (Lit_var l) < fst s'\<close> using u0[OF i(1)] u[OF i(1)] e(1) by simp
+    then obtain i where i: \<open>i < w\<close> \<open>l = make_Lit (word_of_nat (fst s + i)) False\<close>
+      using e(2) by (auto simp del: of_nat_add)
+    then show \<open>unat (Lit_var l) < fst s'\<close> using u0[OF i(1)] e(1) by (simp del: of_nat_add)
   qed
   have len: \<open>length r = w\<close> using e(2) by simp
   have M: \<open>\<exists>\<sigma>'. (\<forall>v < fst s. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s') \<and> map (lit_sem \<sigma>') r = bs\<close>
@@ -1163,7 +1162,7 @@ proof -
       show \<open>length (map (lit_sem ?\<sigma>') r) = length bs\<close> using bs e(2) by simp
       fix i assume \<open>i < length (map (lit_sem ?\<sigma>') r)\<close>
       then have i: \<open>i < w\<close> using e(2) by simp
-      show \<open>map (lit_sem ?\<sigma>') r ! i = bs ! i\<close> using i u[OF i] u0[OF i] by (simp add: e(2) lit_sem_def)
+      show \<open>map (lit_sem ?\<sigma>') r ! i = bs ! i\<close> using i u0[OF i] by (simp add: e(2) lit_sem_def del: of_nat_add)
     qed
     then show ?thesis using ag c by blast
   qed

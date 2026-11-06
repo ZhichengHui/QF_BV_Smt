@@ -1,0 +1,4 @@
+session "BVSmt" = "AutoCorrode" +
+  options [document = false]
+  theories
+    BVSmt_Funs

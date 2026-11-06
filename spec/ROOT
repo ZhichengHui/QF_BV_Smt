@@ -1,0 +1,4 @@
+session "BVSmt_Spec" = "BVSmt" +
+  options [document = false]
+  theories
+    BVSmt_Spec

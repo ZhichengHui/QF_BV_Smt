@@ -1117,55 +1117,85 @@ lemma fresh_vec_fst [simp]: \<open>fst (fst (fresh_vec_m s w)) = fst s + w\<clos
   by (simp add: fresh_vec_m_def)
 
 text \<open>Fresh variables can take any values.\<close>
+lemma fresh_lit_var:
+  \<open>v < 2 ^ 64 \<Longrightarrow> unat (Lit_var (make_Lit (word_of_nat v :: 64 word) b)) = v\<close>
+  by simp
+
+lemma fresh_lit_sem:
+  \<open>v < 2 ^ 64 \<Longrightarrow> lit_sem \<sigma> (make_Lit (word_of_nat v :: 64 word) False) = \<sigma> v\<close>
+  by (simp add: lit_sem_def)
+
+lemma fresh_vec_eqs:
+  assumes \<open>fresh_vec_m s w = (s', r)\<close>
+  shows \<open>s' = (fst s + w, snd s)\<close> \<open>r = map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]\<close>
+  using assms unfolding fresh_vec_m_def by (simp_all only: prod.inject)
+
+lemma fresh_vec_wf: \<open>wf_st s \<Longrightarrow> wf_st (fst s + w, snd s)\<close>
+  unfolding wf_st_def by (auto intro: lits_lt_mono[OF _ le_add1])
+
+lemma fresh_vec_ll:
+  assumes sw: \<open>fst s + w < 2 ^ 64\<close>
+  shows \<open>lits_lt (fst s + w) (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w])\<close>
+  unfolding lits_lt_def
+proof
+  fix l assume \<open>l \<in> set (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w])\<close>
+  then obtain i where i0: \<open>i \<in> {0..<w}\<close> and l: \<open>l = make_Lit (word_of_nat (fst s + i)) False\<close>
+    unfolding set_map set_upt by blast
+  have i: \<open>i < w\<close> using i0 by simp
+  have v: \<open>fst s + i < 2 ^ 64\<close> using i sw by linarith
+  have \<open>unat (Lit_var l) = fst s + i\<close> using fresh_lit_var[OF v] l by (simp only:)
+  then show \<open>unat (Lit_var l) < fst s + w\<close> using i by linarith
+qed
+
+lemma fresh_vec_model:
+  assumes sw: \<open>fst s + w < 2 ^ 64\<close> and bs: \<open>length bs = w\<close>
+    and lt: \<open>\<forall>c \<in> set cs. lits_lt (fst s) c\<close> and \<sigma>: \<open>cnf_sem \<sigma> cs\<close>
+  shows \<open>\<exists>\<sigma>'. (\<forall>v < fst s. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' cs \<and>
+           map (lit_sem \<sigma>') (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]) = bs\<close>
+proof -
+  define \<sigma>' where \<open>\<sigma>' v = (if fst s \<le> v \<and> v < fst s + w then bs ! (v - fst s) else \<sigma> v)\<close> for v
+  have ag: \<open>\<forall>v < fst s. \<sigma>' v = \<sigma> v\<close> by (simp add: \<sigma>'_def)
+  have c: \<open>cnf_sem \<sigma>' cs\<close> by (rule cnf_sem_agree[OF lt ag \<sigma>])
+  have \<open>map (lit_sem \<sigma>') (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]) = bs\<close>
+  proof (rule nth_equalityI)
+    show \<open>length (map (lit_sem \<sigma>') (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w])) =
+          length bs\<close> using bs by simp
+    fix i assume \<open>i < length (map (lit_sem \<sigma>') (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]))\<close>
+    then have i: \<open>i < w\<close> by simp
+    have v: \<open>fst s + i < 2 ^ 64\<close> using i sw by linarith
+    have \<open>map (lit_sem \<sigma>') (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]) ! i =
+          lit_sem \<sigma>' (make_Lit (word_of_nat (fst s + i)) False)\<close>
+      using i by (simp del: of_nat_add)
+    also have \<open>\<dots> = \<sigma>' (fst s + i)\<close> by (rule fresh_lit_sem[OF v])
+    also have \<open>\<dots> = bs ! i\<close> using i by (simp add: \<sigma>'_def)
+    finally show \<open>map (lit_sem \<sigma>') (map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]) ! i =
+                  bs ! i\<close> .
+  qed
+  then show ?thesis using ag c by blast
+qed
+
 lemma fresh_vec_correct:
   assumes \<open>wf_st s\<close> \<open>fresh_vec_m s w = (s', r)\<close> \<open>fst s' < 2 ^ 64\<close>
   shows \<open>wf_st s' \<and> ext s s' \<and> lits_lt (fst s') r \<and> length r = w \<and>
          (\<forall>\<sigma> bs. cnf_sem \<sigma> (snd s) \<longrightarrow> length bs = w \<longrightarrow>
             (\<exists>\<sigma>'. (\<forall>v < fst s. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s') \<and> map (lit_sem \<sigma>') r = bs))\<close>
 proof -
-  have e: \<open>s' = (fst s + w, snd s)\<close> \<open>r = map (\<lambda>i. make_Lit (word_of_nat (fst s + i)) False) [0..<w]\<close>
-    using assms(2) by (simp_all add: fresh_vec_m_def)
-  have sw: \<open>fst s + w < 2 ^ 64\<close> using assms(3) e(1) by simp
-  have u0: \<open>unat (word_of_nat (fst s + i) :: 64 word) = fst s + i\<close> if \<open>i < w\<close> for i
-  proof -
-    have \<open>fst s + i < 2 ^ 64\<close> using sw that by linarith
-    then show ?thesis by (rule unat_won)
-  qed
-  have wf: \<open>wf_st s'\<close>
-    using assms(1) unfolding wf_st_def e(1) by (auto intro: lits_lt_mono[OF _ le_add1])
-  have ex: \<open>ext s s'\<close> unfolding ext_def
+  note e = fresh_vec_eqs[OF assms(2)]
+  have sw: \<open>fst s + w < 2 ^ 64\<close> using assms(3) unfolding e(1) fst_conv .
+  have wf: \<open>wf_st s'\<close> unfolding e(1) by (rule fresh_vec_wf[OF assms(1)])
+  have ex: \<open>ext s s'\<close> unfolding ext_def e(1) fst_conv snd_conv
   proof (intro conjI allI impI)
-    show \<open>fst s \<le> fst s'\<close> using e(1) by simp
-    show \<open>\<exists>cs. snd s' = snd s @ cs\<close> using e(1) by simp
+    show \<open>fst s \<le> fst s + w\<close> by simp
+    show \<open>\<exists>cs. snd s = snd s @ cs\<close> by (rule exI[of _ \<open>[]\<close>]) simp
     fix \<sigma> assume \<open>cnf_sem \<sigma> (snd s)\<close>
-    then show \<open>\<exists>\<sigma>'. (\<forall>v<fst s. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s')\<close>
-      using e(1) by (intro exI[of _ \<sigma>]) simp
+    then show \<open>\<exists>\<sigma>'. (\<forall>v<fst s. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s)\<close> by blast
   qed
-  have ll: \<open>lits_lt (fst s') r\<close> unfolding lits_lt_def
-  proof
-    fix l assume \<open>l \<in> set r\<close>
-    then obtain i where i: \<open>i < w\<close> \<open>l = make_Lit (word_of_nat (fst s + i)) False\<close>
-      using e(2) by (auto simp del: of_nat_add)
-    then show \<open>unat (Lit_var l) < fst s'\<close> using u0[OF i(1)] e(1) by (simp del: of_nat_add)
-  qed
-  have len: \<open>length r = w\<close> using e(2) by simp
+  have ll: \<open>lits_lt (fst s') r\<close> unfolding e fst_conv by (rule fresh_vec_ll[OF sw])
+  have len: \<open>length r = w\<close> unfolding e(2) by simp
   have M: \<open>\<exists>\<sigma>'. (\<forall>v < fst s. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s') \<and> map (lit_sem \<sigma>') r = bs\<close>
-    if \<sigma>: \<open>cnf_sem \<sigma> (snd s)\<close> and bs: \<open>length bs = w\<close> for \<sigma> bs
-  proof -
-    let ?\<sigma>' = \<open>\<lambda>v. if fst s \<le> v \<and> v < fst s + w then bs ! (v - fst s) else \<sigma> v\<close>
-    have ag: \<open>\<forall>v < fst s. ?\<sigma>' v = \<sigma> v\<close> by simp
-    have c0: \<open>cnf_sem ?\<sigma>' (snd s)\<close>
-      by (rule cnf_sem_agree[OF _ ag \<sigma>]) (use assms(1) in \<open>simp add: wf_st_def\<close>)
-    have c: \<open>cnf_sem ?\<sigma>' (snd s')\<close> using c0 e(1) by simp
-    have \<open>map (lit_sem ?\<sigma>') r = bs\<close>
-    proof (rule nth_equalityI)
-      show \<open>length (map (lit_sem ?\<sigma>') r) = length bs\<close> using bs e(2) by simp
-      fix i assume \<open>i < length (map (lit_sem ?\<sigma>') r)\<close>
-      then have i: \<open>i < w\<close> using e(2) by simp
-      show \<open>map (lit_sem ?\<sigma>') r ! i = bs ! i\<close> using i u0[OF i] by (simp add: e(2) lit_sem_def del: of_nat_add)
-    qed
-    then show ?thesis using ag c by blast
-  qed
+    if \<open>cnf_sem \<sigma> (snd s)\<close> \<open>length bs = w\<close> for \<sigma> bs
+    unfolding e snd_conv
+    by (rule fresh_vec_model[OF sw that(2) _ that(1)]) (use assms(1) in \<open>simp add: wf_st_def\<close>)
   show ?thesis using wf ex ll len M by blast
 qed
 

@@ -21,8 +21,11 @@ lemma dpll_unat_Suc:
   fixes x :: \<open>64 word\<close>
   assumes \<open>unat x < 18446744073709551615\<close>
   shows \<open>unat (x + 1) = Suc (unat x)\<close>
-  using assms by (metis Suc_eq_plus1 add.commute unatSuc2 unat_minus_one_word word_less_nat_alt
-      unsigned_less linorder_neq_iff word_of_nat_less)
+proof -
+  have \<open>unat x + unat (1 :: 64 word) < 2 ^ LENGTH(64)\<close> using assms by simp
+  then have \<open>unat (x + 1) = unat x + unat (1 :: 64 word)\<close> using unat_add_lem by blast
+  then show ?thesis by simp
+qed
 
 lemma dpll_nnone_le: \<open>dpll_nnone a \<le> length a\<close>
   by (simp add: dpll_nnone_def)
@@ -66,21 +69,108 @@ lemma dpll_status_Sat:
 
 lemma dpll_status_Conflict:
   \<open>status_m a ls u op = Status_Conflict \<Longrightarrow> u = None \<and> \<not> op \<and> (\<forall>l \<in> set ls. lit_value_m a l = Some False)\<close>
-  by (induction a ls u op rule: status_m.induct) (auto split: option.splits bool.splits if_splits)
+proof (induction ls arbitrary: u op)
+  case Nil
+  then show ?case by (cases u; cases op) simp_all
+next
+  case (Cons x xs)
+  consider (N) \<open>lit_value_m a x = None\<close> | (T) \<open>lit_value_m a x = Some True\<close>
+    | (F) \<open>lit_value_m a x = Some False\<close>
+    by (cases \<open>lit_value_m a x\<close>) auto
+  then show ?case
+  proof cases
+    case N
+    show ?thesis
+    proof (cases u)
+      case None
+      then have \<open>status_m a xs (Some x) op = Status_Conflict\<close> using Cons.prems N by simp
+      then show ?thesis using Cons.IH[of \<open>Some x\<close> op] by simp
+    next
+      case (Some y)
+      then have \<open>status_m a xs u True = Status_Conflict\<close> using Cons.prems N by simp
+      then show ?thesis using Cons.IH[of u True] by simp
+    qed
+  next
+    case T
+    then show ?thesis using Cons.prems by simp
+  next
+    case F
+    then have \<open>status_m a xs u op = Status_Conflict\<close> using Cons.prems by simp
+    then show ?thesis using Cons.IH[of u op] F by simp
+  qed
+qed
 
 lemma dpll_status_opT:
   \<open>status_m a ls u True \<noteq> Status_Conflict \<and> status_m a ls u True \<noteq> Status_Unit l\<close>
-  by (induction ls arbitrary: u) (auto split: option.splits bool.splits)
+proof (induction ls arbitrary: u)
+  case Nil
+  show ?case by (cases u) simp_all
+next
+  case (Cons x xs)
+  consider (N) \<open>lit_value_m a x = None\<close> | (T) \<open>lit_value_m a x = Some True\<close>
+    | (F) \<open>lit_value_m a x = Some False\<close>
+    by (cases \<open>lit_value_m a x\<close>) auto
+  then show ?case using Cons.IH by cases (cases u; simp)+
+qed
 
 lemma dpll_status_Unit:
   \<open>status_m a ls u op = Status_Unit l \<Longrightarrow>
      (\<forall>l' \<in> set ls. lit_value_m a l' = Some False \<or> (u = None \<and> l' = l)) \<and>
      (u = None \<longrightarrow> l \<in> set ls \<and> lit_value_m a l = None) \<and> (u \<noteq> None \<longrightarrow> u = Some l)\<close>
-  by (induction a ls u op rule: status_m.induct) (auto simp: dpll_status_opT split: option.splits bool.splits if_splits)
+proof (induction ls arbitrary: u op)
+  case Nil
+  then show ?case by (cases u; cases op) simp_all
+next
+  case (Cons x xs)
+  consider (N) \<open>lit_value_m a x = None\<close> | (T) \<open>lit_value_m a x = Some True\<close>
+    | (F) \<open>lit_value_m a x = Some False\<close>
+    by (cases \<open>lit_value_m a x\<close>) auto
+  then show ?case
+  proof cases
+    case N
+    show ?thesis
+    proof (cases u)
+      case None
+      then have \<open>status_m a xs (Some x) op = Status_Unit l\<close> using Cons.prems N by simp
+      then show ?thesis using Cons.IH[of \<open>Some x\<close> op] N None by auto
+    next
+      case (Some y)
+      then have \<open>status_m a xs u True = Status_Unit l\<close> using Cons.prems N by simp
+      then show ?thesis using dpll_status_opT[of a xs u l] by simp
+    qed
+  next
+    case T
+    then show ?thesis using Cons.prems by simp
+  next
+    case F
+    then have \<open>status_m a xs u op = Status_Unit l\<close> using Cons.prems by simp
+    then show ?thesis using Cons.IH[of u op] F by auto
+  qed
+qed
 
 lemma dpll_status_Open:
   \<open>status_m a ls u op = Status_Open \<Longrightarrow> op \<or> (\<exists>l \<in> set ls. lit_value_m a l = None)\<close>
-  by (induction a ls u op rule: status_m.induct) (auto split: option.splits bool.splits if_splits)
+proof (induction ls arbitrary: u op)
+  case Nil
+  then show ?case by (cases u; cases op) simp_all
+next
+  case (Cons x xs)
+  consider (N) \<open>lit_value_m a x = None\<close> | (T) \<open>lit_value_m a x = Some True\<close>
+    | (F) \<open>lit_value_m a x = Some False\<close>
+    by (cases \<open>lit_value_m a x\<close>) auto
+  then show ?case
+  proof cases
+    case N
+    then show ?thesis by auto
+  next
+    case T
+    then show ?thesis using Cons.prems by simp
+  next
+    case F
+    then have \<open>status_m a xs u op = Status_Open\<close> using Cons.prems by simp
+    then show ?thesis using Cons.IH[of u op] by auto
+  qed
+qed
 
 lemma dpll_status_Unit_var:
   \<open>status_m a c None False = Status_Unit l \<Longrightarrow> lits_lt n c \<Longrightarrow> unat (Lit_var l) < n\<close>
@@ -162,19 +252,36 @@ next
   show ?case
   proof (cases \<open>status_m a c None False\<close>)
     case Status_Conflict
-    then have \<open>\<forall>l \<in> set c. lit_value_m a l = Some False\<close>
+    then have allF: \<open>\<forall>l \<in> set c. lit_value_m a l = Some False\<close>
       using dpll_status_Conflict by blast
-    then have False
-      using sat wf(1) dpll_lit_value_sem[OF Cons.prems(3)] by (fastforce simp: lits_lt_def)
-    then show ?thesis ..
+    obtain l' where l': \<open>l' \<in> set c\<close> \<open>lit_sem \<sigma> l'\<close> using sat by blast
+    have \<open>unat (Lit_var l') < length a\<close> using wf(1) l'(1) by (simp add: lits_lt_def)
+    moreover have \<open>lit_value_m a l' = Some False\<close> using allF l'(1) by blast
+    ultimately have \<open>lit_sem \<sigma> l' = False\<close> by (rule dpll_lit_value_sem[OF Cons.prems(3)])
+    then show ?thesis using l'(2) by simp
   next
     case (Status_Unit l)
-    have \<open>agrees (a[unat (Lit_var l) := Some (\<not> Lit_neg l)]) \<sigma>\<close>
+    let ?a1 = \<open>a[unat (Lit_var l) := Some (\<not> Lit_neg l)]\<close>
+    have ag: \<open>agrees ?a1 \<sigma>\<close>
       using dpll_unit_assign[OF Status_Unit Cons.prems(3) wf(1) sat] .
-    then show ?thesis
-      using Cons.IH[of \<open>a[unat (Lit_var l) := Some (\<not> Lit_neg l)]\<close> True] wf(2) Cons.prems(2,4) Status_Unit
-      by simp
-  qed (use Cons.IH[of a ch] wf(2) Cons.prems in simp_all)
+    have wf1: \<open>dpll_wf (length ?a1) cs\<close> using wf(2) by simp
+    have sub: \<open>set cs \<subseteq> set cs0\<close> using Cons.prems(2) by simp
+    have \<open>case pass_m cs ?a1 True of None \<Rightarrow> False | Some (a', ch') \<Rightarrow> agrees a' \<sigma>\<close>
+      by (rule Cons.IH[OF wf1 sub ag Cons.prems(4)])
+    then show ?thesis using Status_Unit by simp
+  next
+    case Status_Satisfied
+    have sub: \<open>set cs \<subseteq> set cs0\<close> using Cons.prems(2) by simp
+    have \<open>case pass_m cs a ch of None \<Rightarrow> False | Some (a', ch') \<Rightarrow> agrees a' \<sigma>\<close>
+      by (rule Cons.IH[OF wf(2) sub Cons.prems(3,4)])
+    then show ?thesis using Status_Satisfied by simp
+  next
+    case Status_Open
+    have sub: \<open>set cs \<subseteq> set cs0\<close> using Cons.prems(2) by simp
+    have \<open>case pass_m cs a ch of None \<Rightarrow> False | Some (a', ch') \<Rightarrow> agrees a' \<sigma>\<close>
+      by (rule Cons.IH[OF wf(2) sub Cons.prems(3,4)])
+    then show ?thesis using Status_Open by simp
+  qed
 qed
 
 lemma dpll_pass_shape:
@@ -306,7 +413,7 @@ lemma dpll_rec_post:
      | Some a' \<Rightarrow> length a' = length (x[unat v := Some False]) \<and> (\<forall>v<length a'. a' ! v \<noteq> None) \<and>
          cnf_sem (sigma_of a') cs\<close>
   shows \<open>case r of None \<Rightarrow> \<forall>\<sigma>. agrees a \<sigma> \<longrightarrow> \<not> cnf_sem \<sigma> cs
-     | Some a' \<Rightarrow> length a' = length a \<and> (\<forall>v<length a'. a' ! v \<noteq> None) \<and> cnf_sem (sigma_of a') cs\<close>
+     | Some a' \<Rightarrow> length a' = length x \<and> (\<forall>v<length a'. a' ! v \<noteq> None) \<and> cnf_sem (sigma_of a') cs\<close>
 proof (cases r)
   case None
   then show ?thesis
@@ -456,7 +563,7 @@ lemma dpll_propagate_spec [crush_specs]:
     apply (crush_base wp split: option.splits prod.splits tnil.splits)
     apply (auto dest!: dpll_prop_step(1)[rotated 5] dpll_prop_step(2)[rotated 5] intro: dpll_nnone_fuel)
     done
-  apply (auto simp: dpll_cs_ok_def split: option.splits)
+  subgoal for r by (cases r) (auto simp: dpll_cs_ok_def)
   done
 
 definition dpll_find_unassigned_contract ::

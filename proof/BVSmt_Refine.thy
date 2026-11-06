@@ -8,8 +8,11 @@ lemma unat_word_Suc_simp:
   fixes x :: \<open>64 word\<close>
   assumes \<open>unat x < 18446744073709551615\<close>
   shows \<open>unat (x + 1) = Suc (unat x)\<close>
-  using assms by (metis Suc_eq_plus1 add.commute unatSuc2 unat_minus_one_word word_less_nat_alt
-      unsigned_less linorder_neq_iff word_of_nat_less)
+proof -
+  have \<open>unat x + unat (1 :: 64 word) < 2 ^ LENGTH(64)\<close> using assms by simp
+  then have \<open>unat (x + 1) = unat x + unat (1 :: 64 word)\<close> using unat_add_lem by blast
+  then show ?thesis by simp
+qed
 
 lemma st_of_cnf_of [simp]:
   \<open>fst s < 2 ^ 64 \<Longrightarrow> st_of (cnf_of s) = s\<close>

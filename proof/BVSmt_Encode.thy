@@ -1,6 +1,13 @@
 theory BVSmt_Encode
-  imports BVSmt_Circuits_Iface
+  imports BVSmt_Circuits
 begin
+
+text \<open>The proofs below were written against the statements of \<^verbatim>\<open>BVSmt_Circuits\<close> alone;
+  its simplification rules change the shape of their goals, so they are not used here.\<close>
+declare lits_lt_Nil lits_lt_Cons lits_lt_append Lit_var_lconst Lit_neg_lconst Lit_var_lneg
+   Lit_neg_lneg lit_sem_lneg cnf_sem_Nil cnf_sem_Cons cnf_sem_append unat_won val_Nil
+   bits_nat_replicate_False and_fst xor_fst ite_fst or_fst bitw_fst add_step_fst eq_step_fst
+   fresh_vec_fst [simp del]
 
 section \<open>Correctness of the encoding\<close>
 
@@ -50,57 +57,88 @@ lemma bitwise_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (b
 lemma add_step_mono: \<open>n \<le> fst (fst x) \<Longrightarrow> n \<le> fst (fst (add_step a b x i))\<close>
   by (simp add: add_step_def split_def Let_def xor_m_mono ite_m_mono)
 
-lemma add_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (add_m s a b c))\<close>
+lemma add_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (add_m s a b c))\<close>
   unfolding add_m_def
   by (rule foldl_le) (simp_all add: add_step_mono)
 
-lemma partial_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (partial_m s a bi i))\<close>
+lemma partial_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (partial_m s a bi i))\<close>
   unfolding partial_m_def
   by (rule foldl_le) (simp_all add: split_def Let_def and_m_mono split: if_split)
 
 lemma mul_step_mono: \<open>n \<le> fst (fst x) \<Longrightarrow> n \<le> fst (fst (mul_step a b x i))\<close>
-  by (simp add: mul_step_def split_def Let_def partial_m_mono add_m_mono)
+  by (simp add: mul_step_def split_def Let_def partial_m_mono_le add_m_mono_le)
 
-lemma mul_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (mul_m s a b))\<close>
+lemma mul_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (mul_m s a b))\<close>
   unfolding mul_m_def
   by (rule foldl_le) (simp_all add: mul_step_mono)
 
 lemma eq_step_mono: \<open>n \<le> fst (fst x) \<Longrightarrow> n \<le> fst (fst (eq_step a b x i))\<close>
   by (simp add: eq_step_def split_def Let_def xor_m_mono and_m_mono)
 
-lemma eq_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (eq_m s a b))\<close>
+lemma eq_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (eq_m s a b))\<close>
   unfolding eq_m_def
   by (rule foldl_le) (simp_all add: eq_step_mono)
 
-lemma ult_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (ult_m s a b))\<close>
-  by (simp add: ult_m_def split_def Let_def add_m_mono)
+lemma ult_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (ult_m s a b))\<close>
+  by (simp add: ult_m_def split_def Let_def add_m_mono_le)
 
-lemma ite_vec_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (ite_vec_m s c a b))\<close>
+lemma ite_vec_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (ite_vec_m s c a b))\<close>
   unfolding ite_vec_m_def
   by (rule foldl_le) (simp_all add: split_def Let_def ite_m_mono)
 
 lemma shift_step_mono: \<open>n \<le> fst (fst x) \<Longrightarrow> n \<le> fst (fst (shift_step a b left x k))\<close>
-  by (simp add: shift_step_def split_def Let_def eq_m_mono ite_vec_m_mono)
+  by (simp add: shift_step_def split_def Let_def eq_m_mono_le ite_vec_m_mono_le)
 
 lemma shift_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (shift_m s a b left))\<close>
   unfolding shift_m_def
   by (rule foldl_le) (simp_all add: shift_step_mono)
 
 lemma divrem_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (divrem_m s a b))\<close>
-  by (simp add: divrem_m_def split_def Let_def fresh_vec_m_mono eq_m_mono and_m_mono mul_m_mono
-      add_m_mono ult_m_mono ite_m_mono)
+proof -
+  assume n0: \<open>n \<le> fst s\<close>
+  define w where \<open>w = length a\<close>
+  obtain s1 q1 where 1: \<open>fresh_vec_m s w = (s1, q1)\<close> by (cases \<open>fresh_vec_m s w\<close>)
+  obtain s2 r1 where 2: \<open>fresh_vec_m s1 w = (s2, r1)\<close> by (cases \<open>fresh_vec_m s1 w\<close>)
+  obtain s3 bz where 3: \<open>eq_m s2 b (replicate w (lconst False)) = (s3, bz)\<close>
+    by (cases \<open>eq_m s2 b (replicate w (lconst False))\<close>)
+  obtain s4 qo where 4: \<open>eq_m s3 q1 (replicate w (lconst True)) = (s4, qo)\<close>
+    by (cases \<open>eq_m s3 q1 (replicate w (lconst True))\<close>)
+  obtain s5 ra where 5: \<open>eq_m s4 r1 a = (s5, ra)\<close> by (cases \<open>eq_m s4 r1 a\<close>)
+  obtain s6 cz where 6: \<open>and_m s5 qo ra = (s6, cz)\<close> by (cases \<open>and_m s5 qo ra\<close>)
+  obtain s7 pr where 7: \<open>mul_m s6 (zext_m q1 (w + w)) (zext_m b (w + w)) = (s7, pr)\<close>
+    by (cases \<open>mul_m s6 (zext_m q1 (w + w)) (zext_m b (w + w))\<close>)
+  obtain s8 sm c where 8: \<open>add_m s7 pr (zext_m r1 (w + w)) (lconst False) = (s8, sm, c)\<close>
+    by (metis prod_cases3)
+  obtain s9 sa where 9: \<open>eq_m s8 sm (zext_m a (w + w)) = (s9, sa)\<close> by (cases \<open>eq_m s8 sm (zext_m a (w + w))\<close>)
+  obtain s10 rl where 10: \<open>ult_m s9 r1 b = (s10, rl)\<close> by (cases \<open>ult_m s9 r1 b\<close>)
+  obtain s11 cn where 11: \<open>and_m s10 sa rl = (s11, cn)\<close> by (cases \<open>and_m s10 sa rl\<close>)
+  obtain s12 ok where 12: \<open>ite_m s11 bz cz cn = (s12, ok)\<close> by (cases \<open>ite_m s11 bz cz cn\<close>)
+  have n1: \<open>n \<le> fst s1\<close> using fresh_vec_m_mono[OF n0, of w] 1 by simp
+  have n2: \<open>n \<le> fst s2\<close> using fresh_vec_m_mono[OF n1, of w] 2 by simp
+  have n3: \<open>n \<le> fst s3\<close> using eq_m_mono_le[OF n2, of b \<open>replicate w (lconst False)\<close>] 3 by simp
+  have n4: \<open>n \<le> fst s4\<close> using eq_m_mono_le[OF n3, of q1 \<open>replicate w (lconst True)\<close>] 4 by simp
+  have n5: \<open>n \<le> fst s5\<close> using eq_m_mono_le[OF n4, of r1 a] 5 by simp
+  have n6: \<open>n \<le> fst s6\<close> using and_m_mono[OF n5, of qo ra] 6 by simp
+  have n7: \<open>n \<le> fst s7\<close> using mul_m_mono_le[OF n6, of \<open>zext_m q1 (w + w)\<close> \<open>zext_m b (w + w)\<close>] 7 by simp
+  have n8: \<open>n \<le> fst s8\<close>
+    using add_m_mono_le[OF n7, of pr \<open>zext_m r1 (w + w)\<close> \<open>lconst False\<close>] 8 by simp
+  have n9: \<open>n \<le> fst s9\<close> using eq_m_mono_le[OF n8, of sm \<open>zext_m a (w + w)\<close>] 9 by simp
+  have n10: \<open>n \<le> fst s10\<close> using ult_m_mono_le[OF n9, of r1 b] 10 by simp
+  have n11: \<open>n \<le> fst s11\<close> using and_m_mono[OF n10, of sa rl] 11 by simp
+  have n12: \<open>n \<le> fst s12\<close> using ite_m_mono[OF n11, of bz cz cn] 12 by simp
+  have \<open>fst (fst (divrem_m s a b)) = fst s12\<close>
+    using 1 2 3 4 5 6 7 8 9 10 11 12 by (simp add: divrem_m_def w_def[symmetric] Let_def)
+  then show ?thesis using n12 by simp
+qed
 
 lemma blast_bin_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (blast_bin_m s op a b))\<close>
-  by (cases op) (simp_all add: blast_bin_m_def split_def Let_def bitwise_m_mono add_m_mono
-      mul_m_mono divrem_m_mono shift_m_mono eq_m_mono ult_m_mono)
+  by (cases op) (simp_all add: blast_bin_m_def split_def Let_def bitwise_m_mono add_m_mono_le
+      mul_m_mono_le divrem_m_mono shift_m_mono eq_m_mono_le ult_m_mono_le)
 
 lemma blast_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (blast_m vs dl s t))\<close>
-  by (induction t arbitrary: n s) (simp_all add: split_def Let_def blast_bin_m_mono ite_vec_m_mono)
+  by (induction t arbitrary: n s) (simp_all add: split_def Let_def blast_bin_m_mono ite_vec_m_mono_le)
 
 subsection \<open>Auxiliary facts\<close>
-
-lemma ext_fst: \<open>ext s s' \<Longrightarrow> fst s \<le> fst s'\<close>
-  by (simp add: ext_def)
 
 definition env_ok :: \<open>nat \<Rightarrow> nat list \<Rightarrow> Lit list list \<Rightarrow> bool\<close> where
   \<open>env_ok n ws vs \<equiv> length vs = length ws \<and> (\<forall>i < length ws. length (vs ! i) = ws ! i) \<and>
@@ -112,19 +150,19 @@ lemma env_ok_mono: \<open>env_ok n ws vs \<Longrightarrow> n \<le> m \<Longright
 lemma env_ok_snoc: \<open>env_ok n ws vs \<Longrightarrow> lits_lt n l \<Longrightarrow> env_ok n (ws @ [length l]) (vs @ [l])\<close>
   unfolding env_ok_def by (auto simp: nth_append less_Suc_eq)
 
-lemma val_single: \<open>length l = 1 \<Longrightarrow> val \<sigma> l = (if lit_sem \<sigma> (l ! 0) then 1 else 0)\<close>
+lemma val_single_enc: \<open>length l = 1 \<Longrightarrow> val \<sigma> l = (if lit_sem \<sigma> (l ! 0) then 1 else 0)\<close>
   by (cases l) (auto simp: val_def)
 
 lemma map_lit_agree:
   \<open>lits_lt n l \<Longrightarrow> \<forall>v < n. \<sigma>' v = \<sigma> v \<Longrightarrow> map (lit_sem \<sigma>') l = map (lit_sem \<sigma>) l\<close>
   by (rule map_cong) (auto simp: lits_lt_def lit_sem_def)
 
-lemma val_agree: \<open>lits_lt n l \<Longrightarrow> \<forall>v < n. \<sigma>' v = \<sigma> v \<Longrightarrow> val \<sigma>' l = val \<sigma> l\<close>
+lemma val_agree_enc: \<open>lits_lt n l \<Longrightarrow> \<forall>v < n. \<sigma>' v = \<sigma> v \<Longrightarrow> val \<sigma>' l = val \<sigma> l\<close>
   unfolding val_def using map_lit_agree by metis
 
 lemma map_val_agree:
   \<open>\<forall>l \<in> set L. lits_lt n l \<Longrightarrow> \<forall>v < n. \<sigma>' v = \<sigma> v \<Longrightarrow> map (val \<sigma>') L = map (val \<sigma>) L\<close>
-  by (rule map_cong) (auto intro: val_agree)
+  by (rule map_cong) (auto intro: val_agree_enc)
 
 lemma map_map_lit_agree:
   \<open>\<forall>l \<in> set L. lits_lt n l \<Longrightarrow> \<forall>v < n. \<sigma>' v = \<sigma> v \<Longrightarrow>
@@ -135,7 +173,7 @@ lemma map_map_lit_agree:
 lemma map_val_bits: \<open>map (val \<sigma>) L = map bits_nat (map (map (lit_sem \<sigma>)) L)\<close>
   by (simp add: val_def)
 
-lemma cnf_sem_append: \<open>cnf_sem \<sigma> (a @ b) = (cnf_sem \<sigma> a \<and> cnf_sem \<sigma> b)\<close>
+lemma cnf_sem_append_enc: \<open>cnf_sem \<sigma> (a @ b) = (cnf_sem \<sigma> a \<and> cnf_sem \<sigma> b)\<close>
   by (auto simp: cnf_sem_def)
 
 lemma cnf_sem_unit: \<open>cnf_sem \<sigma> [[x]] = lit_sem \<sigma> x\<close>
@@ -251,7 +289,7 @@ next
   obtain s2 la where B: \<open>blast_m vs dl s1 a = (s2, la)\<close> by (cases \<open>blast_m vs dl s1 a\<close>)
   obtain s3 lb where C: \<open>blast_m vs dl s2 b = (s3, lb)\<close> by (cases \<open>blast_m vs dl s2 b\<close>)
   have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using Term_Ite.prems(5) A B C by simp
-  have le3: \<open>fst s3 \<le> fst s'\<close> using ite_vec_m_mono[of \<open>fst s3\<close> s3 \<open>lc ! 0\<close> la lb] D by simp
+  have le3: \<open>fst s3 \<le> fst s'\<close> using ite_vec_m_mono_le[of \<open>fst s3\<close> s3 \<open>lc ! 0\<close> la lb] D by simp
   have le2: \<open>fst s2 \<le> fst s3\<close> using blast_m_mono[of \<open>fst s2\<close> s2 vs dl b] C by simp
   have le1: \<open>fst s1 \<le> fst s2\<close> using blast_m_mono[of \<open>fst s1\<close> s1 vs dl a] B by simp
   have wc: \<open>wt ws ds c\<close> and wa: \<open>wt ws ds a\<close> and wb: \<open>wt ws ds b\<close>
@@ -288,7 +326,7 @@ next
     have S3: \<open>cnf_sem \<sigma> (snd s3)\<close> using ext_cnf_sem[OF e4 S] .
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using ext_cnf_sem[OF e3 S3] .
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF e2 S2] .
-    have vc: \<open>val \<sigma> lc = (if lit_sem \<sigma> (lc ! 0) then 1 else 0)\<close> using val_single[OF lc1] .
+    have vc: \<open>val \<sigma> lc = (if lit_sem \<sigma> (lc ! 0) then 1 else 0)\<close> using val_single_enc[OF lc1] .
     show \<open>val \<sigma> ls = eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (Term_Ite c a b)\<close>
       using IV IA IB IC S S1 S2 S3 vc by auto
   qed
@@ -444,13 +482,13 @@ next
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s)\<close>
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> and U: \<open>lit_sem \<sigma> (ls ! 0)\<close>
-      using S E by (simp_all add: cnf_sem_append cnf_sem_unit)
+      using S E by (simp_all add: cnf_sem_append_enc cnf_sem_unit)
     have Sp: \<open>cnf_sem \<sigma> (snd sp)\<close> using ext_cnf_sem[OF e1 S1] .
     show \<open>cnf_sem \<sigma> (snd s0)\<close> using IH Sp by blast
   next
     fix \<sigma> j assume S: \<open>cnf_sem \<sigma> (snd s)\<close> and j: \<open>j < Suc k\<close>
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> and U: \<open>lit_sem \<sigma> (ls ! 0)\<close>
-      using S E by (simp_all add: cnf_sem_append cnf_sem_unit)
+      using S E by (simp_all add: cnf_sem_append_enc cnf_sem_unit)
     have Sp: \<open>cnf_sem \<sigma> (snd sp)\<close> using ext_cnf_sem[OF e1 S1] .
     show \<open>eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1\<close>
     proof (cases \<open>j < k\<close>)
@@ -459,7 +497,7 @@ next
     next
       case False
       then have \<open>j = k\<close> using j by simp
-      then show ?thesis using BC S1 U val_single[OF l1, of \<sigma>] by simp
+      then show ?thesis using BC S1 U val_single_enc[OF l1, of \<sigma>] by simp
     qed
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s0)\<close>
@@ -478,9 +516,9 @@ next
       show ?thesis by (simp only: m1 m2)
     qed
     also have \<open>\<dots> = 1\<close> using V by simp
-    finally have \<open>lit_sem \<sigma>2 (ls ! 0)\<close> using val_single[OF l1, of \<sigma>2]
+    finally have \<open>lit_sem \<sigma>2 (ls ! 0)\<close> using val_single_enc[OF l1, of \<sigma>2]
       by (cases \<open>lit_sem \<sigma>2 (ls ! 0)\<close>) simp_all
-    then have \<open>cnf_sem \<sigma>2 (snd s)\<close> using T2(2) E by (simp add: cnf_sem_append cnf_sem_unit)
+    then have \<open>cnf_sem \<sigma>2 (snd s)\<close> using T2(2) E by (simp add: cnf_sem_append_enc cnf_sem_unit)
     then show \<open>\<exists>\<sigma>'. (\<forall>v < fst s0. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s)\<close> using ag by blast
   qed
 qed

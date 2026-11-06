@@ -179,6 +179,11 @@ definition blast_bin_m :: \<open>st \<Rightarrow> BinOp \<Rightarrow> Lit list \
       | BinOp_Eq \<Rightarrow> (let (s1, x) = eq_m s a b in (s1, [x]))
       | BinOp_Ult \<Rightarrow> (let (s1, x) = ult_m s a b in (s1, [x])))\<close>
 
+text \<open>The width of the result of a binary operator on operands of widths \<open>wa\<close>, \<open>wb\<close>.\<close>
+definition bin_width :: \<open>BinOp \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>bin_width op wa wb \<equiv>
+     (case op of BinOp_Concat \<Rightarrow> wa + wb | BinOp_Eq \<Rightarrow> 1 | BinOp_Ult \<Rightarrow> 1 | _ \<Rightarrow> wa)\<close>
+
 text \<open>\<^verbatim>\<open>blast\<close>, given the literals of the variables and of the definitions.\<close>
 primrec blast_m :: \<open>Lit list list \<Rightarrow> Lit list list \<Rightarrow> st \<Rightarrow> Term \<Rightarrow> st \<times> Lit list\<close> where
   \<open>blast_m vs dl s (Term_Const bs) = (s, const_m bs)\<close>
@@ -304,7 +309,7 @@ primrec subterms :: \<open>Term \<Rightarrow> Term list\<close> where
 text \<open>A bound on the iterations of every loop that blasting \<open>t\<close> runs (each loop runs over at
   most twice the width of a subterm) and on the depth of the recursion.\<close>
 definition tbound :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
-  \<open>tbound ws ds t \<equiv> max (size t) (Max (set (map (\<lambda>u. 2 * width ws ds u + 2) (subterms t))))\<close>
+  \<open>tbound ws ds t \<equiv> max (Suc (size t)) (Max (set (map (\<lambda>u. 2 * width ws ds u + 2) (subterms t))))\<close>
 
 text \<open>The fuel the solver needs: a bound on the iterations of every loop and on the depth of
   every recursion, for the problem \<open>p\<close>. It depends on \<open>p\<close> only.\<close>

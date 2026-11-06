@@ -299,7 +299,7 @@ lemma dpll_branch_unsat:
   using assms dpll_split by blast
 
 lemma dpll_rec_post:
-  assumes \<open>length x = length a\<close> \<open>unat v < length a\<close>
+  assumes \<open>length x = length a\<close> \<open>unat v < length x\<close>
     \<open>\<forall>\<sigma>. agrees a \<sigma> \<and> cnf_sem \<sigma> cs \<longrightarrow> agrees x \<sigma>\<close>
     \<open>\<forall>\<sigma>. agrees (x[unat v := Some True]) \<sigma> \<longrightarrow> \<not> cnf_sem \<sigma> cs\<close>
     \<open>case r of None \<Rightarrow> \<forall>\<sigma>. agrees (x[unat v := Some False]) \<sigma> \<longrightarrow> \<not> cnf_sem \<sigma> cs
@@ -424,9 +424,10 @@ definition dpll_propagate_contract ::
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of
              None \<Rightarrow> \<not> (\<exists>\<sigma>. agrees a \<sigma> \<and> cnf_sem \<sigma> cs)
-           | Some a' \<Rightarrow> length a' = length a \<and> (\<forall>v < length a. a ! v \<noteq> None \<longrightarrow> a' ! v = a ! v) \<and>
+           | Some a' \<Rightarrow> length a = length a' \<and> (\<forall>v < length a. a ! v \<noteq> None \<longrightarrow> a' ! v = a ! v) \<and>
                dpll_nnone a' \<le> dpll_nnone a \<and> (\<forall>\<sigma>. agrees a \<sigma> \<and> cnf_sem \<sigma> cs \<longrightarrow> agrees a' \<sigma>) \<and>
-               dpll_quiet a' cs\<rangle>)\<close>
+               dpll_quiet a' cs \<and> dpll_cs_ok cs (length a') \<and>
+               length a' + 2 \<le> urust_fuel \<and> length a' < 2 ^ 64\<rangle>)\<close>
 
 lemma dpll_propagate_spec [crush_specs]:
   shows \<open>\<Gamma>; propagate a cs \<Turnstile>\<^sub>F dpll_propagate_contract a cs\<close>
@@ -446,14 +447,16 @@ lemma dpll_propagate_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of
              None \<Rightarrow> \<not> (\<exists>\<sigma>. agrees a \<sigma> \<and> cnf_sem \<sigma> cs)
-           | Some a' \<Rightarrow> length a' = length a \<and> (\<forall>v < length a. a ! v \<noteq> None \<longrightarrow> a' ! v = a ! v) \<and>
+           | Some a' \<Rightarrow> length a = length a' \<and> (\<forall>v < length a. a ! v \<noteq> None \<longrightarrow> a' ! v = a ! v) \<and>
                dpll_nnone a' \<le> dpll_nnone a \<and> (\<forall>\<sigma>. agrees a \<sigma> \<and> cnf_sem \<sigma> cs \<longrightarrow> agrees a' \<sigma>) \<and>
-               dpll_quiet a' cs\<rangle>\<close> and
+               dpll_quiet a' cs \<and> (\<forall>c \<in> set cs. lits_lt (length a') c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64) \<and>
+               length a' + 2 \<le> urust_fuel \<and> length a' < 2 ^ 64\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: option.splits prod.splits tnil.splits)
     apply (auto dest!: dpll_prop_step(1)[rotated 5] dpll_prop_step(2)[rotated 5] intro: dpll_nnone_fuel)
     done
+  apply (auto simp: dpll_cs_ok_def split: option.splits)
   done
 
 definition dpll_find_unassigned_contract ::
@@ -505,10 +508,9 @@ lemma dpll_rec_step_spec:
   shows \<open>\<Gamma>; dpll_rec_step R cs a \<Turnstile>\<^sub>F dpll_fuel_contract (Suc k) cs a\<close>
   apply (crush_boot f: dpll_rec_step_def contract: dpll_fuel_contract_def)
   apply (crush_base wp split: option.splits specs add: IH contracts add: dpll_fuel_contract_def)
-  subgoal by (rule dpll_rec_post) assumption+
+  subgoal by (rule dpll_rec_post) (assumption | (rule sym, assumption) | simp)+
   apply (auto intro: dpll_nnone_branch dpll_total_sem)
-  apply (tactic \<open>no_tac\<close>)
-  sorry
+  done
 
 lemma dpll_fuel_spec:
   shows \<open>\<Gamma>; (dpll_rec_step ^^ k) g cs a \<Turnstile>\<^sub>F dpll_fuel_contract k cs a\<close>

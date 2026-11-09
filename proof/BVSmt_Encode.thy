@@ -540,7 +540,7 @@ lemma encode_main:
     (\<forall>i < length vs. length (vs ! i) = unat (Problem_widths p ! i)) \<and>
     (\<forall>ls \<in> set vs. lits_lt (fst s) ls) \<and>
     (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> satisfies p (map (map (lit_sem \<sigma>)) vs)) \<and>
-    (\<forall>m. is_model p m \<longrightarrow> satisfies p m \<longrightarrow> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)))\<close>
+    (\<forall>m. is_assignment p m \<longrightarrow> satisfies p m \<longrightarrow> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)))\<close>
 proof -
   let ?W = \<open>Problem_widths p\<close>
   let ?D = \<open>Problem_defs p\<close>
@@ -596,8 +596,8 @@ proof -
         unfolding satisfies_def Let_def Evs mv using ev dv by (auto simp: in_set_conv_nth)
     qed
   next
-    fix m assume M: \<open>is_model p m\<close> and Sm: \<open>satisfies p m\<close>
-    have mw: \<open>map length m = map unat ?W\<close> using M by (simp add: is_model_def var_widths_def)
+    fix m assume M: \<open>is_assignment p m\<close> and Sm: \<open>satisfies p m\<close>
+    have mw: \<open>map length m = map unat ?W\<close> using M by (simp add: is_assignment_def var_widths_def)
     have lm: \<open>length m = length ?W\<close> using arg_cong[OF mw, of length] by simp
     have \<open>\<forall>i < length ?W. length (m ! i) = unat (?W ! i)\<close>
       using mw lm list_eq_iff_nth_eq[of \<open>map length m\<close> \<open>map unat ?W\<close>] by simp
@@ -622,12 +622,12 @@ qed
 
 theorem encode_sound:
   assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>cnf_sem \<sigma> (snd s)\<close>
-  shows \<open>is_model p (map (map (lit_sem \<sigma>)) vs) \<and> satisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
+  shows \<open>is_assignment p (map (map (lit_sem \<sigma>)) vs) \<and> satisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
   using encode_main[OF assms(1-3)] assms(4)
-  by (auto simp: is_model_def var_widths_def list_eq_iff_nth_eq)
+  by (auto simp: is_assignment_def var_widths_def list_eq_iff_nth_eq)
 
 theorem encode_complete:
-  assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>is_model p m\<close> \<open>satisfies p m\<close>
+  assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>is_assignment p m\<close> \<open>satisfies p m\<close>
   shows \<open>\<exists>\<sigma>. cnf_sem \<sigma> (snd s)\<close>
   using encode_main[OF assms(1-3)] assms(4,5) by blast
 

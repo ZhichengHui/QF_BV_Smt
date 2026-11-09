@@ -18,14 +18,14 @@ text \<open>No assignment satisfies the CNF formula: no model satisfies the prob
 lemma unsat_answer:
   assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
     \<open>\<not> (\<exists>\<sigma>. agrees (replicate (fst s) None) \<sigma> \<and> cnf_sem \<sigma> (snd s))\<close>
-  shows \<open>\<forall>m. is_model p m \<longrightarrow> \<not> satisfies p m\<close>
+  shows \<open>\<forall>m. is_assignment p m \<longrightarrow> \<not> satisfies p m\<close>
   using assms encode_complete[OF assms(1-3)] by (auto simp add: agrees_def)
 
 text \<open>A total assignment satisfies the CNF formula: the model read from it satisfies the problem.\<close>
 lemma sat_answer:
   assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
     \<open>length a = fst s\<close> \<open>\<forall>v < length a. a ! v \<noteq> None\<close> \<open>cnf_sem (sigma_of a) (snd s)\<close>
-  shows \<open>is_model p (read_model_m a vs) \<and> satisfies p (read_model_m a vs)\<close>
+  shows \<open>is_assignment p (read_model_m a vs) \<and> satisfies p (read_model_m a vs)\<close>
 proof -
   have \<open>\<forall>ls \<in> set vs. lits_lt (length a) ls\<close>
     using encode_wf[OF assms(1-3)] assms(4) by simp
@@ -84,7 +84,7 @@ proof (cases \<open>problem_wt p\<close>)
         split: option.splits
         simp add: e assms2 nv Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
     using assms2 dpll_pre rm_pre unsat_answer[OF _ e s64] sat_answer[OF _ e s64]
-    by (auto split: option.splits)
+    by (auto simp: is_model_def split: option.splits)
 next
   case False
   show ?thesis

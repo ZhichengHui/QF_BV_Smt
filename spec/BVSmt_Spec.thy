@@ -16,9 +16,9 @@ text \<open>
   assertions \<^const>\<open>Problem_asserts\<close> (terms of width 1). Booleans are bit-vectors of width 1, true
   being 1. Bit lists are least significant bit first.
 
-  The specification: for a well-sorted problem, the answer \<open>Sat m\<close> gives a model \<open>m\<close> (bits of
-  every variable, of the declared widths) under which every assertion evaluates to 1; the answer
-  \<open>Unsat\<close> means that no such model exists.
+  The specification: for a well-sorted problem, the answer \<open>Sat m\<close> gives a model \<open>m\<close>: an
+  assignment (bits of every variable, of the declared widths) under which every assertion
+  evaluates to 1; the answer \<open>Unsat\<close> means that no model exists.
 
   The solver does not panic when the problem is well-sorted (\<open>problem_wt\<close>), the fuel
   \<^term>\<open>urust_fuel\<close> of the translation is not less than \<open>size_bound\<close> of the problem,
@@ -151,11 +151,11 @@ definition problem_wt :: \<open>Problem \<Rightarrow> bool\<close> where
      defs_wt ws [] (Problem_defs p) \<and>
      (\<forall>t \<in> set (Problem_asserts p). wt ws ds t \<and> width ws ds t = 1)\<close>
 
-text \<open>A model gives every variable a bit list of its width.\<close>
-definition is_model :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
-  \<open>is_model p m \<equiv> map length m = var_widths p\<close>
+text \<open>An assignment gives every variable a bit list of its width.\<close>
+definition is_assignment :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
+  \<open>is_assignment p m \<equiv> map length m = var_widths p\<close>
 
-text \<open>Every assertion evaluates to 1 under the model.\<close>
+text \<open>Every assertion evaluates to 1 under the assignment.\<close>
 definition satisfies :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
   \<open>satisfies p m \<equiv>
      let ws = var_widths p in
@@ -163,6 +163,10 @@ definition satisfies :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow
      let ds = def_widths ws [] (Problem_defs p) in
      let dv = def_values ws [] vs [] (Problem_defs p) in
      \<forall>t \<in> set (Problem_asserts p). eval ws ds vs dv t = 1\<close>
+
+text \<open>A model is an assignment under which every assertion evaluates to 1.\<close>
+definition is_model :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
+  \<open>is_model p m \<equiv> is_assignment p m \<and> satisfies p m\<close>
 
 subsection \<open>The size of a problem\<close>
 
@@ -204,8 +208,8 @@ definition solve_contract :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort) f
      let pre = can_alloc_reference \<star> \<langle>problem_wt p\<rangle> in
      let post = \<lambda>r. can_alloc_reference \<star>
         \<langle>case r of
-           Answer_Sat m \<Rightarrow> is_model p m \<and> satisfies p m
-         | Answer_Unsat \<Rightarrow> (\<forall>m. is_model p m \<longrightarrow> \<not> satisfies p m)\<rangle> in
+           Answer_Sat m \<Rightarrow> is_model p m
+         | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model p m)\<rangle> in
      make_function_contract pre post\<close>
 
 end

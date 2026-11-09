@@ -1,5 +1,5 @@
 theory BVSmt_Proof
-  imports BVSmt_Refine BVSmt_Encode BVSmt_Dpll
+  imports BVSmt_Refine BVSmt_Encode BVSmt_Dpll BVSmt_Bound
 begin
 
 section \<open>The top-level theorem\<close>
@@ -41,24 +41,29 @@ begin
 subsection \<open>The solver meets its contract\<close>
 
 text \<open>The theorem: \<^const>\<open>solve_contract\<close> holds whenever the translation's fuel covers
-  \<^const>\<open>fuel_bound\<close> and the problem is small enough for \<^verbatim>\<open>usize\<close>. \<^const>\<open>fuel_bound\<close> is defined
-  outside the locale, so it does not depend on \<^term>\<open>urust_fuel\<close>.\<close>
+  \<^const>\<open>size_bound\<close> and \<^const>\<open>size_bound\<close> is small enough for \<^verbatim>\<open>usize\<close>. \<^const>\<open>size_bound\<close> is defined
+  in the specification from the problem alone. For a well-sorted problem it is at least
+  \<^const>\<open>fuel_bound\<close> (\<open>fuel_bound_le\<close>), which the proof uses; a problem that is not well-sorted
+  makes the precondition of the contract false.\<close>
 theorem solve_spec:
-  assumes \<open>fuel_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
+  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>size_bound p < 2 ^ 64\<close>
   shows \<open>\<Gamma>; solve p \<Turnstile>\<^sub>F solve_contract p\<close>
-proof -
+proof (cases \<open>problem_wt p\<close>)
+  case True
+  have assms2: \<open>fuel_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
+    using fuel_bound_le[OF True] assms by simp_all
   obtain s vs where e: \<open>encode_m p = (s, vs)\<close>
     by (cases \<open>encode_m p\<close>)
   note fb = fuel_bound_ge[OF e]
   have s64: \<open>fst s < 2 ^ 64\<close>
-    using fb(1) assms(2) by simp
+    using fb(1) assms2(2) by simp
   have nv: \<open>unat (word_of_nat (fst s) :: 64 word) = fst s\<close>
     using s64 by (simp add: unat_of_nat_eq)
   have dpll_pre: \<open>problem_wt p \<Longrightarrow>
       (\<forall>c \<in> set (snd s). lits_lt (fst s) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64) \<and>
       length (snd s) + 2 \<le> urust_fuel \<and> length (snd s) < 2 ^ 64 \<and>
       fst s + 2 \<le> urust_fuel \<and> fst s < 2 ^ 64\<close>
-    using encode_wf[OF _ e s64] fb assms by fastforce
+    using encode_wf[OF _ e s64] fb assms2 by fastforce
   have rm_pre: \<open>problem_wt p \<Longrightarrow>
       (\<forall>ls \<in> set vs. lits_lt (fst s) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 64) \<and>
       length vs + 2 \<le> urust_fuel \<and> length vs < 2 ^ 64\<close>
@@ -70,16 +75,21 @@ proof -
     moreover have \<open>length vs + 2 \<le> fuel_bound p\<close>
       using w fb(5) by (simp add: var_widths_def)
     ultimately show ?thesis
-      using w assms by fastforce
+      using w assms2 by fastforce
   qed
   show ?thesis
     apply (crush_boot f: solve_def contract: solve_contract_def)
     apply (crush_base specs add: encode_spec dpll_top_spec read_model_spec
         contracts add: encode_contract_def dpll_top_contract_def read_model_contract_def
         split: option.splits
-        simp add: e assms nv Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
-    using assms dpll_pre rm_pre unsat_answer[OF _ e s64] sat_answer[OF _ e s64]
+        simp add: e assms2 nv Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
+    using assms2 dpll_pre rm_pre unsat_answer[OF _ e s64] sat_answer[OF _ e s64]
     by (auto split: option.splits)
+next
+  case False
+  show ?thesis
+    apply (crush_boot f: solve_def contract: solve_contract_def)
+    using False by simp
 qed
 
 end

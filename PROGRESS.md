@@ -3,8 +3,9 @@
 任务：用 Rust 实现支持 QF_BV、能生成模型的 SMT 求解器，用 AutoCorrode 前端翻译到 Isabelle，写顶层规约并证明。
 
 状态：完成。`BVSmt_Proof.BVSmt_Proof` 及其导入的全部 theory 在不开 quick_and_dirty 的情况下检查通过（`EXIT 0`），
-没有 sorry。顶层定理是 `BVSmt_ctx.solve_spec`：前提为 `fuel_bound p ≤ urust_fuel` 和 `fuel_bound p < 2^64` 时，
-`solve p` 满足 `solve_contract p`。规约 `spec/BVSmt_Spec.thy` 仍待用户审阅。
+没有 sorry。顶层定理是 `BVSmt_ctx.solve_spec`：前提为 `size_bound p ≤ urust_fuel` 和 `size_bound p < 2^64` 时，
+`solve p` 满足 `solve_contract p`。`size_bound` 定义在规约中，只用问题本身的量（变量宽度、定义和断言的个数、
+各子项的宽度）表达；`proof/BVSmt_Bound.thy` 证明实现模型的 `fuel_bound` 不超过它。规约 `spec/BVSmt_Spec.thy` 仍待用户审阅。
 
 位置：worktree `~/Work/BVSmt/.claude/worktrees/bvsmt`，分支 `worktree-bvsmt`；主仓库 `~/Work/BVSmt`（无远端，未合并进 main）。
 
@@ -26,6 +27,7 @@
 | `proof/BVSmt_Encode.thy` | `encode_sound`、`encode_complete`、`encode_wf` |
 | `proof/BVSmt_Refine.thy` | AutoCorrode 合约：Rust 函数等于模型，最终为 `encode_spec` |
 | `proof/BVSmt_Dpll.thy` | DPLL 的语义与合约 |
+| `proof/BVSmt_Bound.thy` | 各电路新增变量和子句个数的界，`fuel_bound p ≤ size_bound p` |
 | `proof/BVSmt_Proof.thy` | 顶层定理 `solve_spec` |
 
 检查：`BVSMT_WORK=<远端目录名> tools/check.sh BVSmt_Proof.BVSmt_Proof 7200`，在远端

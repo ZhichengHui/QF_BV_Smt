@@ -296,16 +296,6 @@ definition sigma_of :: \<open>bool option list \<Rightarrow> nat \<Rightarrow> b
 
 section \<open>Bounds\<close>
 
-text \<open>The subterms of a term, the term included.\<close>
-primrec subterms :: \<open>Term \<Rightarrow> Term list\<close> where
-  \<open>subterms (Term_Const bs) = [Term_Const bs]\<close>
-| \<open>subterms (Term_Var i) = [Term_Var i]\<close>
-| \<open>subterms (Term_Ref i) = [Term_Ref i]\<close>
-| \<open>subterms (Term_Not a) = Term_Not a # subterms a\<close>
-| \<open>subterms (Term_Bin op a b) = Term_Bin op a b # subterms a @ subterms b\<close>
-| \<open>subterms (Term_Extract hi lo a) = Term_Extract hi lo a # subterms a\<close>
-| \<open>subterms (Term_Ite c a b) = Term_Ite c a b # subterms c @ subterms a @ subterms b\<close>
-
 text \<open>A bound on the iterations of every loop that blasting \<open>t\<close> runs (each loop runs over at
   most twice the width of a subterm) and on the depth of the recursion.\<close>
 definition tbound :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where

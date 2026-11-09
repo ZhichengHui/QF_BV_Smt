@@ -195,8 +195,8 @@ lemma def_widths_snoc:
   by (induction xs arbitrary: ds) auto
 
 lemma def_values_snoc:
-  \<open>def_values ws vs ds dv (xs @ [x]) =
-   def_values ws vs ds dv xs @ [eval ws (def_widths ws ds xs) vs (def_values ws vs ds dv xs) x]\<close>
+  \<open>def_values ws ds vs dv (xs @ [x]) =
+   def_values ws ds vs dv xs @ [eval ws (def_widths ws ds xs) vs (def_values ws ds vs dv xs) x]\<close>
   by (induction xs arbitrary: ds dv) auto
 
 lemma defs_wt_append:
@@ -388,7 +388,7 @@ lemma defs_inv:
   assumes \<open>wf_st s0\<close> \<open>env_ok (fst s0) ws vs\<close> \<open>defs_wt ws [] D\<close>
   shows \<open>k \<le> length D \<Longrightarrow> foldl (defs_step vs D) (s0, []) [0..<k] = (s, dl) \<Longrightarrow> fst s < 2 ^ 64 \<Longrightarrow>
    wf_st s \<and> ext s0 s \<and> env_ok (fst s) (def_widths ws [] (take k D)) dl \<and>
-   (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> map (val \<sigma>) dl = def_values ws (map (val \<sigma>) vs) [] [] (take k D))\<close>
+   (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> map (val \<sigma>) dl = def_values ws [] (map (val \<sigma>) vs) [] (take k D))\<close>
 proof (induction k arbitrary: s dl)
   case 0
   then have E: \<open>s = s0\<close> \<open>dl = []\<close> by auto
@@ -405,7 +405,7 @@ next
   have kl: \<open>k < length D\<close> using Suc.prems(1) by simp
   note IH = Suc.IH[OF _ A bp]
   have IH': \<open>wf_st sp \<and> ext s0 sp \<and> env_ok (fst sp) (def_widths ws [] (take k D)) dp \<and>
-   (\<forall>\<sigma>. cnf_sem \<sigma> (snd sp) \<longrightarrow> map (val \<sigma>) dp = def_values ws (map (val \<sigma>) vs) [] [] (take k D))\<close>
+   (\<forall>\<sigma>. cnf_sem \<sigma> (snd sp) \<longrightarrow> map (val \<sigma>) dp = def_values ws [] (map (val \<sigma>) vs) [] (take k D))\<close>
     using IH kl by simp
   have envv: \<open>env_ok (fst sp) ws vs\<close> using assms(2) IH' ext_fst env_ok_mono by blast
   have wtk: \<open>wt ws (def_widths ws [] (take k D)) (D ! k)\<close> using defs_wt_nth[OF assms(3) kl] .
@@ -427,7 +427,7 @@ next
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s)\<close>
     have Sp: \<open>cnf_sem \<sigma> (snd sp)\<close> using ext_cnf_sem S BC E by blast
-    show \<open>map (val \<sigma>) dl = def_values ws (map (val \<sigma>) vs) [] [] (take (Suc k) D)\<close>
+    show \<open>map (val \<sigma>) dl = def_values ws [] (map (val \<sigma>) vs) [] (take (Suc k) D)\<close>
       using BC IH' S Sp by (simp add: E tk def_values_snoc def_widths_snoc)
   qed
 qed
@@ -569,7 +569,7 @@ proof -
   have dwt: \<open>defs_wt ?ws [] ?D\<close> and awt: \<open>\<forall>t \<in> set ?A. wt ?ws ?ds t \<and> width ?ws ?ds t = 1\<close>
     using assms(1) by (simp_all add: problem_wt_def Let_def)
   have DI: \<open>wf_st s2 \<and> ext s1 s2 \<and> env_ok (fst s2) ?ds dl \<and>
-    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> map (val \<sigma>) dl = def_values ?ws (map (val \<sigma>) vs1) [] [] ?D)\<close>
+    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> map (val \<sigma>) dl = def_values ?ws [] (map (val \<sigma>) vs1) [] ?D)\<close>
     using defs_inv[OF wf1 env1 dwt order_refl Dl b2] by simp
   have wf2: \<open>wf_st s2\<close> and e12: \<open>ext s1 s2\<close> and envd: \<open>env_ok (fst s2) ?ds dl\<close> using DI by simp_all
   have envv: \<open>env_ok (fst s2) ?ws vs1\<close> using env1 ext_fst[OF e12] env_ok_mono by blast
@@ -587,7 +587,7 @@ proof -
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using AI Sg by blast
     have ev: \<open>\<forall>j < length ?A. eval ?ws ?ds (map (val \<sigma>) vs1) (map (val \<sigma>) dl) (?A ! j) = 1\<close>
       using AI Sg by blast
-    have dv: \<open>map (val \<sigma>) dl = def_values ?ws (map (val \<sigma>) vs1) [] [] ?D\<close> using DI S2 by blast
+    have dv: \<open>map (val \<sigma>) dl = def_values ?ws [] (map (val \<sigma>) vs1) [] ?D\<close> using DI S2 by blast
     show \<open>satisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
     proof -
       have mv: \<open>map bits_nat (map (map (lit_sem \<sigma>)) vs1) = map (val \<sigma>) vs1\<close>
@@ -597,8 +597,12 @@ proof -
     qed
   next
     fix m assume M: \<open>is_model p m\<close> and Sm: \<open>satisfies p m\<close>
-    have \<open>length m = length ?W\<close> \<open>\<forall>i < length ?W. length (m ! i) = unat (?W ! i)\<close>
-      using M by (simp_all add: is_model_def var_widths_def)
+    have mw: \<open>map length m = map unat ?W\<close> using M by (simp add: is_model_def var_widths_def)
+    have lm: \<open>length m = length ?W\<close> using arg_cong[OF mw, of length] by simp
+    have \<open>\<forall>i < length ?W. length (m ! i) = unat (?W ! i)\<close>
+      using mw lm list_eq_iff_nth_eq[of \<open>map length m\<close> \<open>map unat ?W\<close>] by simp
+    then have \<open>length m = length ?W\<close> \<open>\<forall>i < length ?W. length (m ! i) = unat (?W ! i)\<close>
+      using lm by simp_all
     then obtain \<sigma>0 where T0: \<open>cnf_sem \<sigma>0 (snd s1)\<close> \<open>map (map (lit_sem \<sigma>0)) vs1 = m\<close>
       using VI by blast
     obtain \<sigma>1 where T1: \<open>\<forall>v < fst s1. \<sigma>1 v = \<sigma>0 v\<close> \<open>cnf_sem \<sigma>1 (snd s2)\<close>
@@ -606,9 +610,9 @@ proof -
     have m1: \<open>map (map (lit_sem \<sigma>1)) vs1 = m\<close>
       using map_map_lit_agree[OF vl T1(1)] T0(2) by simp
     have vv: \<open>map (val \<sigma>1) vs1 = map bits_nat m\<close> using m1 by (simp add: map_val_bits)
-    have dv: \<open>map (val \<sigma>1) dl = def_values ?ws (map bits_nat m) [] [] ?D\<close>
+    have dv: \<open>map (val \<sigma>1) dl = def_values ?ws [] (map bits_nat m) [] ?D\<close>
       using DI T1(2) vv by simp
-    have \<open>\<forall>t \<in> set ?A. eval ?ws ?ds (map bits_nat m) (def_values ?ws (map bits_nat m) [] [] ?D) t = 1\<close>
+    have \<open>\<forall>t \<in> set ?A. eval ?ws ?ds (map bits_nat m) (def_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
       using Sm by (simp add: satisfies_def Let_def)
     then have \<open>\<forall>j < length ?A. eval ?ws ?ds (map (val \<sigma>1) vs1) (map (val \<sigma>1) dl) (?A ! j) = 1\<close>
       using vv dv by simp
@@ -619,7 +623,8 @@ qed
 theorem encode_sound:
   assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>cnf_sem \<sigma> (snd s)\<close>
   shows \<open>is_model p (map (map (lit_sem \<sigma>)) vs) \<and> satisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
-  using encode_main[OF assms(1-3)] assms(4) by (auto simp: is_model_def var_widths_def)
+  using encode_main[OF assms(1-3)] assms(4)
+  by (auto simp: is_model_def var_widths_def list_eq_iff_nth_eq)
 
 theorem encode_complete:
   assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>is_model p m\<close> \<open>satisfies p m\<close>

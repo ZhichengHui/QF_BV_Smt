@@ -8,7 +8,7 @@ hide_const (open) Rust_Iterator.map
 section \<open>The top-level specification of the solver\<close>
 
 text \<open>
-  REVIEW NOTES
+  OVERVIEW
 
   The Rust entry point is \<^verbatim>\<open>pub fn solve(p: &Problem) -> Answer\<close> (\<^verbatim>\<open>core/src/lib.rs\<close>), translated
   to \<^verbatim>\<open>BVSmt_ctx.solve\<close>. A problem has variables of the widths \<^const>\<open>Problem_widths\<close>,
@@ -18,7 +18,12 @@ text \<open>
 
   The specification: for a well-sorted problem, the answer \<open>Sat m\<close> gives a model \<open>m\<close> (bits of
   every variable, of the declared widths) under which every assertion evaluates to 1; the answer
-  \<open>Unsat\<close> means that no such model exists. The solver does not panic.
+  \<open>Unsat\<close> means that no such model exists.
+
+  The solver does not panic when the problem is well-sorted (\<open>problem_wt\<close>), the fuel
+  \<^term>\<open>urust_fuel\<close> of the translation is not less than \<open>size_bound\<close> of the problem,
+  and \<open>size_bound\<close> of the problem is less than \<open>2^64\<close> (so that the \<^verbatim>\<open>usize\<close> counters of
+  the solver do not overflow).
 
   Semantics of the operators, following the SMT-LIB 2.6 theory FixedSizeBitVectors (values are
   natural numbers below \<open>2^w\<close>, as with \<^verbatim>\<open>bv2nat\<close>):
@@ -30,18 +35,23 @@ text \<open>
   The other SMT-LIB operators (signed ones, \<open>bvsub\<close>, \<open>bvneg\<close>, Boolean connectives, \<open>let\<close>, ...)
   are translated into these by the command-line parser (\<^verbatim>\<open>cli/src\<close>), which is not verified.
 
-  Transcription choices (to check):
+  Widths: SMT-LIB requires every bit-vector width to be at least 1. This specification places no
+  such restriction: a variable of width 0 and the empty constant \<^term>\<open>Term_Const []\<close> are allowed, with
+  the value 0 of width 0. The specification therefore generalizes SMT-LIB, and the theorem
+  \<open>solve_spec\<close> holds for these problems as well.
+
+  Choices of the transcription:
   \<^item> \<^verbatim>\<open>usize\<close> fields are @{typ \<open>64 word\<close>}; widths and indices are read with \<^const>\<open>unat\<close>.
   \<^item> \<open>xs ! i\<close> is unspecified out of bounds; \<open>wt\<close> keeps every index in bounds.
   \<^item> The problem is passed by shared reference, which the translation passes by value.
   \<^item> \<open>can_alloc_reference\<close>: the solver allocates mutable locals; this is AutoCorrode's requirement.
-  \<^item> \<^const>\<open>make_function_contract\<close> makes the abort postcondition false: the contract also claims
+  \<^item> \<^const>\<open>make_function_contract\<close> makes the abort postcondition false: the contract also states
     that the solver does not panic (no out-of-bounds index, no arithmetic overflow).
   \<^item> The translation bounds every loop and the recursion by the locale parameter
-    \<^term>\<open>urust_fuel\<close> and panics when it runs out. The contract can only hold when the fuel is
-    large enough and the problem small enough for \<^verbatim>\<open>usize\<close>; the theorem proved in
-    \<^verbatim>\<open>BVSmt_Proof\<close> assumes \<open>fuel_bound p \<le> urust_fuel\<close> and \<open>fuel_bound p < 2^64\<close> for a
-    function \<open>fuel_bound\<close> of the problem defined outside the locale (so independent of the fuel).
+    \<^term>\<open>urust_fuel\<close> and panics when it runs out. \<open>size_bound\<close> is defined from the
+    problem alone (outside the locale), so the condition on the fuel does not mention the
+    implementation. The theorem \<open>solve_spec\<close> in \<^verbatim>\<open>BVSmt_Proof\<close> assumes
+    \<open>size_bound p \<le> urust_fuel\<close> and \<open>size_bound p < 2^64\<close>.
 \<close>
 
 subsection \<open>Values\<close>
@@ -123,11 +133,12 @@ fun def_widths :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term list
   \<open>def_widths ws ds [] = ds\<close>
 | \<open>def_widths ws ds (d # dd) = def_widths ws (ds @ [width ws ds d]) dd\<close>
 
-text \<open>The values of the definitions, appended to \<open>dv\<close> (whose widths are \<open>ds\<close>).\<close>
+text \<open>The values of the definitions, appended to \<open>dv\<close> (the values of definitions of widths \<open>ds\<close>), given
+  the widths \<open>ws\<close> and values \<open>vs\<close> of the variables.\<close>
 fun def_values :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> nat list\<close> where
-  \<open>def_values ws vs ds dv [] = dv\<close>
-| \<open>def_values ws vs ds dv (d # dd) =
-     def_values ws vs (ds @ [width ws ds d]) (dv @ [eval ws ds vs dv d]) dd\<close>
+  \<open>def_values ws ds vs dv [] = dv\<close>
+| \<open>def_values ws ds vs dv (d # dd) =
+     def_values ws (ds @ [width ws ds d]) vs (dv @ [eval ws ds vs dv d]) dd\<close>
 
 definition var_widths :: \<open>Problem \<Rightarrow> nat list\<close> where
   \<open>var_widths p \<equiv> map unat (Problem_widths p)\<close>
@@ -142,8 +153,7 @@ definition problem_wt :: \<open>Problem \<Rightarrow> bool\<close> where
 
 text \<open>A model gives every variable a bit list of its width.\<close>
 definition is_model :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
-  \<open>is_model p m \<equiv>
-     length m = length (var_widths p) \<and> (\<forall>i < length m. length (m ! i) = var_widths p ! i)\<close>
+  \<open>is_model p m \<equiv> map length m = var_widths p\<close>
 
 text \<open>Every assertion evaluates to 1 under the model.\<close>
 definition satisfies :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
@@ -151,8 +161,38 @@ definition satisfies :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow
      let ws = var_widths p in
      let vs = map bits_nat m in
      let ds = def_widths ws [] (Problem_defs p) in
-     let dv = def_values ws vs [] [] (Problem_defs p) in
+     let dv = def_values ws [] vs [] (Problem_defs p) in
      \<forall>t \<in> set (Problem_asserts p). eval ws ds vs dv t = 1\<close>
+
+subsection \<open>The size of a problem\<close>
+
+text \<open>The subterms of a term, the term included.\<close>
+primrec subterms :: \<open>Term \<Rightarrow> Term list\<close> where
+  \<open>subterms (Term_Const bs) = [Term_Const bs]\<close>
+| \<open>subterms (Term_Var i) = [Term_Var i]\<close>
+| \<open>subterms (Term_Ref i) = [Term_Ref i]\<close>
+| \<open>subterms (Term_Not a) = Term_Not a # subterms a\<close>
+| \<open>subterms (Term_Bin op a b) = Term_Bin op a b # subterms a @ subterms b\<close>
+| \<open>subterms (Term_Extract hi lo a) = Term_Extract hi lo a # subterms a\<close>
+| \<open>subterms (Term_Ite c a b) = Term_Ite c a b # subterms c @ subterms a @ subterms b\<close>
+
+text \<open>The weight of a term: the sum over its subterms (counted with multiplicity) of the square of
+  the width plus one. Widths are those given by \<^const>\<open>width\<close>, so a \<^const>\<open>Term_Ref\<close> weighs by the
+  width of the definition it refers to, however large that is.\<close>
+definition term_weight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>term_weight ws ds t \<equiv> sum_list (map (\<lambda>u. (width ws ds u + 1) ^ 2) (subterms t))\<close>
+
+text \<open>The size of a problem, as a bound on the work of the solver: one plus the sum of the widths of
+  the variables, plus the numbers of variables, definitions and assertions, plus the weights of
+  all definitions and assertions, times 1000. It is linear in the number of subterms and
+  quadratic in their widths. The solver needs a fuel (a bound on the iterations of each loop and
+  on the depth of the recursion) and counters (of type \<^verbatim>\<open>usize\<close>) of this size.\<close>
+definition size_bound :: \<open>Problem \<Rightarrow> nat\<close> where
+  \<open>size_bound p \<equiv>
+     let ws = var_widths p in
+     let ds = def_widths ws [] (Problem_defs p) in
+     1000 * (1 + sum_list ws + length ws + length (Problem_defs p) + length (Problem_asserts p) +
+             sum_list (map (term_weight ws ds) (Problem_defs p @ Problem_asserts p)))\<close>
 
 context BVSmt_ctx
 begin

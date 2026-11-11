@@ -8,7 +8,7 @@ Isabelle/HOL，并证明满足顶层规约。
 | 路径 | 内容 |
 |---|---|
 | `core/src/lib.rs` | 求解器核心（被验证的部分）：把位向量问题位爆破为 CNF，再用带单元传播的 DPLL 求解，Sat 时读出模型。入口 `pub fn solve(p: &Problem) -> Answer` |
-| `cli/src/main.rs` | SMT-LIB 前端（未验证）：解析 QF_BV 脚本，直接输出扩展项（不展开位向量运算），只处理 Bool/let/define-fun 等非位向量部分，调用 `solve` 并输出结果 |
+| `cli/src/main.rs` | SMT-LIB 前端（未验证）：解析 QF_BV 脚本并转换成核心的问题结构（不展开位向量运算）；负责 SMT-LIB 的语法简写（多参数的 `bvand`/`bvor`/`bvadd`/`bvmul`/`distinct`、`let`、`define-fun`）和 Bool 部分；调用 `solve` 并输出结果 |
 | `urust/` | AutoCorrode 前端从 `core/src/lib.rs` 生成的 Isabelle 翻译，session `BVSmt` |
 | `spec/` | 顶层规约 `BVSmt_Spec.thy`，session `BVSmt_Spec` |
 | `proof/` | 证明，session `BVSmt_Proof` |
@@ -22,7 +22,9 @@ Isabelle/HOL，并证明满足顶层规约。
 `sign_extend`、`rotate_left`、`rotate_right`、`bvule`、`bvugt`、`bvuge`、`bvslt`、`bvsle`、`bvsgt`、`bvsge`，再加上位向量上的
 `=`、`distinct`、`ite`。
 
-问题由变量（给定位宽）、定义（可引用之前的定义，用于共享子项）和断言（宽度为 1 的项）组成，项可直接写出上述任一运算。
+问题由变量（给定位宽）、定义（可引用之前的定义，用于共享子项）和断言（宽度为 1 的项）组成，项可直接写出上述任一运算，
+每个运算取 SMT-LIB 定义它时用的二元形式。核心的输入是这个问题结构，不是 SMT-LIB 文本：多参数写法（SMT-LIB 把它定义为
+二元形式的简写）、`let`、`define-fun` 和 Bool 部分由未验证的前端转换。
 核心先把扩展的项按 SMT-LIB 的定义改写（lower）成一小组基本运算（`not`、`and`、`or`、`xor`、`add`、`mul`、`udiv`、`urem`、
 `shl`、`lshr`、`concat`、`extract`、`=`、`bvult`、`ite`），再做位爆破和 DPLL。改写保持语义，已在 Isabelle 中证明。
 
@@ -37,11 +39,12 @@ Isabelle/HOL，并证明满足顶层规约。
 规约 `spec/BVSmt_Spec.thy` 按 SMT-LIB 2.6 的 FixedSizeBitVectors 原文逐条给出每个运算的语义（值为小于 `2^w` 的自然数，
 有符号运算按补码，除以 0 等边界按原文），不以"等于其他运算的组合"来定义；二元运算见 `bin_sem`，其余项见 `eval`。规约还定义：
 
-- `problem_wt p`：问题良类型；
+- `problem_wt p`：问题良类型。项中出现的宽度都至少为 1；没有被任何项引用的变量不受检查，可以声明为宽度 0；
 - `is_assignment p m`：`m` 给每个变量一个宽度正确的位串；
 - `is_model p m`：`m` 是使全部断言为 1 的赋值；
 - `size_bound p`：由变量位宽、定义和断言的个数、各子项的宽度算出的问题规模；
-- `sizes_ok p`：`size_bound p < 2^64`，即求解器的 `usize` 计数器不溢出；
+- `sizes_ok p`：`size_bound p < 2^64`。它保证求解器的 `usize` 计数器不溢出，但只是充分条件：`size_bound` 估计得很宽
+  （乘了 1000000，并对每个宽度取三次方），一个宽度 30000 的 `bvmul` 就会使它超过 `2^64`，定理对这样的问题不作保证；
 - `solve_contract p`：前置条件为 `problem_wt p`（扩展问题的良类型）；返回 `Answer_Sat m` 时 `is_model p m`，返回 `Answer_Unsat` 时不存在模型；求解器不崩溃；
 - `solve_correct Γ`：对每个满足 `problem_wt p` 和 `sizes_ok p` 的问题 `p`，存在 `N`，使得翻译取任意不小于 `N` 的 fuel 时，
   `solve p` 都满足 `solve_contract p`。fuel 是翻译给每个循环和递归设的次数上限（`BVSmt_ctx` 的参数 `urust_fuel`）；
@@ -49,6 +52,15 @@ Isabelle/HOL，并证明满足顶层规约。
 
 顶层定理 `BVSmt_heap.solve_correct`（`proof/BVSmt_Proof.thy`）证明 `solve_correct Γ`。证明中的 `N` 取 `size_bound p`，
 来自 `BVSmt_ctx.solve_spec`：若 `size_bound p ≤ urust_fuel` 且 `size_bound p < 2^64`，则 `solve p` 满足 `solve_contract p`。
+
+信任基础（不在本仓库中证明）：
+
+- 定理讲的是 AutoCorrode 翻译出的函数。它能推到编译后的 Rust 程序，依赖于翻译的正确性：fuel 足够时，翻译出的函数和
+  Rust 函数行为一致；fuel 只在耗尽时额外引入中止。
+- `solve_correct` 陈述在 locale `BVSmt_heap` 中，其假设描述一个对每种可变局部变量类型各有一类引用的堆。本仓库没有给出
+  这个 locale 的具体实例；和其他 AutoCorrode 项目一样，这些假设就是 AutoCorrode 引用模型的假设，定理对满足它们的
+  每个堆成立。
+- 未验证的前端负责把 SMT-LIB 文本转换成核心的问题结构（见上文）。
 
 证明的组成：
 

@@ -21,13 +21,21 @@ text \<open>
   evaluates to 1; the answer \<open>Unsat\<close> means that no model exists.
 
   The statement \<open>solve_correct\<close> at the end of this theory: for every well-sorted problem
-  (\<open>problem_wt\<close>) whose \<open>size_bound\<close> is less than \<open>2^64\<close> (so that the \<^verbatim>\<open>usize\<close> counters of
-  the solver do not overflow), there is a number \<open>N\<close> such that the solver, translated with any
-  fuel \<open>\<ge> N\<close>, satisfies the contract (and so does not panic).
+  (\<open>problem_wt\<close>) whose \<open>size_bound\<close> is less than \<open>2^64\<close> (\<open>sizes_ok\<close>), there is a number \<open>N\<close>
+  such that the solver, translated with any fuel \<open>\<ge> N\<close>, satisfies the contract (and so does not
+  panic). For a problem that is not well-sorted, or whose \<open>size_bound\<close> is not below \<open>2^64\<close>, the
+  statement says nothing.
 
-  The terms (\<^typ>\<open>Term\<close>) are those of the logic QF_BV of SMT-LIB 2.6: every function symbol of the
-  theory FixedSizeBitVectors and of the logic QF_BV (\<^verbatim>\<open>spec/smtlib-2.6/\<close> holds the two source
-  files), with \<open>=\<close>, \<open>distinct\<close> (binary) and \<open>ite\<close> of the Core theory on bit-vectors:
+  The input of the solver is a value of type \<^typ>\<open>Problem\<close>, not SMT-LIB text. Its terms
+  (\<^typ>\<open>Term\<close>) have a constructor for every function symbol of the theory FixedSizeBitVectors and of
+  the logic QF_BV of SMT-LIB 2.6 (\<^verbatim>\<open>spec/smtlib-2.6/\<close> holds the two source files), and for \<open>=\<close>,
+  \<open>distinct\<close> and \<open>ite\<close> of the Core theory on bit-vectors. Each constructor takes the operands of the
+  binary form in which SMT-LIB defines the function. The front end (\<^verbatim>\<open>cli/src/main.rs\<close>) is not
+  verified: it parses the SMT-LIB text and turns it into a \<^typ>\<open>Problem\<close>. This includes the forms
+  that SMT-LIB defines as abbreviations of the binary ones (\<open>bvand\<close>, \<open>bvor\<close>, \<open>bvadd\<close>, \<open>bvmul\<close> with more
+  than two operands, which have the attribute \<open>:left-assoc\<close>, and \<open>distinct\<close> with more than two
+  operands), \<open>let\<close>, \<open>define-fun\<close>, and the Bool terms of the Core theory (Bool is read as width 1).
+  The function symbols, by source:
 
   \<^item> FixedSizeBitVectors: \<open>concat\<close>, \<open>extract\<close>, \<open>bvnot\<close>, \<open>bvneg\<close>, \<open>bvand\<close>, \<open>bvor\<close>, \<open>bvadd\<close>, \<open>bvmul\<close>,
     \<open>bvudiv\<close>, \<open>bvurem\<close>, \<open>bvshl\<close>, \<open>bvlshr\<close>, \<open>bvult\<close> (section \<open>:definition\<close> of the theory).
@@ -47,7 +55,11 @@ text \<open>
   (\<open>bvudiv\<close> by 0 is all ones, \<open>bvurem\<close> by 0 is the dividend, and the signed operations inherit
   their behaviour from these).
 
-  Widths: SMT-LIB requires every bit-vector width to be at least 1, and so does \<open>wt\<close>.
+  Widths: SMT-LIB requires every bit-vector width to be at least 1. \<open>wt\<close> requires it of every
+  constant, variable and definition that a term refers to, so every width that occurs in a term is
+  at least 1. \<open>problem_wt\<close> does not look at variables that no term refers to: such a variable
+  may be declared with width 0, and an assignment then gives it the empty bit list. It does not
+  change the value of any term.
 
   Choices of the transcription:
   \<^item> \<^verbatim>\<open>usize\<close> fields are @{typ \<open>64 word\<close>}; widths and indices are read with \<^const>\<open>unat\<close>.
@@ -60,6 +72,16 @@ text \<open>
     \<^term>\<open>urust_fuel\<close> and panics when it runs out. \<open>solve_correct\<close> quantifies the fuel:
     it states that some fuel suffices, and that every larger fuel suffices too. It does not
     say how large the fuel must be.
+
+  Trusted, not proved here:
+  \<^item> The translation (AutoCorrode) gives the Rust program its meaning. The theorem is about the
+    translated function. That it carries over to the compiled Rust program rests on the
+    translation: with enough fuel, the translated function does what the Rust function does,
+    and fuel only adds a panic when it runs out.
+  \<^item> \<open>solve_correct\<close> is stated in the locale \<open>BVSmt_heap\<close>, whose assumptions describe a heap with
+    one kind of reference per type of mutable local. This theory gives no interpretation of the
+    locale. As in other AutoCorrode developments, the assumptions are those of AutoCorrode's
+    reference model, and the theorem holds for every heap that satisfies them.
 \<close>
 
 subsection \<open>Values\<close>
@@ -367,9 +389,12 @@ end
 
 subsection \<open>The overflow condition\<close>
 
-text \<open>The single spec-level condition that keeps the solver's \<^verbatim>\<open>usize\<close> counters within range:
-  the \<^const>\<open>size_bound\<close> of the problem fits in a 64-bit word. It is kept separate from the fuel:
-  the top-level theorem quantifies the fuel existentially and does not mention any bound.\<close>
+text \<open>The condition on the size of a problem: its \<^const>\<open>size_bound\<close> fits in a 64-bit word. It is
+  sufficient for the solver's \<^verbatim>\<open>usize\<close> counters to stay within range, but it is not necessary:
+  \<^const>\<open>size_bound\<close> is a generous over-estimate (a factor 1000000 and the cube of every width), so
+  the condition also excludes problems the solver would handle. For example, a single
+  \<open>bvmul\<close> of width 30000 already makes \<^const>\<open>size_bound\<close> exceed \<open>2^64\<close>. The condition is
+  separate from the fuel: the top-level statement quantifies the fuel existentially.\<close>
 definition sizes_ok :: \<open>Problem \<Rightarrow> bool\<close> where
   \<open>sizes_ok p \<equiv> size_bound p < 2 ^ 64\<close>
 

@@ -19,6 +19,9 @@ locale BVSmt_ctx =
   + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>(bool option) list\<close>
   + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>bool list\<close>
   + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool list) list\<close>
+  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>CoreTerm list\<close>
+  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>(64 word) list\<close>
+  + ref_13: reference_allocatable reference_types _ _ _ _ _ _ _ prism_13 \<comment> \<open>Lower\<close>
   for reference_types :: \<open>'s::{sepalg} \<Rightarrow> 'addr \<Rightarrow> 'gv \<Rightarrow> 'abort \<Rightarrow> 'i prompt \<Rightarrow> 'o prompt_output \<Rightarrow> unit\<close>
   and prism_1 :: \<open>('gv, (Lit list) list) prism\<close>
   and prism_2 :: \<open>('gv, Lit list) prism\<close>
@@ -30,6 +33,9 @@ locale BVSmt_ctx =
   and prism_8 :: \<open>('gv, (bool option) list) prism\<close>
   and prism_9 :: \<open>('gv, bool list) prism\<close>
   and prism_10 :: \<open>('gv, (bool list) list) prism\<close>
+  and prism_11 :: \<open>('gv, CoreTerm list) prism\<close>
+  and prism_12 :: \<open>('gv, (64 word) list) prism\<close>
+  and prism_13 :: \<open>('gv, Lower) prism\<close>
   + fixes urust_fuel :: nat
 begin
 
@@ -43,6 +49,9 @@ adhoc_overloading store_reference_const \<rightleftharpoons> ref_7.new
 adhoc_overloading store_reference_const \<rightleftharpoons> ref_8.new
 adhoc_overloading store_reference_const \<rightleftharpoons> ref_9.new
 adhoc_overloading store_reference_const \<rightleftharpoons> ref_10.new
+adhoc_overloading store_reference_const \<rightleftharpoons> ref_11.new
+adhoc_overloading store_reference_const \<rightleftharpoons> ref_12.new
+adhoc_overloading store_reference_const \<rightleftharpoons> ref_13.new
 adhoc_overloading store_update_const \<rightleftharpoons> update_fun
 
 end

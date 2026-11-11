@@ -28,14 +28,101 @@ datatype BinOp =
   | BinOp_Eq
   | BinOp_Ult
 
+(* Rust: CoreTerm *)
+datatype CoreTerm =
+    CoreTerm_Const \<open>bool list\<close>
+  | CoreTerm_Var \<open>64 word\<close>
+  | CoreTerm_Ref \<open>64 word\<close>
+  | CoreTerm_Not \<open>CoreTerm\<close>
+  | CoreTerm_Bin \<open>BinOp\<close> \<open>CoreTerm\<close> \<open>CoreTerm\<close>
+  | CoreTerm_Extract \<open>64 word\<close> \<open>64 word\<close> \<open>CoreTerm\<close>
+  | CoreTerm_Ite \<open>CoreTerm\<close> \<open>CoreTerm\<close> \<open>CoreTerm\<close>
+
+definition "CoreTerm_Const_mk" :: \<open>(bool list) \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Const_mk \<equiv> \<lambda>a0. FunctionBody (literal (CoreTerm_Const a0))\<close>
+
+definition "CoreTerm_Var_mk" :: \<open>(64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Var_mk \<equiv> \<lambda>a0. FunctionBody (literal (CoreTerm_Var a0))\<close>
+
+definition "CoreTerm_Ref_mk" :: \<open>(64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Ref_mk \<equiv> \<lambda>a0. FunctionBody (literal (CoreTerm_Ref a0))\<close>
+
+definition "CoreTerm_Not_mk" :: \<open>CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Not_mk \<equiv> \<lambda>a0. FunctionBody (literal (CoreTerm_Not a0))\<close>
+
+definition "CoreTerm_Bin_mk" :: \<open>BinOp \<Rightarrow> CoreTerm \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Bin_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (CoreTerm_Bin a0 a1 a2))\<close>
+
+definition "CoreTerm_Extract_mk" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Extract_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (CoreTerm_Extract a0 a1 a2))\<close>
+
+definition "CoreTerm_Ite_mk" :: \<open>CoreTerm \<Rightarrow> CoreTerm \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreTerm_Ite_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (CoreTerm_Ite a0 a1 a2))\<close>
+
+(* Rust: CoreProblem *)
+datatype_record CoreProblem =
+  CoreProblem_widths :: \<open>(64 word) list\<close>
+  CoreProblem_defs :: \<open>CoreTerm list\<close>
+  CoreProblem_asserts :: \<open>CoreTerm list\<close>
+micro_rust_record CoreProblem
+
+definition "CoreProblem_mk" :: \<open>((64 word) list) \<Rightarrow> (CoreTerm list) \<Rightarrow> (CoreTerm list) \<Rightarrow> ('s, CoreProblem, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>CoreProblem_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (make_CoreProblem a0 a1 a2))\<close>
+
+(* Rust: Answer *)
+datatype Answer =
+    Answer_Sat \<open>(bool list) list\<close>
+  | Answer_Unsat
+
+definition "Answer_Sat_mk" :: \<open>((bool list) list) \<Rightarrow> ('s, Answer, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Answer_Sat_mk \<equiv> \<lambda>a0. FunctionBody (literal (Answer_Sat a0))\<close>
+
+(* Rust: Op *)
+datatype Op =
+    Op_And
+  | Op_Or
+  | Op_Xor
+  | Op_Nand
+  | Op_Nor
+  | Op_Xnor
+  | Op_Comp
+  | Op_Add
+  | Op_Sub
+  | Op_Mul
+  | Op_Udiv
+  | Op_Urem
+  | Op_Sdiv
+  | Op_Srem
+  | Op_Smod
+  | Op_Shl
+  | Op_Lshr
+  | Op_Ashr
+  | Op_Concat
+  | Op_Eq
+  | Op_Distinct
+  | Op_Ult
+  | Op_Ule
+  | Op_Ugt
+  | Op_Uge
+  | Op_Slt
+  | Op_Sle
+  | Op_Sgt
+  | Op_Sge
+
 (* Rust: Term *)
 datatype Term =
     Term_Const \<open>bool list\<close>
   | Term_Var \<open>64 word\<close>
   | Term_Ref \<open>64 word\<close>
   | Term_Not \<open>Term\<close>
-  | Term_Bin \<open>BinOp\<close> \<open>Term\<close> \<open>Term\<close>
+  | Term_Neg \<open>Term\<close>
+  | Term_Bin \<open>Op\<close> \<open>Term\<close> \<open>Term\<close>
   | Term_Extract \<open>64 word\<close> \<open>64 word\<close> \<open>Term\<close>
+  | Term_Repeat \<open>64 word\<close> \<open>Term\<close>
+  | Term_ZeroExtend \<open>64 word\<close> \<open>Term\<close>
+  | Term_SignExtend \<open>64 word\<close> \<open>Term\<close>
+  | Term_RotateLeft \<open>64 word\<close> \<open>Term\<close>
+  | Term_RotateRight \<open>64 word\<close> \<open>Term\<close>
   | Term_Ite \<open>Term\<close> \<open>Term\<close> \<open>Term\<close>
 
 definition "Term_Const_mk" :: \<open>(bool list) \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
@@ -50,11 +137,29 @@ definition "Term_Ref_mk" :: \<open>(64 word) \<Rightarrow> ('s, Term, 'abort, 'i
 definition "Term_Not_mk" :: \<open>Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Term_Not_mk \<equiv> \<lambda>a0. FunctionBody (literal (Term_Not a0))\<close>
 
-definition "Term_Bin_mk" :: \<open>BinOp \<Rightarrow> Term \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+definition "Term_Neg_mk" :: \<open>Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Term_Neg_mk \<equiv> \<lambda>a0. FunctionBody (literal (Term_Neg a0))\<close>
+
+definition "Term_Bin_mk" :: \<open>Op \<Rightarrow> Term \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Term_Bin_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (Term_Bin a0 a1 a2))\<close>
 
 definition "Term_Extract_mk" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Term_Extract_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (Term_Extract a0 a1 a2))\<close>
+
+definition "Term_Repeat_mk" :: \<open>(64 word) \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Term_Repeat_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (Term_Repeat a0 a1))\<close>
+
+definition "Term_ZeroExtend_mk" :: \<open>(64 word) \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Term_ZeroExtend_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (Term_ZeroExtend a0 a1))\<close>
+
+definition "Term_SignExtend_mk" :: \<open>(64 word) \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Term_SignExtend_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (Term_SignExtend a0 a1))\<close>
+
+definition "Term_RotateLeft_mk" :: \<open>(64 word) \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Term_RotateLeft_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (Term_RotateLeft a0 a1))\<close>
+
+definition "Term_RotateRight_mk" :: \<open>(64 word) \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Term_RotateRight_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (Term_RotateRight a0 a1))\<close>
 
 definition "Term_Ite_mk" :: \<open>Term \<Rightarrow> Term \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Term_Ite_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (Term_Ite a0 a1 a2))\<close>
@@ -68,14 +173,6 @@ micro_rust_record Problem
 
 definition "Problem_mk" :: \<open>((64 word) list) \<Rightarrow> (Term list) \<Rightarrow> (Term list) \<Rightarrow> ('s, Problem, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Problem_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (make_Problem a0 a1 a2))\<close>
-
-(* Rust: Answer *)
-datatype Answer =
-    Answer_Sat \<open>(bool list) list\<close>
-  | Answer_Unsat
-
-definition "Answer_Sat_mk" :: \<open>((bool list) list) \<Rightarrow> ('s, Answer, 'abort, 'i, 'o) function_body\<close> where
-  [crush_inline]: \<open>Answer_Sat_mk \<equiv> \<lambda>a0. FunctionBody (literal (Answer_Sat a0))\<close>
 
 (* Rust: Cnf *)
 datatype_record Cnf =
@@ -95,5 +192,14 @@ datatype Status =
 
 definition "Status_Unit_mk" :: \<open>Lit \<Rightarrow> ('s, Status, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Status_Unit_mk \<equiv> \<lambda>a0. FunctionBody (literal (Status_Unit a0))\<close>
+
+(* Rust: Lower *)
+datatype_record Lower =
+  Lower_defs :: \<open>CoreTerm list\<close>
+  Lower_widths :: \<open>(64 word) list\<close>
+micro_rust_record Lower
+
+definition "Lower_mk" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, Lower, 'abort, 'i, 'o) function_body\<close> where
+  [crush_inline]: \<open>Lower_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_Lower a0 a1))\<close>
 
 end

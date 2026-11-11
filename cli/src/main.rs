@@ -1,12 +1,13 @@
-//! Command-line front end: reads an SMT-LIB 2 script in the logic QF_BV, translates its terms
-//! into the core language of `bvsmt` and answers `check-sat` and `get-model`.
+//! Command-line front end: reads an SMT-LIB 2 script in the logic QF_BV, builds the terms of
+//! `bvsmt` and answers `check-sat` and `get-model`.
 //!
-//! This translation is not verified. Every operator of QF_BV that the core lacks is expressed
-//! by the core operators, following the definitions in the SMT-LIB theory FixedSizeBitVectors.
-//! Booleans are bit-vectors of width 1. A subterm used more than once by such a definition, and
-//! every `let`-bound term, becomes a definition of the core problem, so terms are not copied.
+//! This front end is not verified. Every bit-vector operation is passed to the solver as it is;
+//! the front end only parses, handles the Core-theory parts (`Bool`, the Boolean connectives,
+//! chainable `=`, pairwise `distinct`, `let`, `define-fun`) and reads the model. Booleans are
+//! bit-vectors of width 1. Every `let`-bound term and every argument of a defined function
+//! becomes a definition of the problem, so terms are not copied.
 
-use bvsmt::{Answer, BinOp, Problem, Term, solve};
+use bvsmt::{Answer, Op, Problem, Term, solve};
 use std::collections::HashMap;
 use std::io::Read;
 
@@ -117,22 +118,39 @@ fn num(s: &Sexp) -> Result<usize, String> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Terms of the core language, built with sharing
+// Terms
 
-fn clone_op(op: &BinOp) -> BinOp {
+fn clone_op(op: &Op) -> Op {
     match op {
-        BinOp::And => BinOp::And,
-        BinOp::Or => BinOp::Or,
-        BinOp::Xor => BinOp::Xor,
-        BinOp::Add => BinOp::Add,
-        BinOp::Mul => BinOp::Mul,
-        BinOp::Udiv => BinOp::Udiv,
-        BinOp::Urem => BinOp::Urem,
-        BinOp::Shl => BinOp::Shl,
-        BinOp::Lshr => BinOp::Lshr,
-        BinOp::Concat => BinOp::Concat,
-        BinOp::Eq => BinOp::Eq,
-        BinOp::Ult => BinOp::Ult,
+        Op::And => Op::And,
+        Op::Or => Op::Or,
+        Op::Xor => Op::Xor,
+        Op::Nand => Op::Nand,
+        Op::Nor => Op::Nor,
+        Op::Xnor => Op::Xnor,
+        Op::Comp => Op::Comp,
+        Op::Add => Op::Add,
+        Op::Sub => Op::Sub,
+        Op::Mul => Op::Mul,
+        Op::Udiv => Op::Udiv,
+        Op::Urem => Op::Urem,
+        Op::Sdiv => Op::Sdiv,
+        Op::Srem => Op::Srem,
+        Op::Smod => Op::Smod,
+        Op::Shl => Op::Shl,
+        Op::Lshr => Op::Lshr,
+        Op::Ashr => Op::Ashr,
+        Op::Concat => Op::Concat,
+        Op::Eq => Op::Eq,
+        Op::Distinct => Op::Distinct,
+        Op::Ult => Op::Ult,
+        Op::Ule => Op::Ule,
+        Op::Ugt => Op::Ugt,
+        Op::Uge => Op::Uge,
+        Op::Slt => Op::Slt,
+        Op::Sle => Op::Sle,
+        Op::Sgt => Op::Sgt,
+        Op::Sge => Op::Sge,
     }
 }
 
@@ -142,8 +160,14 @@ fn clone_term(t: &Term) -> Term {
         Term::Var(i) => Term::Var(*i),
         Term::Ref(i) => Term::Ref(*i),
         Term::Not(a) => Term::Not(Box::new(clone_term(a))),
+        Term::Neg(a) => Term::Neg(Box::new(clone_term(a))),
         Term::Bin(op, a, b) => Term::Bin(clone_op(op), Box::new(clone_term(a)), Box::new(clone_term(b))),
         Term::Extract(h, l, a) => Term::Extract(*h, *l, Box::new(clone_term(a))),
+        Term::Repeat(i, a) => Term::Repeat(*i, Box::new(clone_term(a))),
+        Term::ZeroExtend(i, a) => Term::ZeroExtend(*i, Box::new(clone_term(a))),
+        Term::SignExtend(i, a) => Term::SignExtend(*i, Box::new(clone_term(a))),
+        Term::RotateLeft(i, a) => Term::RotateLeft(*i, Box::new(clone_term(a))),
+        Term::RotateRight(i, a) => Term::RotateRight(*i, Box::new(clone_term(a))),
         Term::Ite(c, a, b) => Term::Ite(Box::new(clone_term(c)), Box::new(clone_term(a)), Box::new(clone_term(b))),
     }
 }
@@ -186,7 +210,7 @@ struct Builder {
     macros: HashMap<String, Macro>,
 }
 
-fn bin(op: BinOp, a: Term, b: Term) -> Term {
+fn bin(op: Op, a: Term, b: Term) -> Term {
     Term::Bin(op, Box::new(a), Box::new(b))
 }
 
@@ -198,20 +222,52 @@ fn ite(c: Term, a: Term, b: Term) -> Term {
     Term::Ite(Box::new(c), Box::new(a), Box::new(b))
 }
 
-fn extract(hi: usize, lo: usize, a: Term) -> Term {
-    Term::Extract(hi, lo, Box::new(a))
-}
-
-fn konst(v: u64, w: usize) -> Term {
-    Term::Const((0..w).map(|i| i < 64 && (v >> i) & 1 == 1).collect())
-}
-
-fn ones(w: usize) -> Term {
-    Term::Const(vec![true; w])
-}
-
 fn tt() -> Term {
     Term::Const(vec![true])
+}
+
+/// The left-associative application of `op` to at least one term.
+fn fold_left(op: Op, ts: Vec<Term>) -> Term {
+    let mut it = ts.into_iter();
+    let mut r = it.next().unwrap();
+    for t in it {
+        r = bin(clone_op(&op), r, t);
+    }
+    r
+}
+
+/// The binary operator named `f`, if it is one of QF_BV.
+fn bv_op(f: &str) -> Option<Op> {
+    Some(match f {
+        "bvand" => Op::And,
+        "bvor" => Op::Or,
+        "bvxor" => Op::Xor,
+        "bvnand" => Op::Nand,
+        "bvnor" => Op::Nor,
+        "bvxnor" => Op::Xnor,
+        "bvcomp" => Op::Comp,
+        "bvadd" => Op::Add,
+        "bvsub" => Op::Sub,
+        "bvmul" => Op::Mul,
+        "bvudiv" => Op::Udiv,
+        "bvurem" => Op::Urem,
+        "bvsdiv" => Op::Sdiv,
+        "bvsrem" => Op::Srem,
+        "bvsmod" => Op::Smod,
+        "bvshl" => Op::Shl,
+        "bvlshr" => Op::Lshr,
+        "bvashr" => Op::Ashr,
+        "concat" => Op::Concat,
+        "bvult" => Op::Ult,
+        "bvule" => Op::Ule,
+        "bvugt" => Op::Ugt,
+        "bvuge" => Op::Uge,
+        "bvslt" => Op::Slt,
+        "bvsle" => Op::Sle,
+        "bvsgt" => Op::Sgt,
+        "bvsge" => Op::Sge,
+        _ => return None,
+    })
 }
 
 impl Builder {
@@ -230,23 +286,6 @@ impl Builder {
     fn share(&mut self, t: Term) -> usize {
         self.defs.push(t);
         self.defs.len() - 1
-    }
-
-    fn shared(&mut self, t: Term) -> Term {
-        match t {
-            Term::Ref(i) => Term::Ref(i),
-            Term::Var(i) => Term::Var(i),
-            t => Term::Ref(self.share(t)),
-        }
-    }
-
-    fn neg(&mut self, a: Term, w: usize) -> Term {
-        bin(BinOp::Add, not(a), konst(1, w))
-    }
-
-    /// The sign bit of `a`, compared with 1: a Boolean.
-    fn msb(&self, a: &Term, w: usize) -> Term {
-        bin(BinOp::Eq, extract(w - 1, w - 1, clone_term(a)), tt())
     }
 
     fn sort_of(&self, s: &Sexp) -> Result<Sort, String> {
@@ -412,50 +451,26 @@ impl Builder {
             Sort::Bv(w) => w,
             Sort::Bool => return Err(format!("{} on a Boolean", f)),
         };
+        let t = Box::new(t);
         match (f, idx.as_slice()) {
             ("extract", [hi, lo]) => {
                 if lo > hi || *hi >= w {
                     return Err("extract out of range".into());
                 }
-                Ok((extract(*hi, *lo, t), Sort::Bv(hi - lo + 1)))
-            }
-            ("zero_extend", [i]) => {
-                if *i == 0 {
-                    return Ok((t, sort));
-                }
-                Ok((bin(BinOp::Concat, Term::Const(vec![false; *i]), t), Sort::Bv(w + i)))
-            }
-            ("sign_extend", [i]) => {
-                if *i == 0 {
-                    return Ok((t, sort));
-                }
-                let t = self.shared(t);
-                let hi = ite(self.msb(&t, w), ones(*i), Term::Const(vec![false; *i]));
-                Ok((bin(BinOp::Concat, hi, t), Sort::Bv(w + i)))
+                Ok((Term::Extract(*hi, *lo, t), Sort::Bv(hi - lo + 1)))
             }
             ("repeat", [i]) => {
                 if *i == 0 {
                     return Err("repeat 0".into());
                 }
-                let t = self.shared(t);
-                let mut r = clone_term(&t);
-                for _ in 1..*i {
-                    r = bin(BinOp::Concat, clone_term(&t), r);
-                }
-                Ok((r, Sort::Bv(w * i)))
+                Ok((Term::Repeat(*i, t), Sort::Bv(w * i)))
             }
-            ("rotate_left", [i]) => Ok((self.rotate_left(t, i % w, w), sort)),
-            ("rotate_right", [i]) => Ok((self.rotate_left(t, (w - i % w) % w, w), sort)),
+            ("zero_extend", [i]) => Ok((Term::ZeroExtend(*i, t), Sort::Bv(w + i))),
+            ("sign_extend", [i]) => Ok((Term::SignExtend(*i, t), Sort::Bv(w + i))),
+            ("rotate_left", [i]) => Ok((Term::RotateLeft(*i, t), sort)),
+            ("rotate_right", [i]) => Ok((Term::RotateRight(*i, t), sort)),
             _ => Err(format!("unsupported indexed operator {}", f)),
         }
-    }
-
-    fn rotate_left(&mut self, t: Term, i: usize, w: usize) -> Term {
-        if i == 0 {
-            return t;
-        }
-        let t = self.shared(t);
-        bin(BinOp::Concat, extract(w - 1 - i, 0, clone_term(&t)), extract(w - 1, w - i, t))
     }
 
     fn apply(&mut self, f: &str, args: Vec<(Term, Sort)>) -> Result<(Term, Sort), String> {
@@ -467,13 +482,13 @@ impl Builder {
         let mut ts: Vec<Term> = args.into_iter().map(|a| a.0).collect();
         let all_bool = sorts.iter().all(|s| *s == Sort::Bool);
         let same = sorts.windows(2).all(|p| p[0] == p[1]);
-        let w = sorts.first().map(|s| s.width()).unwrap_or(0);
         let bv = !sorts.is_empty() && sorts.iter().all(|s| matches!(s, Sort::Bv(_)));
         let arity = |n: usize| -> Result<(), String> {
             if sorts.len() == n { Ok(()) } else { Err(format!("{} takes {} arguments", f, n)) }
         };
         let bool_r = |t: Term| Ok((t, Sort::Bool));
         match f {
+            // The Boolean connectives, on bit-vectors of width 1.
             "not" => {
                 arity(1)?;
                 if !all_bool {
@@ -486,16 +501,11 @@ impl Builder {
                     return Err(format!("{} needs Boolean arguments", f));
                 }
                 let op = match f {
-                    "and" => BinOp::And,
-                    "or" => BinOp::Or,
-                    _ => BinOp::Xor,
+                    "and" => Op::And,
+                    "or" => Op::Or,
+                    _ => Op::Xor,
                 };
-                let mut it = ts.into_iter();
-                let mut r = it.next().unwrap();
-                for t in it {
-                    r = bin(clone_op(&op), r, t);
-                }
-                bool_r(r)
+                bool_r(fold_left(op, ts))
             }
             "=>" => {
                 if !all_bool || ts.len() < 2 {
@@ -504,33 +514,33 @@ impl Builder {
                 // Right associative.
                 let mut r = ts.pop().unwrap();
                 while let Some(t) = ts.pop() {
-                    r = bin(BinOp::Or, not(t), r);
+                    r = bin(Op::Or, not(t), r);
                 }
                 bool_r(r)
             }
+            // `=` is chainable and `distinct` pairwise: conjunctions of the binary operators.
             "=" | "distinct" => {
                 if ts.len() < 2 || !same {
                     return Err(format!("{} needs at least two arguments of one sort", f));
                 }
-                let ts: Vec<Term> = ts.into_iter().map(|t| self.shared(t)).collect();
+                let ts: Vec<Term> = if ts.len() == 2 {
+                    ts
+                } else {
+                    ts.into_iter().map(|t| Term::Ref(self.share(t))).collect()
+                };
                 let mut conj: Vec<Term> = Vec::new();
                 if f == "=" {
                     for i in 0..ts.len() - 1 {
-                        conj.push(bin(BinOp::Eq, clone_term(&ts[i]), clone_term(&ts[i + 1])));
+                        conj.push(bin(Op::Eq, clone_term(&ts[i]), clone_term(&ts[i + 1])));
                     }
                 } else {
                     for i in 0..ts.len() {
                         for j in i + 1..ts.len() {
-                            conj.push(not(bin(BinOp::Eq, clone_term(&ts[i]), clone_term(&ts[j]))));
+                            conj.push(bin(Op::Distinct, clone_term(&ts[i]), clone_term(&ts[j])));
                         }
                     }
                 }
-                let mut it = conj.into_iter();
-                let mut r = it.next().unwrap();
-                for t in it {
-                    r = bin(BinOp::And, r, t);
-                }
-                bool_r(r)
+                bool_r(fold_left(Op::And, conj))
             }
             "ite" => {
                 arity(3)?;
@@ -546,21 +556,22 @@ impl Builder {
                 if !bv {
                     return Err(format!("unknown function or ill-sorted application: {}", f));
                 }
-                self.apply_bv(f, ts, &sorts, w, same)
+                self.apply_bv(f, ts, &sorts, same)
             }
         }
     }
 
-    fn apply_bv(&mut self, f: &str, mut ts: Vec<Term>, sorts: &[Sort], w: usize, same: bool) -> Result<(Term, Sort), String> {
+    /// The operators of QF_BV, each passed to the solver as it is.
+    fn apply_bv(&mut self, f: &str, mut ts: Vec<Term>, sorts: &[Sort], same: bool) -> Result<(Term, Sort), String> {
         let n = ts.len();
-        let bvw = Sort::Bv(w);
+        let w = sorts[0].width();
         if f == "concat" {
             if n != 2 {
                 return Err("concat takes 2 arguments".into());
             }
             let b = ts.pop().unwrap();
             let a = ts.pop().unwrap();
-            return Ok((bin(BinOp::Concat, a, b), Sort::Bv(sorts[0].width() + sorts[1].width())));
+            return Ok((bin(Op::Concat, a, b), Sort::Bv(w + sorts[1].width())));
         }
         if !same {
             return Err(format!("{}: operands of different widths", f));
@@ -569,115 +580,21 @@ impl Builder {
             if n != 1 {
                 return Err(format!("{} takes 1 argument", f));
             }
-            let a = ts.pop().unwrap();
-            return Ok((if f == "bvnot" { not(a) } else { self.neg(a, w) }, bvw));
+            let a = Box::new(ts.pop().unwrap());
+            return Ok((if f == "bvnot" { Term::Not(a) } else { Term::Neg(a) }, Sort::Bv(w)));
         }
-        // Left-associative operators may take more than two arguments.
-        let assoc = matches!(f, "bvand" | "bvor" | "bvxor" | "bvadd" | "bvmul");
+        let op = bv_op(f).ok_or_else(|| format!("unknown function {}", f))?;
+        // These operators have the :left-assoc attribute and may take more than two arguments.
+        let assoc = matches!(f, "bvand" | "bvor" | "bvxor" | "bvxnor" | "bvadd" | "bvmul");
         if (assoc && n < 2) || (!assoc && n != 2) {
             return Err(format!("{}: wrong number of arguments", f));
         }
-        if assoc {
-            let op = match f {
-                "bvand" => BinOp::And,
-                "bvor" => BinOp::Or,
-                "bvxor" => BinOp::Xor,
-                "bvadd" => BinOp::Add,
-                _ => BinOp::Mul,
-            };
-            let mut it = ts.into_iter();
-            let mut r = it.next().unwrap();
-            for t in it {
-                r = bin(clone_op(&op), r, t);
-            }
-            return Ok((r, bvw));
-        }
-        let b = ts.pop().unwrap();
-        let a = ts.pop().unwrap();
-        let bool_r = |t: Term| Ok((t, Sort::Bool));
-        match f {
-            "bvnand" => Ok((not(bin(BinOp::And, a, b)), bvw)),
-            "bvnor" => Ok((not(bin(BinOp::Or, a, b)), bvw)),
-            "bvxnor" => Ok((not(bin(BinOp::Xor, a, b)), bvw)),
-            "bvcomp" => Ok((bin(BinOp::Eq, a, b), Sort::Bv(1))),
-            "bvsub" => {
-                let nb = self.neg(b, w);
-                Ok((bin(BinOp::Add, a, nb), bvw))
-            }
-            "bvudiv" => Ok((bin(BinOp::Udiv, a, b), bvw)),
-            "bvurem" => Ok((bin(BinOp::Urem, a, b), bvw)),
-            "bvshl" => Ok((bin(BinOp::Shl, a, b), bvw)),
-            "bvlshr" => Ok((bin(BinOp::Lshr, a, b), bvw)),
-            "bvashr" => {
-                let a = self.shared(a);
-                let b = self.shared(b);
-                let m = self.msb(&a, w);
-                let neg_case = not(bin(BinOp::Lshr, not(clone_term(&a)), clone_term(&b)));
-                Ok((ite(m, neg_case, bin(BinOp::Lshr, a, b)), bvw))
-            }
-            "bvult" => bool_r(bin(BinOp::Ult, a, b)),
-            "bvule" => bool_r(not(bin(BinOp::Ult, b, a))),
-            "bvugt" => bool_r(bin(BinOp::Ult, b, a)),
-            "bvuge" => bool_r(not(bin(BinOp::Ult, a, b))),
-            "bvslt" | "bvsle" | "bvsgt" | "bvsge" => {
-                // Signed order: flip the sign bits, then compare unsigned.
-                let m = konst(0, w);
-                let mut bits = match m {
-                    Term::Const(bits) => bits,
-                    _ => unreachable!(),
-                };
-                bits[w - 1] = true;
-                let fa = bin(BinOp::Xor, a, Term::Const(bits.clone()));
-                let fb = bin(BinOp::Xor, b, Term::Const(bits));
-                match f {
-                    "bvslt" => bool_r(bin(BinOp::Ult, fa, fb)),
-                    "bvsle" => bool_r(not(bin(BinOp::Ult, fb, fa))),
-                    "bvsgt" => bool_r(bin(BinOp::Ult, fb, fa)),
-                    _ => bool_r(not(bin(BinOp::Ult, fa, fb))),
-                }
-            }
-            "bvsdiv" | "bvsrem" | "bvsmod" => Ok((self.signed_div(f, a, b, w), bvw)),
-            _ => Err(format!("unknown function {}", f)),
-        }
-    }
-
-    /// `bvsdiv`, `bvsrem`, `bvsmod` as defined in SMT-LIB, by unsigned division of the absolute
-    /// values.
-    fn signed_div(&mut self, f: &str, a: Term, b: Term, w: usize) -> Term {
-        let a = self.shared(a);
-        let b = self.shared(b);
-        let ma = self.msb(&a, w);
-        let ma = self.shared(ma);
-        let mb = self.msb(&b, w);
-        let mb = self.shared(mb);
-        let na = self.neg(clone_term(&a), w);
-        let abs_a = ite(clone_term(&ma), na, clone_term(&a));
-        let abs_a = self.shared(abs_a);
-        let nb = self.neg(clone_term(&b), w);
-        let abs_b = ite(clone_term(&mb), nb, clone_term(&b));
-        let abs_b = self.shared(abs_b);
-        match f {
-            "bvsdiv" => {
-                let q = self.shared(bin(BinOp::Udiv, abs_a, abs_b));
-                let nq = self.neg(clone_term(&q), w);
-                ite(bin(BinOp::Xor, ma, mb), nq, q)
-            }
-            "bvsrem" => {
-                let r = self.shared(bin(BinOp::Urem, abs_a, abs_b));
-                let nr = self.neg(clone_term(&r), w);
-                ite(ma, nr, r)
-            }
-            _ => {
-                let u = self.shared(bin(BinOp::Urem, abs_a, abs_b));
-                let nu = self.neg(clone_term(&u), w);
-                let nu = self.shared(nu);
-                let u_zero = bin(BinOp::Eq, clone_term(&u), konst(0, w));
-                // ma = 0, mb = 0: u;  ma = 1, mb = 0: -u + b;  ma = 0, mb = 1: u + b;  both: -u.
-                let pos_a = ite(clone_term(&mb), bin(BinOp::Add, clone_term(&u), clone_term(&b)), clone_term(&u));
-                let neg_a = ite(mb, clone_term(&nu), bin(BinOp::Add, clone_term(&nu), b));
-                ite(u_zero, u, ite(ma, neg_a, pos_a))
-            }
-        }
+        let sort = match op {
+            Op::Comp => Sort::Bv(1),
+            Op::Ult | Op::Ule | Op::Ugt | Op::Uge | Op::Slt | Op::Sle | Op::Sgt | Op::Sge => Sort::Bool,
+            _ => Sort::Bv(w),
+        };
+        Ok((fold_left(op, ts), sort))
     }
 
     fn apply_macro(&mut self, name: &str, args: Vec<(Term, Sort)>) -> Result<(Term, Sort), String> {

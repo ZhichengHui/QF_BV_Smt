@@ -1081,13 +1081,13 @@ lemma blast_bin_m_length:
   by (cases op) (simp_all add: bin_width_def)
 
 lemma blast_m_simps':
-  \<open>blast_m vs dl s (Term_Not a) = (fst (blast_m vs dl s a), not_m (snd (blast_m vs dl s a)))\<close>
-  \<open>blast_m vs dl s (Term_Bin op a b) =
+  \<open>blast_m vs dl s (CoreTerm_Not a) = (fst (blast_m vs dl s a), not_m (snd (blast_m vs dl s a)))\<close>
+  \<open>blast_m vs dl s (CoreTerm_Bin op a b) =
      blast_bin_m (fst (blast_m vs dl (fst (blast_m vs dl s a)) b)) op (snd (blast_m vs dl s a))
        (snd (blast_m vs dl (fst (blast_m vs dl s a)) b))\<close>
-  \<open>blast_m vs dl s (Term_Extract hi lo a) =
+  \<open>blast_m vs dl s (CoreTerm_Extract hi lo a) =
      (fst (blast_m vs dl s a), extract_m (snd (blast_m vs dl s a)) (unat hi) (unat lo))\<close>
-  \<open>blast_m vs dl s (Term_Ite c a b) =
+  \<open>blast_m vs dl s (CoreTerm_Ite c a b) =
      ite_vec_m (fst (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b))
        (snd (blast_m vs dl s c) ! 0) (snd (blast_m vs dl (fst (blast_m vs dl s c)) a))
        (snd (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b))\<close>
@@ -1098,60 +1098,60 @@ declare blast_m_simps' [simp]
 
 lemma blast_m_mono: \<open>fst s \<le> fst (fst (blast_m vs dl s t))\<close>
 proof (induction t arbitrary: s)
-  case (Term_Not a)
+  case (CoreTerm_Not a)
   then show ?case by simp
 next
-  case (Term_Bin op a b)
-  have \<open>fst s \<le> fst (fst (blast_m vs dl s a))\<close> by (rule Term_Bin.IH(1))
-  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl (fst (blast_m vs dl s a)) b))\<close> by (rule Term_Bin.IH(2))
-  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl s (Term_Bin op a b)))\<close> by (simp add: blast_bin_m_mono)
+  case (CoreTerm_Bin op a b)
+  have \<open>fst s \<le> fst (fst (blast_m vs dl s a))\<close> by (rule CoreTerm_Bin.IH(1))
+  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl (fst (blast_m vs dl s a)) b))\<close> by (rule CoreTerm_Bin.IH(2))
+  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl s (CoreTerm_Bin op a b)))\<close> by (simp add: blast_bin_m_mono)
   finally show ?case .
 next
-  case (Term_Extract hi lo a)
+  case (CoreTerm_Extract hi lo a)
   then show ?case by simp
 next
-  case (Term_Ite c a b)
-  have \<open>fst s \<le> fst (fst (blast_m vs dl s c))\<close> by (rule Term_Ite.IH(1))
-  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl (fst (blast_m vs dl s c)) a))\<close> by (rule Term_Ite.IH(2))
+  case (CoreTerm_Ite c a b)
+  have \<open>fst s \<le> fst (fst (blast_m vs dl s c))\<close> by (rule CoreTerm_Ite.IH(1))
+  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl (fst (blast_m vs dl s c)) a))\<close> by (rule CoreTerm_Ite.IH(2))
   also have \<open>\<dots> \<le> fst (fst (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b))\<close>
-    by (rule Term_Ite.IH(3))
-  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl s (Term_Ite c a b)))\<close> by simp
+    by (rule CoreTerm_Ite.IH(3))
+  also have \<open>\<dots> \<le> fst (fst (blast_m vs dl s (CoreTerm_Ite c a b)))\<close> by simp
   finally show ?case .
 qed simp_all
 
 lemma blast_m_length:
-  \<open>wt (map length vs) (map length dl) t \<Longrightarrow>
-   length (snd (blast_m vs dl s t)) = width (map length vs) (map length dl) t\<close>
+  \<open>cwt (map length vs) (map length dl) t \<Longrightarrow>
+   length (snd (blast_m vs dl s t)) = cwidth (map length vs) (map length dl) t\<close>
 proof (induction t arbitrary: s)
-  case (Term_Bin op a b)
-  then have \<open>length (snd (blast_m vs dl s a)) = width (map length vs) (map length dl) a\<close>
-    \<open>length (snd (blast_m vs dl (fst (blast_m vs dl s a)) b)) = width (map length vs) (map length dl) b\<close>
+  case (CoreTerm_Bin op a b)
+  then have \<open>length (snd (blast_m vs dl s a)) = cwidth (map length vs) (map length dl) a\<close>
+    \<open>length (snd (blast_m vs dl (fst (blast_m vs dl s a)) b)) = cwidth (map length vs) (map length dl) b\<close>
     by simp_all
-  then show ?case using Term_Bin.prems
+  then show ?case using CoreTerm_Bin.prems
     by (cases \<open>op = BinOp_Concat\<close>) (simp_all add: blast_bin_m_length bin_width_def split: BinOp.splits)
 next
-  case (Term_Extract hi lo a)
+  case (CoreTerm_Extract hi lo a)
   then show ?case by (simp add: Suc_diff_le)
 qed simp_all
 
-lemma subterms_self [simp]: \<open>t \<in> set (subterms t)\<close>
+lemma subterms_self [simp]: \<open>t \<in> set (csubterms t)\<close>
   by (cases t) simp_all
 
 text \<open>The precondition of \<^verbatim>\<open>blast\<close>: what each call of the recursion needs.\<close>
-primrec bok :: \<open>nat \<Rightarrow> Lit list list \<Rightarrow> Lit list list \<Rightarrow> st \<Rightarrow> Term \<Rightarrow> bool\<close> where
-  \<open>bok N vs dl s (Term_Const bs) = (length bs \<le> N \<and> length bs < 2 ^ 64)\<close>
-| \<open>bok N vs dl s (Term_Var i) = (unat i < length vs)\<close>
-| \<open>bok N vs dl s (Term_Ref i) = (unat i < length dl)\<close>
-| \<open>bok N vs dl s (Term_Not a) =
+primrec bok :: \<open>nat \<Rightarrow> Lit list list \<Rightarrow> Lit list list \<Rightarrow> st \<Rightarrow> CoreTerm \<Rightarrow> bool\<close> where
+  \<open>bok N vs dl s (CoreTerm_Const bs) = (length bs \<le> N \<and> length bs < 2 ^ 64)\<close>
+| \<open>bok N vs dl s (CoreTerm_Var i) = (unat i < length vs)\<close>
+| \<open>bok N vs dl s (CoreTerm_Ref i) = (unat i < length dl)\<close>
+| \<open>bok N vs dl s (CoreTerm_Not a) =
      (bok N vs dl s a \<and> length (snd (blast_m vs dl s a)) \<le> N \<and> length (snd (blast_m vs dl s a)) < 2 ^ 64)\<close>
-| \<open>bok N vs dl s (Term_Bin op a b) =
+| \<open>bok N vs dl s (CoreTerm_Bin op a b) =
      (bok N vs dl s a \<and> bok N vs dl (fst (blast_m vs dl s a)) b \<and>
       bin_ok N (fst (blast_m vs dl (fst (blast_m vs dl s a)) b)) op (snd (blast_m vs dl s a))
         (snd (blast_m vs dl (fst (blast_m vs dl s a)) b)))\<close>
-| \<open>bok N vs dl s (Term_Extract hi lo a) =
+| \<open>bok N vs dl s (CoreTerm_Extract hi lo a) =
      (bok N vs dl s a \<and> unat lo \<le> unat hi \<and> unat hi < length (snd (blast_m vs dl s a)) \<and>
       length (snd (blast_m vs dl s a)) < 2 ^ 64 \<and> unat hi - unat lo + 1 \<le> N)\<close>
-| \<open>bok N vs dl s (Term_Ite c a b) =
+| \<open>bok N vs dl s (CoreTerm_Ite c a b) =
      (bok N vs dl s c \<and> bok N vs dl (fst (blast_m vs dl s c)) a \<and>
       bok N vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b \<and>
       0 < length (snd (blast_m vs dl s c)) \<and>
@@ -1163,169 +1163,169 @@ primrec bok :: \<open>nat \<Rightarrow> Lit list list \<Rightarrow> Lit list lis
         length (snd (blast_m vs dl (fst (blast_m vs dl s c)) a)) < 2 ^ 64)\<close>
 
 lemma bok_intro:
-  assumes \<open>wt (map length vs) (map length dl) t\<close>
-    \<open>\<forall>u \<in> set (subterms t). 2 * width (map length vs) (map length dl) u + 2 \<le> M\<close>
+  assumes \<open>cwt (map length vs) (map length dl) t\<close>
+    \<open>\<forall>u \<in> set (csubterms t). 2 * cwidth (map length vs) (map length dl) u + 2 \<le> M\<close>
     \<open>M \<le> N\<close> \<open>M < 2 ^ 64\<close> \<open>fst (fst (blast_m vs dl s t)) < 2 ^ 64\<close>
   shows \<open>bok N vs dl s t\<close>
   using assms
 proof (induction t arbitrary: s)
-  case (Term_Const bs)
+  case (CoreTerm_Const bs)
   then show ?case by simp
 next
-  case (Term_Var i)
+  case (CoreTerm_Var i)
   then show ?case by simp
 next
-  case (Term_Ref i)
+  case (CoreTerm_Ref i)
   then show ?case by simp
 next
-  case (Term_Not a)
-  have w: \<open>2 * width (map length vs) (map length dl) a + 2 \<le> M\<close>
-    using Term_Not.prems(2) by simp
-  have la: \<open>length (snd (blast_m vs dl s a)) = width (map length vs) (map length dl) a\<close>
-    using Term_Not.prems(1) by (simp add: blast_m_length)
+  case (CoreTerm_Not a)
+  have w: \<open>2 * cwidth (map length vs) (map length dl) a + 2 \<le> M\<close>
+    using CoreTerm_Not.prems(2) by simp
+  have la: \<open>length (snd (blast_m vs dl s a)) = cwidth (map length vs) (map length dl) a\<close>
+    using CoreTerm_Not.prems(1) by (simp add: blast_m_length)
   have \<open>bok N vs dl s a\<close>
-    by (rule Term_Not.IH) (insert Term_Not.prems, simp_all)
-  then show ?case using w la Term_Not.prems(3,4) by simp
+    by (rule CoreTerm_Not.IH) (insert CoreTerm_Not.prems, simp_all)
+  then show ?case using w la CoreTerm_Not.prems(3,4) by simp
 next
-  case (Term_Bin op a b)
+  case (CoreTerm_Bin op a b)
   let ?W = \<open>map length vs\<close> and ?D = \<open>map length dl\<close>
   let ?s1 = \<open>fst (blast_m vs dl s a)\<close>
   let ?s2 = \<open>fst (blast_m vs dl ?s1 b)\<close>
   have fin: \<open>fst (fst (blast_bin_m ?s2 op (snd (blast_m vs dl s a)) (snd (blast_m vs dl ?s1 b)))) < 2 ^ 64\<close>
-    using Term_Bin.prems(5) by simp
+    using CoreTerm_Bin.prems(5) by simp
   have m2: \<open>fst ?s2 < 2 ^ 64\<close>
     using le_less_trans[OF blast_bin_m_mono fin] .
   have m1: \<open>fst ?s1 < 2 ^ 64\<close>
     using le_less_trans[OF blast_m_mono m2] .
-  have wt: \<open>wt ?W ?D a\<close> \<open>wt ?W ?D b\<close> \<open>op \<noteq> BinOp_Concat \<longrightarrow> width ?W ?D a = width ?W ?D b\<close>
-    using Term_Bin.prems(1) by simp_all
-  have sub: \<open>\<forall>u \<in> set (subterms a). 2 * width ?W ?D u + 2 \<le> M\<close> \<open>\<forall>u \<in> set (subterms b). 2 * width ?W ?D u + 2 \<le> M\<close>
-    \<open>2 * width ?W ?D (Term_Bin op a b) + 2 \<le> M\<close>
-    using Term_Bin.prems(2) by simp_all
-  have wa: \<open>2 * width ?W ?D a + 2 \<le> M\<close>
+  have cwt: \<open>cwt ?W ?D a\<close> \<open>cwt ?W ?D b\<close> \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ?W ?D a = cwidth ?W ?D b\<close>
+    using CoreTerm_Bin.prems(1) by simp_all
+  have sub: \<open>\<forall>u \<in> set (csubterms a). 2 * cwidth ?W ?D u + 2 \<le> M\<close> \<open>\<forall>u \<in> set (csubterms b). 2 * cwidth ?W ?D u + 2 \<le> M\<close>
+    \<open>2 * cwidth ?W ?D (CoreTerm_Bin op a b) + 2 \<le> M\<close>
+    using CoreTerm_Bin.prems(2) by simp_all
+  have wa: \<open>2 * cwidth ?W ?D a + 2 \<le> M\<close>
     using sub(1) subterms_self[of a] by blast
-  have la: \<open>length (snd (blast_m vs dl s a)) = width ?W ?D a\<close>
-    using wt(1) by (rule blast_m_length)
-  have lb: \<open>length (snd (blast_m vs dl ?s1 b)) = width ?W ?D b\<close>
-    using wt(2) by (rule blast_m_length)
+  have la: \<open>length (snd (blast_m vs dl s a)) = cwidth ?W ?D a\<close>
+    using cwt(1) by (rule blast_m_length)
+  have lb: \<open>length (snd (blast_m vs dl ?s1 b)) = cwidth ?W ?D b\<close>
+    using cwt(2) by (rule blast_m_length)
   have oka: \<open>bok N vs dl s a\<close>
-    using wt(1) sub(1) Term_Bin.prems(3,4) m1 by (rule Term_Bin.IH(1))
+    using cwt(1) sub(1) CoreTerm_Bin.prems(3,4) m1 by (rule CoreTerm_Bin.IH(1))
   have okb: \<open>bok N vs dl ?s1 b\<close>
-    using wt(2) sub(2) Term_Bin.prems(3,4) m2 by (rule Term_Bin.IH(2))
+    using cwt(2) sub(2) CoreTerm_Bin.prems(3,4) m2 by (rule CoreTerm_Bin.IH(2))
   have \<open>bin_ok N ?s2 op (snd (blast_m vs dl s a)) (snd (blast_m vs dl ?s1 b))\<close>
-    unfolding bin_ok_def using fin la lb wt(3) wa sub(3) Term_Bin.prems(3,4)
+    unfolding bin_ok_def using fin la lb cwt(3) wa sub(3) CoreTerm_Bin.prems(3,4)
     by (cases op) simp_all
   then show ?case using oka okb by simp
 next
-  case (Term_Extract hi lo a)
-  have w: \<open>2 * width (map length vs) (map length dl) (Term_Extract hi lo a) + 2 \<le> M\<close>
-    using Term_Extract.prems(2) by simp
-  have wt: \<open>wt (map length vs) (map length dl) a\<close> \<open>unat lo \<le> unat hi\<close>
-    \<open>unat hi < width (map length vs) (map length dl) a\<close>
-    using Term_Extract.prems(1) by simp_all
-  have wa: \<open>2 * width (map length vs) (map length dl) a + 2 \<le> M\<close>
-    using Term_Extract.prems(2) subterms_self[of a] by auto
+  case (CoreTerm_Extract hi lo a)
+  have w: \<open>2 * cwidth (map length vs) (map length dl) (CoreTerm_Extract hi lo a) + 2 \<le> M\<close>
+    using CoreTerm_Extract.prems(2) by simp
+  have cwt: \<open>cwt (map length vs) (map length dl) a\<close> \<open>unat lo \<le> unat hi\<close>
+    \<open>unat hi < cwidth (map length vs) (map length dl) a\<close>
+    using CoreTerm_Extract.prems(1) by simp_all
+  have wa: \<open>2 * cwidth (map length vs) (map length dl) a + 2 \<le> M\<close>
+    using CoreTerm_Extract.prems(2) subterms_self[of a] by auto
   have \<open>bok N vs dl s a\<close>
-    by (rule Term_Extract.IH) (insert Term_Extract.prems, simp_all)
-  then show ?case using w wt wa Term_Extract.prems(3,4) by (simp add: blast_m_length)
+    by (rule CoreTerm_Extract.IH) (insert CoreTerm_Extract.prems, simp_all)
+  then show ?case using w cwt wa CoreTerm_Extract.prems(3,4) by (simp add: blast_m_length)
 next
-  case (Term_Ite c a b)
+  case (CoreTerm_Ite c a b)
   let ?W = \<open>map length vs\<close> and ?D = \<open>map length dl\<close>
   let ?s1 = \<open>fst (blast_m vs dl s c)\<close>
   let ?s2 = \<open>fst (blast_m vs dl ?s1 a)\<close>
   let ?s3 = \<open>fst (blast_m vs dl ?s2 b)\<close>
   have fin: \<open>fst ?s3 + length (snd (blast_m vs dl ?s1 a)) < 2 ^ 64\<close>
-    using Term_Ite.prems(5) by simp
+    using CoreTerm_Ite.prems(5) by simp
   have m3: \<open>fst ?s3 < 2 ^ 64\<close> using fin by simp
   have m2: \<open>fst ?s2 < 2 ^ 64\<close> using le_less_trans[OF blast_m_mono m3] .
   have m1: \<open>fst ?s1 < 2 ^ 64\<close> using le_less_trans[OF blast_m_mono m2] .
-  have wt: \<open>wt ?W ?D c\<close> \<open>wt ?W ?D a\<close> \<open>wt ?W ?D b\<close> \<open>width ?W ?D c = 1\<close> \<open>width ?W ?D a = width ?W ?D b\<close>
-    using Term_Ite.prems(1) by simp_all
-  have sub: \<open>\<forall>u \<in> set (subterms c). 2 * width ?W ?D u + 2 \<le> M\<close>
-    \<open>\<forall>u \<in> set (subterms a). 2 * width ?W ?D u + 2 \<le> M\<close> \<open>\<forall>u \<in> set (subterms b). 2 * width ?W ?D u + 2 \<le> M\<close>
-    using Term_Ite.prems(2) by simp_all
-  have wa: \<open>2 * width ?W ?D a + 2 \<le> M\<close>
+  have cwt: \<open>cwt ?W ?D c\<close> \<open>cwt ?W ?D a\<close> \<open>cwt ?W ?D b\<close> \<open>cwidth ?W ?D c = 1\<close> \<open>cwidth ?W ?D a = cwidth ?W ?D b\<close>
+    using CoreTerm_Ite.prems(1) by simp_all
+  have sub: \<open>\<forall>u \<in> set (csubterms c). 2 * cwidth ?W ?D u + 2 \<le> M\<close>
+    \<open>\<forall>u \<in> set (csubterms a). 2 * cwidth ?W ?D u + 2 \<le> M\<close> \<open>\<forall>u \<in> set (csubterms b). 2 * cwidth ?W ?D u + 2 \<le> M\<close>
+    using CoreTerm_Ite.prems(2) by simp_all
+  have wa: \<open>2 * cwidth ?W ?D a + 2 \<le> M\<close>
     using sub(2) subterms_self[of a] by blast
   have lc: \<open>length (snd (blast_m vs dl s c)) = 1\<close>
-    using blast_m_length[OF wt(1)] wt(4) by simp
-  have la: \<open>length (snd (blast_m vs dl ?s1 a)) = width ?W ?D a\<close>
-    using wt(2) by (rule blast_m_length)
-  have lb: \<open>length (snd (blast_m vs dl ?s2 b)) = width ?W ?D b\<close>
-    using wt(3) by (rule blast_m_length)
+    using blast_m_length[OF cwt(1)] cwt(4) by simp
+  have la: \<open>length (snd (blast_m vs dl ?s1 a)) = cwidth ?W ?D a\<close>
+    using cwt(2) by (rule blast_m_length)
+  have lb: \<open>length (snd (blast_m vs dl ?s2 b)) = cwidth ?W ?D b\<close>
+    using cwt(3) by (rule blast_m_length)
   have okc: \<open>bok N vs dl s c\<close>
-    using wt(1) sub(1) Term_Ite.prems(3,4) m1 by (rule Term_Ite.IH(1))
+    using cwt(1) sub(1) CoreTerm_Ite.prems(3,4) m1 by (rule CoreTerm_Ite.IH(1))
   have oka: \<open>bok N vs dl ?s1 a\<close>
-    using wt(2) sub(2) Term_Ite.prems(3,4) m2 by (rule Term_Ite.IH(2))
+    using cwt(2) sub(2) CoreTerm_Ite.prems(3,4) m2 by (rule CoreTerm_Ite.IH(2))
   have okb: \<open>bok N vs dl ?s2 b\<close>
-    using wt(3) sub(3) Term_Ite.prems(3,4) m3 by (rule Term_Ite.IH(3))
-  show ?case using okc oka okb lc la lb wt(5) wa fin Term_Ite.prems(3,4) by simp
+    using cwt(3) sub(3) CoreTerm_Ite.prems(3,4) m3 by (rule CoreTerm_Ite.IH(3))
+  show ?case using okc oka okb lc la lb cwt(5) wa fin CoreTerm_Ite.prems(3,4) by simp
 qed
 
 section \<open>Encoding a problem: pure facts\<close>
 
 subsection \<open>Sorts\<close>
 
-lemma def_widths_append: \<open>def_widths ws ds (xs @ ys) = def_widths ws (def_widths ws ds xs) ys\<close>
+lemma def_widths_append: \<open>cdef_widths ws ds (xs @ ys) = cdef_widths ws (cdef_widths ws ds xs) ys\<close>
   by (induction xs arbitrary: ds) simp_all
 
 lemma defs_wt_append:
-  \<open>defs_wt ws ds (xs @ ys) = (defs_wt ws ds xs \<and> defs_wt ws (def_widths ws ds xs) ys)\<close>
+  \<open>cdefs_wt ws ds (xs @ ys) = (cdefs_wt ws ds xs \<and> cdefs_wt ws (cdef_widths ws ds xs) ys)\<close>
   by (induction xs arbitrary: ds) auto
 
-lemma def_widths_prefix: \<open>\<exists>e. def_widths ws ds xs = ds @ e\<close>
+lemma def_widths_prefix: \<open>\<exists>e. cdef_widths ws ds xs = ds @ e\<close>
 proof (induction xs arbitrary: ds)
   case Nil
   show ?case by simp
 next
   case (Cons d dd)
-  obtain e where \<open>def_widths ws (ds @ [width ws ds d]) dd = (ds @ [width ws ds d]) @ e\<close>
+  obtain e where \<open>cdef_widths ws (ds @ [cwidth ws ds d]) dd = (ds @ [cwidth ws ds d]) @ e\<close>
     using Cons.IH by blast
   then show ?case by simp
 qed
 
 lemma def_widths_take_Suc:
-  \<open>j < length ts \<Longrightarrow> def_widths ws [] (take (Suc j) ts) =
-     def_widths ws [] (take j ts) @ [width ws (def_widths ws [] (take j ts)) (ts ! j)]\<close>
+  \<open>j < length ts \<Longrightarrow> cdef_widths ws [] (take (Suc j) ts) =
+     cdef_widths ws [] (take j ts) @ [cwidth ws (cdef_widths ws [] (take j ts)) (ts ! j)]\<close>
   by (simp add: take_Suc_conv_app_nth def_widths_append)
 
 lemma defs_wt_nth:
-  assumes \<open>defs_wt ws [] ts\<close> \<open>j < length ts\<close>
-  shows \<open>wt ws (def_widths ws [] (take j ts)) (ts ! j)\<close>
+  assumes \<open>cdefs_wt ws [] ts\<close> \<open>j < length ts\<close>
+  shows \<open>cwt ws (cdef_widths ws [] (take j ts)) (ts ! j)\<close>
 proof -
-  have \<open>defs_wt ws [] (take j ts @ ts ! j # drop (Suc j) ts)\<close>
+  have \<open>cdefs_wt ws [] (take j ts @ ts ! j # drop (Suc j) ts)\<close>
     using assms(1) by (subst (asm) id_take_nth_drop[OF assms(2)])
   then show ?thesis by (simp add: defs_wt_append)
 qed
 
-lemma wt_subterms: \<open>wt ws ds t \<Longrightarrow> u \<in> set (subterms t) \<Longrightarrow> wt ws ds u\<close>
+lemma wt_subterms: \<open>cwt ws ds t \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> cwt ws ds u\<close>
   by (induction t) auto
 
-lemma wt_width_append: \<open>wt ws ds t \<Longrightarrow> width ws (ds @ e) t = width ws ds t\<close>
+lemma wt_width_append: \<open>cwt ws ds t \<Longrightarrow> cwidth ws (ds @ e) t = cwidth ws ds t\<close>
   by (induction t) (auto simp: nth_append split: BinOp.splits)
 
 lemma tbound_size: \<open>Suc (size t) \<le> tbound ws ds t\<close>
   by (simp add: tbound_def)
 
-lemma tbound_width: \<open>u \<in> set (subterms t) \<Longrightarrow> 2 * width ws ds u + 2 \<le> tbound ws ds t\<close>
+lemma tbound_width: \<open>u \<in> set (csubterms t) \<Longrightarrow> 2 * cwidth ws ds u + 2 \<le> tbound ws ds t\<close>
 proof -
-  assume u: \<open>u \<in> set (subterms t)\<close>
-  have \<open>2 * width ws ds u + 2 \<in> set (map (\<lambda>u. 2 * width ws ds u + 2) (subterms t))\<close>
+  assume u: \<open>u \<in> set (csubterms t)\<close>
+  have \<open>2 * cwidth ws ds u + 2 \<in> set (map (\<lambda>u. 2 * cwidth ws ds u + 2) (csubterms t))\<close>
     using u by force
-  then have \<open>2 * width ws ds u + 2 \<le> Max (set (map (\<lambda>u. 2 * width ws ds u + 2) (subterms t)))\<close>
+  then have \<open>2 * cwidth ws ds u + 2 \<le> Max (set (map (\<lambda>u. 2 * cwidth ws ds u + 2) (csubterms t)))\<close>
     by (intro Max_ge) simp_all
   then show ?thesis unfolding tbound_def by simp
 qed
 
 subsection \<open>The fuel bound\<close>
 
-definition fb_set :: \<open>Problem \<Rightarrow> nat set\<close> where
+definition fb_set :: \<open>CoreProblem \<Rightarrow> nat set\<close> where
   \<open>fb_set p \<equiv>
-     {fst (fst (encode_m p)) + 2, length (snd (fst (encode_m p))) + 2, length (var_widths p) + 2,
-      length (Problem_defs p) + 2, length (Problem_asserts p) + 2} \<union>
-     set (map (\<lambda>w. w + 2) (var_widths p)) \<union>
+     {fst (fst (encode_m p)) + 2, length (snd (fst (encode_m p))) + 2, length (cvar_widths p) + 2,
+      length (CoreProblem_defs p) + 2, length (CoreProblem_asserts p) + 2} \<union>
+     set (map (\<lambda>w. w + 2) (cvar_widths p)) \<union>
      set (map (\<lambda>c. length c + 2) (snd (fst (encode_m p)))) \<union>
-     set (map (tbound (var_widths p) (def_widths (var_widths p) [] (Problem_defs p)))
-            (Problem_defs p @ Problem_asserts p))\<close>
+     set (map (tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)))
+            (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
 
 lemma fuel_bound_fb_set: \<open>fuel_bound p = Max (fb_set p)\<close>
   by (simp add: fuel_bound_def fb_set_def Let_def split_def)
@@ -1335,63 +1335,63 @@ lemma fb_ge: \<open>x \<in> fb_set p \<Longrightarrow> x \<le> fuel_bound p\<clo
 
 lemma fb_facts:
   \<open>fst (fst (encode_m p)) + 2 \<le> fuel_bound p\<close>
-  \<open>length (Problem_widths p) + 2 \<le> fuel_bound p\<close>
-  \<open>length (Problem_defs p) + 2 \<le> fuel_bound p\<close>
-  \<open>length (Problem_asserts p) + 2 \<le> fuel_bound p\<close>
-  by (rule fb_ge; simp add: fb_set_def var_widths_def)+
+  \<open>length (CoreProblem_widths p) + 2 \<le> fuel_bound p\<close>
+  \<open>length (CoreProblem_defs p) + 2 \<le> fuel_bound p\<close>
+  \<open>length (CoreProblem_asserts p) + 2 \<le> fuel_bound p\<close>
+  by (rule fb_ge; simp add: fb_set_def cvar_widths_def)+
 
 lemma fb_width:
-  assumes \<open>i < length (Problem_widths p)\<close>
-  shows \<open>unat (Problem_widths p ! i) + 2 \<le> fuel_bound p\<close>
-  using nth_mem[OF assms] by (intro fb_ge) (auto simp: fb_set_def var_widths_def)
+  assumes \<open>i < length (CoreProblem_widths p)\<close>
+  shows \<open>unat (CoreProblem_widths p ! i) + 2 \<le> fuel_bound p\<close>
+  using nth_mem[OF assms] by (intro fb_ge) (auto simp: fb_set_def cvar_widths_def)
 
 lemma fb_tbound:
-  \<open>t \<in> set (Problem_defs p) \<or> t \<in> set (Problem_asserts p) \<Longrightarrow>
-   tbound (var_widths p) (def_widths (var_widths p) [] (Problem_defs p)) t \<le> fuel_bound p\<close>
+  \<open>t \<in> set (CoreProblem_defs p) \<or> t \<in> set (CoreProblem_asserts p) \<Longrightarrow>
+   tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)) t \<le> fuel_bound p\<close>
   by (intro fb_ge) (auto simp: fb_set_def)
 
 subsection \<open>The three loops of \<^verbatim>\<open>encode\<close>\<close>
 
-definition enc_vars :: \<open>Problem \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
-  \<open>enc_vars p n \<equiv> foldl (vars_step (Problem_widths p)) (init_st, []) [0..<n]\<close>
+definition enc_vars :: \<open>CoreProblem \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
+  \<open>enc_vars p n \<equiv> foldl (vars_step (CoreProblem_widths p)) (init_st, []) [0..<n]\<close>
 
-abbreviation enc_vs :: \<open>Problem \<Rightarrow> Lit list list\<close> where
-  \<open>enc_vs p \<equiv> snd (enc_vars p (length (Problem_widths p)))\<close>
+abbreviation enc_vs :: \<open>CoreProblem \<Rightarrow> Lit list list\<close> where
+  \<open>enc_vs p \<equiv> snd (enc_vars p (length (CoreProblem_widths p)))\<close>
 
-definition enc_defs :: \<open>Problem \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
+definition enc_defs :: \<open>CoreProblem \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
   \<open>enc_defs p n \<equiv>
-     foldl (defs_step (enc_vs p) (Problem_defs p)) (fst (enc_vars p (length (Problem_widths p))), []) [0..<n]\<close>
+     foldl (defs_step (enc_vs p) (CoreProblem_defs p)) (fst (enc_vars p (length (CoreProblem_widths p))), []) [0..<n]\<close>
 
-abbreviation enc_dl :: \<open>Problem \<Rightarrow> Lit list list\<close> where
-  \<open>enc_dl p \<equiv> snd (enc_defs p (length (Problem_defs p)))\<close>
+abbreviation enc_dl :: \<open>CoreProblem \<Rightarrow> Lit list list\<close> where
+  \<open>enc_dl p \<equiv> snd (enc_defs p (length (CoreProblem_defs p)))\<close>
 
-definition enc_asserts :: \<open>Problem \<Rightarrow> nat \<Rightarrow> st\<close> where
+definition enc_asserts :: \<open>CoreProblem \<Rightarrow> nat \<Rightarrow> st\<close> where
   \<open>enc_asserts p n \<equiv>
-     foldl (asserts_step (enc_vs p) (enc_dl p) (Problem_asserts p)) (fst (enc_defs p (length (Problem_defs p))))
+     foldl (asserts_step (enc_vs p) (enc_dl p) (CoreProblem_asserts p)) (fst (enc_defs p (length (CoreProblem_defs p))))
        [0..<n]\<close>
 
-lemma encode_m_eq: \<open>encode_m p = (enc_asserts p (length (Problem_asserts p)), enc_vs p)\<close>
+lemma encode_m_eq: \<open>encode_m p = (enc_asserts p (length (CoreProblem_asserts p)), enc_vs p)\<close>
   by (simp add: encode_m_def enc_asserts_def enc_defs_def enc_vars_def split_def Let_def)
 
 lemma enc_vars_simps [simp]:
   \<open>enc_vars p 0 = (init_st, [])\<close>
   \<open>enc_vars p (Suc n) =
-     (fst (fresh_vec_m (fst (enc_vars p n)) (unat (Problem_widths p ! n))),
-      snd (enc_vars p n) @ [snd (fresh_vec_m (fst (enc_vars p n)) (unat (Problem_widths p ! n)))])\<close>
+     (fst (fresh_vec_m (fst (enc_vars p n)) (unat (CoreProblem_widths p ! n))),
+      snd (enc_vars p n) @ [snd (fresh_vec_m (fst (enc_vars p n)) (unat (CoreProblem_widths p ! n)))])\<close>
   by (simp_all add: enc_vars_def vars_step_def split_def Let_def del: fresh_vec_m_simps)
 
 lemma enc_defs_simps [simp]:
-  \<open>enc_defs p 0 = (fst (enc_vars p (length (Problem_widths p))), [])\<close>
+  \<open>enc_defs p 0 = (fst (enc_vars p (length (CoreProblem_widths p))), [])\<close>
   \<open>enc_defs p (Suc n) =
-     (fst (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (Problem_defs p ! n)),
-      snd (enc_defs p n) @ [snd (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (Problem_defs p ! n))])\<close>
+     (fst (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (CoreProblem_defs p ! n)),
+      snd (enc_defs p n) @ [snd (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (CoreProblem_defs p ! n))])\<close>
   by (simp_all add: enc_defs_def defs_step_def split_def Let_def)
 
 lemma enc_asserts_simps [simp]:
-  \<open>enc_asserts p 0 = fst (enc_defs p (length (Problem_defs p)))\<close>
+  \<open>enc_asserts p 0 = fst (enc_defs p (length (CoreProblem_defs p)))\<close>
   \<open>enc_asserts p (Suc n) =
-     addc_m (fst (blast_m (enc_vs p) (enc_dl p) (enc_asserts p n) (Problem_asserts p ! n)))
-       [snd (blast_m (enc_vs p) (enc_dl p) (enc_asserts p n) (Problem_asserts p ! n)) ! 0]\<close>
+     addc_m (fst (blast_m (enc_vs p) (enc_dl p) (enc_asserts p n) (CoreProblem_asserts p ! n)))
+       [snd (blast_m (enc_vs p) (enc_dl p) (enc_asserts p n) (CoreProblem_asserts p ! n)) ! 0]\<close>
   by (simp_all add: enc_asserts_def asserts_step_def split_def Let_def)
 
 lemma enc_vars_mono: \<open>m \<le> n \<Longrightarrow> fst (fst (enc_vars p m)) \<le> fst (fst (enc_vars p n))\<close>
@@ -1407,56 +1407,56 @@ lemma enc_asserts_mono: \<open>m \<le> n \<Longrightarrow> fst (enc_asserts p m)
   by (rule foldl_upt_mono[where g=\<open>\<lambda>X. fst X\<close>]) (simp_all add: asserts_step_def split_def Let_def blast_m_mono)
 
 lemma enc_le:
-  shows enc_asserts_le: \<open>n \<le> length (Problem_asserts p) \<Longrightarrow> fst (enc_asserts p n) \<le> fst (fst (encode_m p))\<close>
-    and enc_defs_le: \<open>n \<le> length (Problem_defs p) \<Longrightarrow> fst (fst (enc_defs p n)) \<le> fst (fst (encode_m p))\<close>
-    and enc_vars_le: \<open>n \<le> length (Problem_widths p) \<Longrightarrow> fst (fst (enc_vars p n)) \<le> fst (fst (encode_m p))\<close>
+  shows enc_asserts_le: \<open>n \<le> length (CoreProblem_asserts p) \<Longrightarrow> fst (enc_asserts p n) \<le> fst (fst (encode_m p))\<close>
+    and enc_defs_le: \<open>n \<le> length (CoreProblem_defs p) \<Longrightarrow> fst (fst (enc_defs p n)) \<le> fst (fst (encode_m p))\<close>
+    and enc_vars_le: \<open>n \<le> length (CoreProblem_widths p) \<Longrightarrow> fst (fst (enc_vars p n)) \<le> fst (fst (encode_m p))\<close>
 proof -
-  have A: \<open>n \<le> length (Problem_asserts p) \<Longrightarrow> fst (enc_asserts p n) \<le> fst (fst (encode_m p))\<close> for n
-    using enc_asserts_mono[of n \<open>length (Problem_asserts p)\<close> p] by (simp add: encode_m_eq)
-  have D: \<open>n \<le> length (Problem_defs p) \<Longrightarrow> fst (fst (enc_defs p n)) \<le> fst (fst (encode_m p))\<close> for n
-    using enc_defs_mono[of n \<open>length (Problem_defs p)\<close> p] A[of 0] by simp
-  have V: \<open>n \<le> length (Problem_widths p) \<Longrightarrow> fst (fst (enc_vars p n)) \<le> fst (fst (encode_m p))\<close> for n
-    using enc_vars_mono[of n \<open>length (Problem_widths p)\<close> p] D[of 0] by simp
-  show \<open>n \<le> length (Problem_asserts p) \<Longrightarrow> fst (enc_asserts p n) \<le> fst (fst (encode_m p))\<close> by (rule A)
-  show \<open>n \<le> length (Problem_defs p) \<Longrightarrow> fst (fst (enc_defs p n)) \<le> fst (fst (encode_m p))\<close> by (rule D)
-  show \<open>n \<le> length (Problem_widths p) \<Longrightarrow> fst (fst (enc_vars p n)) \<le> fst (fst (encode_m p))\<close> by (rule V)
+  have A: \<open>n \<le> length (CoreProblem_asserts p) \<Longrightarrow> fst (enc_asserts p n) \<le> fst (fst (encode_m p))\<close> for n
+    using enc_asserts_mono[of n \<open>length (CoreProblem_asserts p)\<close> p] by (simp add: encode_m_eq)
+  have D: \<open>n \<le> length (CoreProblem_defs p) \<Longrightarrow> fst (fst (enc_defs p n)) \<le> fst (fst (encode_m p))\<close> for n
+    using enc_defs_mono[of n \<open>length (CoreProblem_defs p)\<close> p] A[of 0] by simp
+  have V: \<open>n \<le> length (CoreProblem_widths p) \<Longrightarrow> fst (fst (enc_vars p n)) \<le> fst (fst (encode_m p))\<close> for n
+    using enc_vars_mono[of n \<open>length (CoreProblem_widths p)\<close> p] D[of 0] by simp
+  show \<open>n \<le> length (CoreProblem_asserts p) \<Longrightarrow> fst (enc_asserts p n) \<le> fst (fst (encode_m p))\<close> by (rule A)
+  show \<open>n \<le> length (CoreProblem_defs p) \<Longrightarrow> fst (fst (enc_defs p n)) \<le> fst (fst (encode_m p))\<close> by (rule D)
+  show \<open>n \<le> length (CoreProblem_widths p) \<Longrightarrow> fst (fst (enc_vars p n)) \<le> fst (fst (encode_m p))\<close> by (rule V)
 qed
 
 lemma enc_vars_len:
-  \<open>n \<le> length (Problem_widths p) \<Longrightarrow> map length (snd (enc_vars p n)) = map unat (take n (Problem_widths p))\<close>
+  \<open>n \<le> length (CoreProblem_widths p) \<Longrightarrow> map length (snd (enc_vars p n)) = map unat (take n (CoreProblem_widths p))\<close>
   by (induction n) (simp_all add: take_Suc_conv_app_nth)
 
-lemma enc_vs_len [simp]: \<open>map length (enc_vs p) = var_widths p\<close>
-  using enc_vars_len[of \<open>length (Problem_widths p)\<close> p] by (simp add: var_widths_def)
+lemma enc_vs_len [simp]: \<open>map length (enc_vs p) = cvar_widths p\<close>
+  using enc_vars_len[of \<open>length (CoreProblem_widths p)\<close> p] by (simp add: cvar_widths_def)
 
 lemma enc_defs_len:
-  assumes \<open>problem_wt p\<close>
-  shows \<open>n \<le> length (Problem_defs p) \<Longrightarrow>
-     map length (snd (enc_defs p n)) = def_widths (var_widths p) [] (take n (Problem_defs p))\<close>
+  assumes \<open>cproblem_wt p\<close>
+  shows \<open>n \<le> length (CoreProblem_defs p) \<Longrightarrow>
+     map length (snd (enc_defs p n)) = cdef_widths (cvar_widths p) [] (take n (CoreProblem_defs p))\<close>
 proof (induction n)
   case 0
   then show ?case by simp
 next
   case (Suc n)
-  have n: \<open>n < length (Problem_defs p)\<close> using Suc.prems by simp
-  have IH: \<open>map length (snd (enc_defs p n)) = def_widths (var_widths p) [] (take n (Problem_defs p))\<close>
+  have n: \<open>n < length (CoreProblem_defs p)\<close> using Suc.prems by simp
+  have IH: \<open>map length (snd (enc_defs p n)) = cdef_widths (cvar_widths p) [] (take n (CoreProblem_defs p))\<close>
     using Suc by simp
-  have wt: \<open>wt (var_widths p) (def_widths (var_widths p) [] (take n (Problem_defs p))) (Problem_defs p ! n)\<close>
-    using defs_wt_nth[OF _ n] assms by (simp add: problem_wt_def Let_def)
-  have \<open>length (snd (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (Problem_defs p ! n))) =
-        width (var_widths p) (def_widths (var_widths p) [] (take n (Problem_defs p))) (Problem_defs p ! n)\<close>
-    using blast_m_length[of \<open>enc_vs p\<close> \<open>snd (enc_defs p n)\<close> \<open>Problem_defs p ! n\<close> \<open>fst (enc_defs p n)\<close>] wt IH
+  have cwt: \<open>cwt (cvar_widths p) (cdef_widths (cvar_widths p) [] (take n (CoreProblem_defs p))) (CoreProblem_defs p ! n)\<close>
+    using defs_wt_nth[OF _ n] assms by (simp add: cproblem_wt_def Let_def)
+  have \<open>length (snd (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (CoreProblem_defs p ! n))) =
+        cwidth (cvar_widths p) (cdef_widths (cvar_widths p) [] (take n (CoreProblem_defs p))) (CoreProblem_defs p ! n)\<close>
+    using blast_m_length[of \<open>enc_vs p\<close> \<open>snd (enc_defs p n)\<close> \<open>CoreProblem_defs p ! n\<close> \<open>fst (enc_defs p n)\<close>] cwt IH
     by simp
   then show ?case using IH n by (simp add: def_widths_take_Suc)
 qed
 
 lemma enc_dl_len:
-  \<open>problem_wt p \<Longrightarrow> map length (enc_dl p) = def_widths (var_widths p) [] (Problem_defs p)\<close>
-  using enc_defs_len[of p \<open>length (Problem_defs p)\<close>] by simp
+  \<open>cproblem_wt p \<Longrightarrow> map length (enc_dl p) = cdef_widths (cvar_widths p) [] (CoreProblem_defs p)\<close>
+  using enc_defs_len[of p \<open>length (CoreProblem_defs p)\<close>] by simp
 
 lemma enc_vars_ok:
-  assumes \<open>fuel_bound p \<le> N\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>i < length (Problem_widths p)\<close>
-  shows \<open>unat (Problem_widths p ! i) \<le> N \<and> fst (fst (enc_vars p i)) + unat (Problem_widths p ! i) < 2 ^ 64\<close>
+  assumes \<open>fuel_bound p \<le> N\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>i < length (CoreProblem_widths p)\<close>
+  shows \<open>unat (CoreProblem_widths p ! i) \<le> N \<and> fst (fst (enc_vars p i)) + unat (CoreProblem_widths p ! i) < 2 ^ 64\<close>
 proof -
   have \<open>fst (fst (enc_vars p (Suc i))) \<le> fst (fst (encode_m p))\<close>
     using assms(3) by (intro enc_vars_le) simp
@@ -1464,27 +1464,27 @@ proof -
 qed
 
 lemma enc_defs_ok:
-  assumes \<open>problem_wt p\<close> \<open>fuel_bound p \<le> N\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>j < length (Problem_defs p)\<close>
-  shows \<open>Suc (size (Problem_defs p ! j)) \<le> N \<and>
-    bok N (enc_vs p) (snd (enc_defs p j)) (fst (enc_defs p j)) (Problem_defs p ! j)\<close>
+  assumes \<open>cproblem_wt p\<close> \<open>fuel_bound p \<le> N\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>j < length (CoreProblem_defs p)\<close>
+  shows \<open>Suc (size (CoreProblem_defs p ! j)) \<le> N \<and>
+    bok N (enc_vs p) (snd (enc_defs p j)) (fst (enc_defs p j)) (CoreProblem_defs p ! j)\<close>
 proof -
-  let ?W = \<open>var_widths p\<close> and ?ts = \<open>Problem_defs p\<close>
-  let ?t = \<open>?ts ! j\<close> and ?Dj = \<open>def_widths (var_widths p) [] (take j (Problem_defs p))\<close>
-  let ?DS = \<open>def_widths (var_widths p) [] (Problem_defs p)\<close>
+  let ?W = \<open>cvar_widths p\<close> and ?ts = \<open>CoreProblem_defs p\<close>
+  let ?t = \<open>?ts ! j\<close> and ?Dj = \<open>cdef_widths (cvar_widths p) [] (take j (CoreProblem_defs p))\<close>
+  let ?DS = \<open>cdef_widths (cvar_widths p) [] (CoreProblem_defs p)\<close>
   have tb: \<open>tbound ?W ?DS ?t \<le> fuel_bound p\<close>
     using assms(4) by (intro fb_tbound) simp
-  have wt: \<open>wt ?W ?Dj ?t\<close>
-    using defs_wt_nth[OF _ assms(4)] assms(1) by (simp add: problem_wt_def Let_def)
-  have eq: \<open>?DS = def_widths ?W ?Dj (drop j ?ts)\<close>
+  have cwt: \<open>cwt ?W ?Dj ?t\<close>
+    using defs_wt_nth[OF _ assms(4)] assms(1) by (simp add: cproblem_wt_def Let_def)
+  have eq: \<open>?DS = cdef_widths ?W ?Dj (drop j ?ts)\<close>
     by (simp only: def_widths_append[symmetric] append_take_drop_id)
   obtain e where e: \<open>?DS = ?Dj @ e\<close>
     using def_widths_prefix[of ?W ?Dj \<open>drop j ?ts\<close>] unfolding eq by blast
-  have sub: \<open>\<forall>u \<in> set (subterms ?t). 2 * width ?W ?Dj u + 2 \<le> fuel_bound p\<close>
+  have sub: \<open>\<forall>u \<in> set (csubterms ?t). 2 * cwidth ?W ?Dj u + 2 \<le> fuel_bound p\<close>
   proof
-    fix u assume u: \<open>u \<in> set (subterms ?t)\<close>
-    have \<open>width ?W ?DS u = width ?W ?Dj u\<close>
-      unfolding e using wt_subterms[OF wt u] by (rule wt_width_append)
-    then show \<open>2 * width ?W ?Dj u + 2 \<le> fuel_bound p\<close>
+    fix u assume u: \<open>u \<in> set (csubterms ?t)\<close>
+    have \<open>cwidth ?W ?DS u = cwidth ?W ?Dj u\<close>
+      unfolding e using wt_subterms[OF cwt u] by (rule wt_width_append)
+    then show \<open>2 * cwidth ?W ?Dj u + 2 \<le> fuel_bound p\<close>
       using tbound_width[OF u, of ?W ?DS] tb by simp
   qed
   have \<open>fst (fst (enc_defs p (Suc j))) \<le> fst (fst (encode_m p))\<close>
@@ -1494,25 +1494,25 @@ proof -
   have ld: \<open>map length (snd (enc_defs p j)) = ?Dj\<close>
     using enc_defs_len[OF assms(1)] assms(4) by simp
   have \<open>bok N (enc_vs p) (snd (enc_defs p j)) (fst (enc_defs p j)) ?t\<close>
-    by (rule bok_intro[where M=\<open>fuel_bound p\<close>]) (use wt sub f ld assms(2,3) in simp_all)
+    by (rule bok_intro[where M=\<open>fuel_bound p\<close>]) (use cwt sub f ld assms(2,3) in simp_all)
   moreover have \<open>Suc (size ?t) \<le> N\<close>
     using tbound_size[of ?t ?W ?DS] tb assms(2) by simp
   ultimately show ?thesis by simp
 qed
 
 lemma enc_asserts_ok:
-  assumes \<open>problem_wt p\<close> \<open>fuel_bound p \<le> N\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>k < length (Problem_asserts p)\<close>
-  shows \<open>Suc (size (Problem_asserts p ! k)) \<le> N \<and>
-    bok N (enc_vs p) (enc_dl p) (enc_asserts p k) (Problem_asserts p ! k) \<and>
-    0 < length (snd (blast_m (enc_vs p) (enc_dl p) (enc_asserts p k) (Problem_asserts p ! k)))\<close>
+  assumes \<open>cproblem_wt p\<close> \<open>fuel_bound p \<le> N\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>k < length (CoreProblem_asserts p)\<close>
+  shows \<open>Suc (size (CoreProblem_asserts p ! k)) \<le> N \<and>
+    bok N (enc_vs p) (enc_dl p) (enc_asserts p k) (CoreProblem_asserts p ! k) \<and>
+    0 < length (snd (blast_m (enc_vs p) (enc_dl p) (enc_asserts p k) (CoreProblem_asserts p ! k)))\<close>
 proof -
-  let ?W = \<open>var_widths p\<close> and ?t = \<open>Problem_asserts p ! k\<close>
-  let ?DS = \<open>def_widths (var_widths p) [] (Problem_defs p)\<close>
+  let ?W = \<open>cvar_widths p\<close> and ?t = \<open>CoreProblem_asserts p ! k\<close>
+  let ?DS = \<open>cdef_widths (cvar_widths p) [] (CoreProblem_defs p)\<close>
   have tb: \<open>tbound ?W ?DS ?t \<le> fuel_bound p\<close>
     using assms(4) by (intro fb_tbound) simp
-  have wt: \<open>wt ?W ?DS ?t\<close> \<open>width ?W ?DS ?t = 1\<close>
-    using assms(1,4) by (simp_all add: problem_wt_def Let_def)
-  have sub: \<open>\<forall>u \<in> set (subterms ?t). 2 * width ?W ?DS u + 2 \<le> fuel_bound p\<close>
+  have cwt: \<open>cwt ?W ?DS ?t\<close> \<open>cwidth ?W ?DS ?t = 1\<close>
+    using assms(1,4) by (simp_all add: cproblem_wt_def Let_def)
+  have sub: \<open>\<forall>u \<in> set (csubterms ?t). 2 * cwidth ?W ?DS u + 2 \<le> fuel_bound p\<close>
     using tbound_width[of _ ?t ?W ?DS] tb by (blast intro: le_trans)
   have \<open>fst (enc_asserts p (Suc k)) \<le> fst (fst (encode_m p))\<close>
     using assms(4) by (intro enc_asserts_le) simp
@@ -1521,11 +1521,11 @@ proof -
   have ld: \<open>map length (enc_dl p) = ?DS\<close>
     using enc_dl_len[OF assms(1)] .
   have \<open>bok N (enc_vs p) (enc_dl p) (enc_asserts p k) ?t\<close>
-    by (rule bok_intro[where M=\<open>fuel_bound p\<close>]) (use wt sub f ld assms(2,3) in simp_all)
+    by (rule bok_intro[where M=\<open>fuel_bound p\<close>]) (use cwt sub f ld assms(2,3) in simp_all)
   moreover have \<open>Suc (size ?t) \<le> N\<close>
     using tbound_size[of ?t ?W ?DS] tb assms(2) by simp
   moreover have \<open>length (snd (blast_m (enc_vs p) (enc_dl p) (enc_asserts p k) ?t)) = 1\<close>
-    using blast_m_length[of \<open>enc_vs p\<close> \<open>enc_dl p\<close> ?t \<open>enc_asserts p k\<close>] wt ld by simp
+    using blast_m_length[of \<open>enc_vs p\<close> \<open>enc_dl p\<close> ?t \<open>enc_asserts p k\<close>] cwt ld by simp
   ultimately show ?thesis by simp
 qed
 
@@ -1559,7 +1559,7 @@ subsection \<open>\<^verbatim>\<open>blast\<close>\<close>
 text \<open>The \<open>k\<close>-th unfolding of \<^const>\<open>blast\<close>: its precondition requires the recursion depth
   \<open>size t + 1\<close> to be at most \<open>k\<close>, so the innermost function is never called.\<close>
 definition blast_contract ::
-  \<open>nat \<Rightarrow> st \<Rightarrow> Lit list list \<Rightarrow> Lit list list \<Rightarrow> Term \<Rightarrow> ('s, Cnf \<times> Lit list \<times> tnil, 'abort) function_contract\<close>
+  \<open>nat \<Rightarrow> st \<Rightarrow> Lit list list \<Rightarrow> Lit list list \<Rightarrow> CoreTerm \<Rightarrow> ('s, Cnf \<times> Lit list \<times> tnil, 'abort) function_contract\<close>
   where
   [crush_contracts]: \<open>blast_contract k s vs dl t \<equiv>
      make_function_contract (can_alloc_reference \<star> \<langle>Suc (size t) \<le> k \<and> bok urust_fuel vs dl s t\<rangle>)
@@ -1569,7 +1569,7 @@ lemma blast_rec_step_spec:
   assumes \<open>\<And>s vs dl t. \<Gamma>; R (cnf_of s) vs dl t \<Turnstile>\<^sub>F blast_contract k s vs dl t\<close>
   shows \<open>\<Gamma>; blast_rec_step R (cnf_of s) vs dl t \<Turnstile>\<^sub>F blast_contract (Suc k) s vs dl t\<close>
   apply (crush_boot f: blast_rec_step_def contract: blast_contract_def)
-  apply (cases t; simp only: Term.case)
+  apply (cases t; simp only: CoreTerm.case)
         apply (crush_base specs add: assms)+
   done
 
@@ -1594,24 +1594,24 @@ lemma blast_spec [crush_specs]:
 
 subsection \<open>\<^verbatim>\<open>encode\<close>\<close>
 
-definition encode_contract :: \<open>Problem \<Rightarrow> ('s, Cnf \<times> Lit list list \<times> tnil, 'abort) function_contract\<close> where
+definition encode_contract :: \<open>CoreProblem \<Rightarrow> ('s, Cnf \<times> Lit list list \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>encode_contract p \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>problem_wt p \<and> fuel_bound p \<le> urust_fuel \<and> fuel_bound p < 2 ^ 64\<rangle>)
+       (can_alloc_reference \<star> \<langle>cproblem_wt p \<and> fuel_bound p \<le> urust_fuel \<and> fuel_bound p < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (encode_m p)), snd (encode_m p), TNil)\<rangle>)\<close>
 
 lemma encode_spec_aux:
-  assumes A: \<open>problem_wt p\<close> \<open>fuel_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
+  assumes A: \<open>cproblem_wt p\<close> \<open>fuel_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
   shows \<open>\<Gamma>; encode p \<Turnstile>\<^sub>F encode_contract p\<close>
 proof -
   note fb = fb_facts[of p]
-  have L: \<open>length (Problem_widths p) < 18446744073709551616\<close> \<open>length (Problem_defs p) < 18446744073709551616\<close>
-    \<open>length (Problem_asserts p) < 18446744073709551616\<close> \<open>length (Problem_widths p) \<le> urust_fuel\<close>
-    \<open>length (Problem_defs p) \<le> urust_fuel\<close> \<open>length (Problem_asserts p) \<le> urust_fuel\<close>
+  have L: \<open>length (CoreProblem_widths p) < 18446744073709551616\<close> \<open>length (CoreProblem_defs p) < 18446744073709551616\<close>
+    \<open>length (CoreProblem_asserts p) < 18446744073709551616\<close> \<open>length (CoreProblem_widths p) \<le> urust_fuel\<close>
+    \<open>length (CoreProblem_defs p) \<le> urust_fuel\<close> \<open>length (CoreProblem_asserts p) \<le> urust_fuel\<close>
     using fb A by simp_all
-  have I: \<open>\<And>i. i < length (Problem_widths p) \<Longrightarrow> i < 18446744073709551615\<close>
-    \<open>\<And>i. i < length (Problem_defs p) \<Longrightarrow> i < 18446744073709551615\<close>
-    \<open>\<And>i. i < length (Problem_asserts p) \<Longrightarrow> i < 18446744073709551615\<close>
+  have I: \<open>\<And>i. i < length (CoreProblem_widths p) \<Longrightarrow> i < 18446744073709551615\<close>
+    \<open>\<And>i. i < length (CoreProblem_defs p) \<Longrightarrow> i < 18446744073709551615\<close>
+    \<open>\<And>i. i < length (CoreProblem_asserts p) \<Longrightarrow> i < 18446744073709551615\<close>
     using fb A by fastforce+
   note V = enc_vars_ok[OF A(2,3), simplified]
   note D = enc_defs_ok[OF A]
@@ -1625,12 +1625,12 @@ proof -
         rule_tac
           INV=\<open>\<lambda>k. \<Squnion>gc c gv v gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                  can_alloc_reference \<star>
-                 \<langle>unat i \<le> length (Problem_widths p) \<and> c = cnf_of (fst (enc_vars p (unat i))) \<and>
-                  v = snd (enc_vars p (unat i)) \<and> length (Problem_widths p) - unat i \<le> k\<rangle>\<close> and
+                 \<langle>unat i \<le> length (CoreProblem_widths p) \<and> c = cnf_of (fst (enc_vars p (unat i))) \<and>
+                  v = snd (enc_vars p (unat i)) \<and> length (CoreProblem_widths p) - unat i \<le> k\<rangle>\<close> and
           INV'=\<open>\<lambda>k. \<Squnion>gc c gv v gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                  can_alloc_reference \<star>
-                 \<langle>unat i < length (Problem_widths p) \<and> c = cnf_of (fst (enc_vars p (unat i))) \<and>
-                  v = snd (enc_vars p (unat i)) \<and> length (Problem_widths p) - unat i \<le> Suc k\<rangle>\<close> and
+                 \<langle>unat i < length (CoreProblem_widths p) \<and> c = cnf_of (fst (enc_vars p (unat i))) \<and>
+                  v = snd (enc_vars p (unat i)) \<and> length (CoreProblem_widths p) - unat i \<le> Suc k\<rangle>\<close> and
           \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (encode_m p)), snd (encode_m p), TNil)\<rangle>\<close> and
           \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
@@ -1642,13 +1642,13 @@ proof -
             INV=\<open>\<lambda>k. \<Squnion>gc c gv v gi i gd d gj j. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star>
                    i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> defs_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star>
                    can_alloc_reference \<star>
-                   \<langle>unat j \<le> length (Problem_defs p) \<and> c = cnf_of (fst (enc_defs p (unat j))) \<and>
-                    v = enc_vs p \<and> d = snd (enc_defs p (unat j)) \<and> length (Problem_defs p) - unat j \<le> k\<rangle>\<close> and
+                   \<langle>unat j \<le> length (CoreProblem_defs p) \<and> c = cnf_of (fst (enc_defs p (unat j))) \<and>
+                    v = enc_vs p \<and> d = snd (enc_defs p (unat j)) \<and> length (CoreProblem_defs p) - unat j \<le> k\<rangle>\<close> and
             INV'=\<open>\<lambda>k. \<Squnion>gc c gv v gi i gd d gj j. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star>
                    i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> defs_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star>
                    can_alloc_reference \<star>
-                   \<langle>unat j < length (Problem_defs p) \<and> c = cnf_of (fst (enc_defs p (unat j))) \<and>
-                    v = enc_vs p \<and> d = snd (enc_defs p (unat j)) \<and> length (Problem_defs p) - unat j \<le> Suc k\<rangle>\<close> and
+                   \<langle>unat j < length (CoreProblem_defs p) \<and> c = cnf_of (fst (enc_defs p (unat j))) \<and>
+                    v = enc_vs p \<and> d = snd (enc_defs p (unat j)) \<and> length (CoreProblem_defs p) - unat j \<le> Suc k\<rangle>\<close> and
             \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (encode_m p)), snd (encode_m p), TNil)\<rangle>\<close> and
             \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
           in wp_bounded_while_framedI\<close>)
@@ -1660,13 +1660,13 @@ proof -
               INV=\<open>\<lambda>k. \<Squnion>gc c gv v gi i gd d gj j gk kk. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star>
                      vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> defs_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star>
                      j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kk \<star> can_alloc_reference \<star>
-                     \<langle>unat kk \<le> length (Problem_asserts p) \<and> c = cnf_of (enc_asserts p (unat kk)) \<and>
-                      v = enc_vs p \<and> d = enc_dl p \<and> length (Problem_asserts p) - unat kk \<le> k\<rangle>\<close> and
+                     \<langle>unat kk \<le> length (CoreProblem_asserts p) \<and> c = cnf_of (enc_asserts p (unat kk)) \<and>
+                      v = enc_vs p \<and> d = enc_dl p \<and> length (CoreProblem_asserts p) - unat kk \<le> k\<rangle>\<close> and
               INV'=\<open>\<lambda>k. \<Squnion>gc c gv v gi i gd d gj j gk kk. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star>
                      vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> defs_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star>
                      j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kk \<star> can_alloc_reference \<star>
-                     \<langle>unat kk < length (Problem_asserts p) \<and> c = cnf_of (enc_asserts p (unat kk)) \<and>
-                      v = enc_vs p \<and> d = enc_dl p \<and> length (Problem_asserts p) - unat kk \<le> Suc k\<rangle>\<close> and
+                     \<langle>unat kk < length (CoreProblem_asserts p) \<and> c = cnf_of (enc_asserts p (unat kk)) \<and>
+                      v = enc_vs p \<and> d = enc_dl p \<and> length (CoreProblem_asserts p) - unat kk \<le> Suc k\<rangle>\<close> and
               \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (encode_m p)), snd (encode_m p), TNil)\<rangle>\<close> and
               \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
             in wp_bounded_while_framedI\<close>)
@@ -1683,12 +1683,12 @@ qed
 
 lemma encode_spec [crush_specs]:
   shows \<open>\<Gamma>; encode p \<Turnstile>\<^sub>F encode_contract p\<close>
-proof (cases \<open>problem_wt p \<and> fuel_bound p \<le> urust_fuel \<and> fuel_bound p < 2 ^ 64\<close>)
+proof (cases \<open>cproblem_wt p \<and> fuel_bound p \<le> urust_fuel \<and> fuel_bound p < 2 ^ 64\<close>)
   case True
   then show ?thesis using encode_spec_aux by blast
 next
   case False
-  then have F: \<open>(problem_wt p \<and> fuel_bound p \<le> urust_fuel \<and> fuel_bound p < 2 ^ 64) = False\<close>
+  then have F: \<open>(cproblem_wt p \<and> fuel_bound p \<le> urust_fuel \<and> fuel_bound p < 2 ^ 64) = False\<close>
     by simp
   show ?thesis
     apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)

@@ -498,25 +498,25 @@ definition "blast_bin" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> (Lit list
 
 text \<open>Recursive group blast: defined by iterating blast_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> Term \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> Term \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>blast_rec_step \<equiv> \<lambda>rec_blast. (\<lambda>cnf vars defs t. FunctionBody \<lbrakk>
     match t {
-      Term_Const(bits) \<Rightarrow> {
+      CoreTerm_Const(bits) \<Rightarrow> {
         (cnf, bv_const(bits))
       },
-      Term_Var(i) \<Rightarrow> {
+      CoreTerm_Var(i) \<Rightarrow> {
         (cnf, vars[i])
       },
-      Term_Ref(i) \<Rightarrow> {
+      CoreTerm_Ref(i) \<Rightarrow> {
         (cnf, defs[i])
       },
-      Term_Not(a) \<Rightarrow> {
+      CoreTerm_Not(a) \<Rightarrow> {
         let destr_1 = \<epsilon>\<open>rec_blast\<close>(cnf, vars, defs, a);
         let cnf = destr_1.0;
         let la = destr_1.1;
         (cnf, bv_not(la))
       },
-      Term_Bin(op_v, a, b) \<Rightarrow> {
+      CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
         let destr_2 = \<epsilon>\<open>rec_blast\<close>(cnf, vars, defs, a);
         let cnf = destr_2.0;
         let la = destr_2.1;
@@ -525,13 +525,13 @@ definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit list) list) \<Ri
         let lb = destr_3.1;
         blast_bin(cnf, op_v, la, lb)
       },
-      Term_Extract(hi, lo, a) \<Rightarrow> {
+      CoreTerm_Extract(hi, lo, a) \<Rightarrow> {
         let destr_4 = \<epsilon>\<open>rec_blast\<close>(cnf, vars, defs, a);
         let cnf = destr_4.0;
         let la = destr_4.1;
         (cnf, bv_extract(la, hi, lo))
       },
-      Term_Ite(c, a, b) \<Rightarrow> {
+      CoreTerm_Ite(c, a, b) \<Rightarrow> {
         let destr_5 = \<epsilon>\<open>rec_blast\<close>(cnf, vars, defs, c);
         let cnf = destr_5.0;
         let lc = destr_5.1;
@@ -547,7 +547,7 @@ definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit list) list) \<Ri
   \<rbrakk>)\<close>
 
 (* Rust: blast *)
-definition "blast" :: \<open>Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> Term \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "blast" :: \<open>Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>blast \<equiv> ((blast_rec_step ^^ urust_fuel) (\<lambda>cnf vars defs t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: lit_value *)
@@ -721,13 +721,13 @@ definition "read_model" :: \<open>((bool option) list) \<Rightarrow> ((Lit list)
   \<rbrakk>\<close>
 
 (* Rust: encode *)
-definition "encode" :: \<open>Problem \<Rightarrow> ('s, (Cnf \<times> ((Lit list) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "encode" :: \<open>CoreProblem \<Rightarrow> ('s, (Cnf \<times> ((Lit list) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>encode \<equiv> \<lambda>p. FunctionBody \<lbrakk>
     let mut cnf = add_clause(Cnf_mk { Cnf_num_vars: 1_usize, Cnf_clauses: [] }, clause1(lit_const(true)));
     let mut vars = [];
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*i) < len(p.Problem_widths) {
-      let destr_1 = bv_fresh(*cnf, p.Problem_widths[*i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*i) < len(p.CoreProblem_widths) {
+      let destr_1 = bv_fresh(*cnf, p.CoreProblem_widths[*i]);
       let c = destr_1.0;
       let ls = destr_1.1;
       *cnf = c;
@@ -736,8 +736,8 @@ definition "encode" :: \<open>Problem \<Rightarrow> ('s, (Cnf \<times> ((Lit lis
     };
     let mut defs = [];
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*j) < len(p.Problem_defs) {
-      let destr_2 = blast(*cnf, *vars, *defs, p.Problem_defs[*j]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*j) < len(p.CoreProblem_defs) {
+      let destr_2 = blast(*cnf, *vars, *defs, p.CoreProblem_defs[*j]);
       let c = destr_2.0;
       let ls = destr_2.1;
       *cnf = c;
@@ -745,8 +745,8 @@ definition "encode" :: \<open>Problem \<Rightarrow> ('s, (Cnf \<times> ((Lit lis
       *j += 1_usize;
     };
     let mut k = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*k) < len(p.Problem_asserts) {
-      let destr_3 = blast(*cnf, *vars, *defs, p.Problem_asserts[*k]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*k) < len(p.CoreProblem_asserts) {
+      let destr_3 = blast(*cnf, *vars, *defs, p.CoreProblem_asserts[*k]);
       let c = destr_3.0;
       let ls = destr_3.1;
       *cnf = add_clause(c, clause1(ls[0_usize]));
@@ -755,9 +755,9 @@ definition "encode" :: \<open>Problem \<Rightarrow> ('s, (Cnf \<times> ((Lit lis
     (*cnf, *vars)
   \<rbrakk>\<close>
 
-(* Rust: solve *)
-definition "solve" :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>solve \<equiv> \<lambda>p. FunctionBody \<lbrakk>
+(* Rust: solve_core *)
+definition "solve_core" :: \<open>CoreProblem \<Rightarrow> ('s, Answer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>solve_core \<equiv> \<lambda>p. FunctionBody \<lbrakk>
     let destr_1 = encode(p);
     let cnf = destr_1.0;
     let vars = destr_1.1;
@@ -769,6 +769,355 @@ definition "solve" :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort, 'i promp
         Answer_Sat_mk(read_model(a, vars))
       }
     }
+  \<rbrakk>\<close>
+
+(* Rust: push_def *)
+definition "push_def" :: \<open>Lower \<Rightarrow> CoreTerm \<Rightarrow> (64 word) \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>push_def \<equiv> \<lambda>l t w. FunctionBody \<lbrakk>
+    let k = len(l.Lower_defs);
+    let mut defs = l.Lower_defs;
+    vec_push(defs, t);
+    let mut widths = l.Lower_widths;
+    vec_push(widths, w);
+    (Lower_mk { Lower_defs: *defs, Lower_widths: *widths }, k)
+  \<rbrakk>\<close>
+
+(* Rust: cref *)
+definition "cref" :: \<open>(64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cref \<equiv> \<lambda>k. FunctionBody \<lbrakk>
+    CoreTerm_Ref_mk(k)
+  \<rbrakk>\<close>
+
+(* Rust: cnot *)
+definition "cnot" :: \<open>CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cnot \<equiv> \<lambda>a. FunctionBody \<lbrakk>
+    CoreTerm_Not_mk(a)
+  \<rbrakk>\<close>
+
+(* Rust: cbin *)
+definition "cbin" :: \<open>BinOp \<Rightarrow> CoreTerm \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cbin \<equiv> \<lambda>op_v a b. FunctionBody \<lbrakk>
+    CoreTerm_Bin_mk(op_v, a, b)
+  \<rbrakk>\<close>
+
+(* Rust: cite *)
+definition "cite" :: \<open>CoreTerm \<Rightarrow> CoreTerm \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cite \<equiv> \<lambda>c a b. FunctionBody \<lbrakk>
+    CoreTerm_Ite_mk(c, a, b)
+  \<rbrakk>\<close>
+
+(* Rust: cextract *)
+definition "cextract" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cextract \<equiv> \<lambda>hi lo a. FunctionBody \<lbrakk>
+    CoreTerm_Extract_mk(hi, lo, a)
+  \<rbrakk>\<close>
+
+(* Rust: cone *)
+definition "cone" :: \<open>(64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cone \<equiv> \<lambda>w. FunctionBody \<lbrakk>
+    let mut one = [];
+    vec_push(one, true);
+    cbin(BinOp_Concat, CoreTerm_Const_mk(vec_from_elem(false, w - 1_usize)), CoreTerm_Const_mk(*one))
+  \<rbrakk>\<close>
+
+(* Rust: cneg *)
+definition "cneg" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cneg \<equiv> \<lambda>k w. FunctionBody \<lbrakk>
+    cbin(BinOp_Add, cnot(cref(k)), cone(w))
+  \<rbrakk>\<close>
+
+(* Rust: cmsb *)
+definition "cmsb" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cmsb \<equiv> \<lambda>k w. FunctionBody \<lbrakk>
+    cextract(w - 1_usize, w - 1_usize, cref(k))
+  \<rbrakk>\<close>
+
+(* Rust: cabs *)
+definition "cabs" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cabs \<equiv> \<lambda>k w. FunctionBody \<lbrakk>
+    cite(cmsb(k, w), cneg(k, w), cref(k))
+  \<rbrakk>\<close>
+
+(* Rust: cslt *)
+definition "cslt" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cslt \<equiv> \<lambda>ka kb w. FunctionBody \<lbrakk>
+    cbin(BinOp_Or, cbin(BinOp_And, cmsb(ka, w), cnot(cmsb(kb, w))), cbin(BinOp_And, cnot(cbin(BinOp_Xor, cmsb(ka, w), cmsb(kb, w))), cbin(BinOp_Ult, cref(ka), cref(kb))))
+  \<rbrakk>\<close>
+
+(* Rust: csle *)
+definition "csle" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>csle \<equiv> \<lambda>ka kb w. FunctionBody \<lbrakk>
+    cbin(BinOp_Or, cbin(BinOp_And, cmsb(ka, w), cnot(cmsb(kb, w))), cbin(BinOp_And, cnot(cbin(BinOp_Xor, cmsb(ka, w), cmsb(kb, w))), cnot(cbin(BinOp_Ult, cref(kb), cref(ka)))))
+  \<rbrakk>\<close>
+
+(* Rust: lower_bin *)
+definition "lower_bin" :: \<open>Lower \<Rightarrow> Op \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>lower_bin \<equiv> \<lambda>l op_v ka kb. FunctionBody \<lbrakk>
+    let w = l.Lower_widths[ka];
+    match op_v {
+      Op_And \<Rightarrow> {
+        push_def(l, cbin(BinOp_And, cref(ka), cref(kb)), w)
+      },
+      Op_Or \<Rightarrow> {
+        push_def(l, cbin(BinOp_Or, cref(ka), cref(kb)), w)
+      },
+      Op_Xor \<Rightarrow> {
+        push_def(l, cbin(BinOp_Xor, cref(ka), cref(kb)), w)
+      },
+      Op_Nand \<Rightarrow> {
+        push_def(l, cnot(cbin(BinOp_And, cref(ka), cref(kb))), w)
+      },
+      Op_Nor \<Rightarrow> {
+        push_def(l, cnot(cbin(BinOp_Or, cref(ka), cref(kb))), w)
+      },
+      Op_Xnor \<Rightarrow> {
+        push_def(l, cnot(cbin(BinOp_Xor, cref(ka), cref(kb))), w)
+      },
+      Op_Comp \<Rightarrow> {
+        push_def(l, cbin(BinOp_Eq, cref(ka), cref(kb)), 1_usize)
+      },
+      Op_Add \<Rightarrow> {
+        push_def(l, cbin(BinOp_Add, cref(ka), cref(kb)), w)
+      },
+      Op_Sub \<Rightarrow> {
+        push_def(l, cbin(BinOp_Add, cref(ka), cneg(kb, w)), w)
+      },
+      Op_Mul \<Rightarrow> {
+        push_def(l, cbin(BinOp_Mul, cref(ka), cref(kb)), w)
+      },
+      Op_Udiv \<Rightarrow> {
+        push_def(l, cbin(BinOp_Udiv, cref(ka), cref(kb)), w)
+      },
+      Op_Urem \<Rightarrow> {
+        push_def(l, cbin(BinOp_Urem, cref(ka), cref(kb)), w)
+      },
+      Op_Sdiv \<Rightarrow> {
+        let destr_1 = push_def(l, cbin(BinOp_Udiv, cabs(ka, w), cabs(kb, w)), w);
+        let l = destr_1.0;
+        let q = destr_1.1;
+        push_def(l, cite(cbin(BinOp_Xor, cmsb(ka, w), cmsb(kb, w)), cneg(q, w), cref(q)), w)
+      },
+      Op_Srem \<Rightarrow> {
+        let destr_2 = push_def(l, cbin(BinOp_Urem, cabs(ka, w), cabs(kb, w)), w);
+        let l = destr_2.0;
+        let r = destr_2.1;
+        push_def(l, cite(cmsb(ka, w), cneg(r, w), cref(r)), w)
+      },
+      Op_Smod \<Rightarrow> {
+        let destr_3 = push_def(l, cbin(BinOp_Urem, cabs(ka, w), cabs(kb, w)), w);
+        let l = destr_3.0;
+        let u = destr_3.1;
+        let destr_4 = push_def(l, cneg(u, w), w);
+        let l = destr_4.0;
+        let nu = destr_4.1;
+        let zero = cbin(BinOp_Eq, cref(u), CoreTerm_Const_mk(vec_from_elem(false, w)));
+        let neg_a = cite(cmsb(kb, w), cref(nu), cbin(BinOp_Add, cref(nu), cref(kb)));
+        let pos_a = cite(cmsb(kb, w), cbin(BinOp_Add, cref(u), cref(kb)), cref(u));
+        push_def(l, cite(zero, cref(u), cite(cmsb(ka, w), neg_a, pos_a)), w)
+      },
+      Op_Shl \<Rightarrow> {
+        push_def(l, cbin(BinOp_Shl, cref(ka), cref(kb)), w)
+      },
+      Op_Lshr \<Rightarrow> {
+        push_def(l, cbin(BinOp_Lshr, cref(ka), cref(kb)), w)
+      },
+      Op_Ashr \<Rightarrow> {
+        push_def(l, cite(cmsb(ka, w), cnot(cbin(BinOp_Lshr, cnot(cref(ka)), cref(kb))), cbin(BinOp_Lshr, cref(ka), cref(kb))), w)
+      },
+      Op_Concat \<Rightarrow> {
+        let wb = l.Lower_widths[kb];
+        push_def(l, cbin(BinOp_Concat, cref(ka), cref(kb)), w + wb)
+      },
+      Op_Eq \<Rightarrow> {
+        push_def(l, cbin(BinOp_Eq, cref(ka), cref(kb)), 1_usize)
+      },
+      Op_Distinct \<Rightarrow> {
+        push_def(l, cnot(cbin(BinOp_Eq, cref(ka), cref(kb))), 1_usize)
+      },
+      Op_Ult \<Rightarrow> {
+        push_def(l, cbin(BinOp_Ult, cref(ka), cref(kb)), 1_usize)
+      },
+      Op_Ule \<Rightarrow> {
+        push_def(l, cnot(cbin(BinOp_Ult, cref(kb), cref(ka))), 1_usize)
+      },
+      Op_Ugt \<Rightarrow> {
+        push_def(l, cbin(BinOp_Ult, cref(kb), cref(ka)), 1_usize)
+      },
+      Op_Uge \<Rightarrow> {
+        push_def(l, cnot(cbin(BinOp_Ult, cref(ka), cref(kb))), 1_usize)
+      },
+      Op_Slt \<Rightarrow> {
+        push_def(l, cslt(ka, kb, w), 1_usize)
+      },
+      Op_Sle \<Rightarrow> {
+        push_def(l, csle(ka, kb, w), 1_usize)
+      },
+      Op_Sgt \<Rightarrow> {
+        push_def(l, cslt(kb, ka, w), 1_usize)
+      },
+      Op_Sge \<Rightarrow> {
+        push_def(l, csle(kb, ka, w), 1_usize)
+      }
+    }
+  \<rbrakk>\<close>
+
+text \<open>Recursive group lower: defined by iterating lower_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "lower_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>lower_rec_step \<equiv> \<lambda>rec_lower. (\<lambda>ws dm l t. FunctionBody \<lbrakk>
+    match t {
+      Term_Const(bits) \<Rightarrow> {
+        push_def(l, CoreTerm_Const_mk(bits), len(bits))
+      },
+      Term_Var(i) \<Rightarrow> {
+        push_def(l, CoreTerm_Var_mk(i), ws[i])
+      },
+      Term_Ref(j) \<Rightarrow> {
+        (l, dm[j])
+      },
+      Term_Not(a) \<Rightarrow> {
+        let destr_1 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_1.0;
+        let ka = destr_1.1;
+        let w = l.Lower_widths[ka];
+        push_def(l, cnot(cref(ka)), w)
+      },
+      Term_Neg(a) \<Rightarrow> {
+        let destr_2 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_2.0;
+        let ka = destr_2.1;
+        let w = l.Lower_widths[ka];
+        push_def(l, cneg(ka, w), w)
+      },
+      Term_Bin(op_v, a, b) \<Rightarrow> {
+        let destr_3 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_3.0;
+        let ka = destr_3.1;
+        let destr_4 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, b);
+        let l = destr_4.0;
+        let kb = destr_4.1;
+        lower_bin(l, op_v, ka, kb)
+      },
+      Term_Extract(hi, lo, a) \<Rightarrow> {
+        let destr_5 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_5.0;
+        let ka = destr_5.1;
+        push_def(l, cextract(hi, lo, cref(ka)), (hi - lo) + 1_usize)
+      },
+      Term_Repeat(i, a) \<Rightarrow> {
+        let destr_6 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_6.0;
+        let ka = destr_6.1;
+        let w = l.Lower_widths[ka];
+        let destr_7 = push_def(l, CoreTerm_Const_mk([]), 0_usize);
+        let l = destr_7.0;
+        let k0 = destr_7.1;
+        let mut l = l;
+        let mut k = k0;
+        let mut acc = 0_usize;
+        let mut j = 0_usize;
+        #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*j) < i {
+          let destr_8 = push_def(*l, cbin(BinOp_Concat, cref(ka), cref(*k)), (*acc) + w);
+          let l1 = destr_8.0;
+          let k1 = destr_8.1;
+          *l = l1;
+          *k = k1;
+          *acc = (*acc) + w;
+          *j += 1_usize;
+        };
+        (*l, *k)
+      },
+      Term_ZeroExtend(i, a) \<Rightarrow> {
+        let destr_9 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_9.0;
+        let ka = destr_9.1;
+        let w = l.Lower_widths[ka];
+        push_def(l, cbin(BinOp_Concat, CoreTerm_Const_mk(vec_from_elem(false, i)), cref(ka)), w + i)
+      },
+      Term_SignExtend(i, a) \<Rightarrow> {
+        let destr_10 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_10.0;
+        let ka = destr_10.1;
+        let w = l.Lower_widths[ka];
+        let ext = cite(cmsb(ka, w), CoreTerm_Const_mk(vec_from_elem(true, i)), CoreTerm_Const_mk(vec_from_elem(false, i)));
+        push_def(l, cbin(BinOp_Concat, ext, cref(ka)), w + i)
+      },
+      Term_RotateLeft(i, a) \<Rightarrow> {
+        let destr_11 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_11.0;
+        let ka = destr_11.1;
+        let w = l.Lower_widths[ka];
+        let r = i % w;
+        if r == 0_usize {
+          (l, ka)
+        } else {
+          push_def(l, cbin(BinOp_Concat, cextract((w - 1_usize) - r, 0_usize, cref(ka)), cextract(w - 1_usize, w - r, cref(ka))), w)
+        }
+      },
+      Term_RotateRight(i, a) \<Rightarrow> {
+        let destr_12 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_12.0;
+        let ka = destr_12.1;
+        let w = l.Lower_widths[ka];
+        let r = i % w;
+        if r == 0_usize {
+          (l, ka)
+        } else {
+          push_def(l, cbin(BinOp_Concat, cextract(r - 1_usize, 0_usize, cref(ka)), cextract(w - 1_usize, r, cref(ka))), w)
+        }
+      },
+      Term_Ite(c, a, b) \<Rightarrow> {
+        let destr_13 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, c);
+        let l = destr_13.0;
+        let kc = destr_13.1;
+        let destr_14 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_14.0;
+        let ka = destr_14.1;
+        let destr_15 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, b);
+        let l = destr_15.0;
+        let kb = destr_15.1;
+        let w = l.Lower_widths[ka];
+        push_def(l, cite(cref(kc), cref(ka), cref(kb)), w)
+      }
+    }
+  \<rbrakk>)\<close>
+
+(* Rust: lower *)
+definition "lower" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>lower \<equiv> ((lower_rec_step ^^ urust_fuel) (\<lambda>ws dm l t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+
+(* Rust: lower_problem *)
+definition "lower_problem" :: \<open>Problem \<Rightarrow> ('s, CoreProblem, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>lower_problem \<equiv> \<lambda>p. FunctionBody \<lbrakk>
+    let mut l = Lower_mk { Lower_defs: [], Lower_widths: [] };
+    let mut dm = [];
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*j) < len(p.Problem_defs) {
+      let destr_1 = lower(p.Problem_widths, *dm, *l, p.Problem_defs[*j]);
+      let l1 = destr_1.0;
+      let k = destr_1.1;
+      *l = l1;
+      vec_push(dm, k);
+      *j += 1_usize;
+    };
+    let mut asserts = [];
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (*i) < len(p.Problem_asserts) {
+      let destr_2 = lower(p.Problem_widths, *dm, *l, p.Problem_asserts[*i]);
+      let l1 = destr_2.0;
+      let k = destr_2.1;
+      *l = l1;
+      vec_push(asserts, cref(k));
+      *i += 1_usize;
+    };
+    CoreProblem_mk { CoreProblem_widths: p.Problem_widths, CoreProblem_defs: *(l.Lower_defs), CoreProblem_asserts: *asserts }
+  \<rbrakk>\<close>
+
+(* Rust: solve *)
+definition "solve" :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>solve \<equiv> \<lambda>p. FunctionBody \<lbrakk>
+    let q = lower_problem(p);
+    solve_core(q)
   \<rbrakk>\<close>
 
 end

@@ -191,24 +191,24 @@ lemma sat_init: \<open>cnf_sem (\<lambda>_. True) (snd init_st)\<close>
 subsection \<open>Definitions\<close>
 
 lemma def_widths_snoc:
-  \<open>def_widths ws ds (xs @ [x]) = def_widths ws ds xs @ [width ws (def_widths ws ds xs) x]\<close>
+  \<open>cdef_widths ws ds (xs @ [x]) = cdef_widths ws ds xs @ [cwidth ws (cdef_widths ws ds xs) x]\<close>
   by (induction xs arbitrary: ds) auto
 
 lemma def_values_snoc:
-  \<open>def_values ws ds vs dv (xs @ [x]) =
-   def_values ws ds vs dv xs @ [eval ws (def_widths ws ds xs) vs (def_values ws ds vs dv xs) x]\<close>
+  \<open>cdef_values ws ds vs dv (xs @ [x]) =
+   cdef_values ws ds vs dv xs @ [ceval ws (cdef_widths ws ds xs) vs (cdef_values ws ds vs dv xs) x]\<close>
   by (induction xs arbitrary: ds dv) auto
 
 lemma defs_wt_append:
-  \<open>defs_wt ws ds (xs @ ys) = (defs_wt ws ds xs \<and> defs_wt ws (def_widths ws ds xs) ys)\<close>
+  \<open>cdefs_wt ws ds (xs @ ys) = (cdefs_wt ws ds xs \<and> cdefs_wt ws (cdef_widths ws ds xs) ys)\<close>
   by (induction xs arbitrary: ds) auto
 
 lemma defs_wt_nth:
-  assumes \<open>defs_wt ws [] D\<close> \<open>k < length D\<close>
-  shows \<open>wt ws (def_widths ws [] (take k D)) (D ! k)\<close>
+  assumes \<open>cdefs_wt ws [] D\<close> \<open>k < length D\<close>
+  shows \<open>cwt ws (cdef_widths ws [] (take k D)) (D ! k)\<close>
 proof -
-  have \<open>defs_wt ws [] (take k D @ drop k D)\<close> using assms(1) by simp
-  then have \<open>defs_wt ws (def_widths ws [] (take k D)) (drop k D)\<close>
+  have \<open>cdefs_wt ws [] (take k D @ drop k D)\<close> using assms(1) by simp
+  then have \<open>cdefs_wt ws (cdef_widths ws [] (take k D)) (drop k D)\<close>
     by (simp only: defs_wt_append)
   then show ?thesis by (simp add: Cons_nth_drop_Suc[OF assms(2), symmetric])
 qed
@@ -216,96 +216,96 @@ qed
 subsection \<open>Bit-blasting a term\<close>
 
 lemma blast_correct:
-  \<open>wt ws ds t \<Longrightarrow> wf_st s \<Longrightarrow> env_ok (fst s) ws vs \<Longrightarrow> env_ok (fst s) ds dl \<Longrightarrow>
+  \<open>cwt ws ds t \<Longrightarrow> wf_st s \<Longrightarrow> env_ok (fst s) ws vs \<Longrightarrow> env_ok (fst s) ds dl \<Longrightarrow>
    blast_m vs dl s t = (s', ls) \<Longrightarrow> fst s' < 2 ^ 64 \<Longrightarrow>
-   wf_st s' \<and> ext s s' \<and> lits_lt (fst s') ls \<and> length ls = width ws ds t \<and>
-   (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> val \<sigma> ls = eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) t)\<close>
+   wf_st s' \<and> ext s s' \<and> lits_lt (fst s') ls \<and> length ls = cwidth ws ds t \<and>
+   (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) t)\<close>
 proof (induction t arbitrary: s s' ls)
-  case (Term_Const bs)
+  case (CoreTerm_Const bs)
   then show ?case using const_correct[of s bs] by (auto simp: ext_refl)
 next
-  case (Term_Var i)
+  case (CoreTerm_Var i)
   then show ?case using nth_mem[of \<open>unat i\<close> vs] by (auto simp: env_ok_def ext_refl)
 next
-  case (Term_Ref i)
+  case (CoreTerm_Ref i)
   then show ?case using nth_mem[of \<open>unat i\<close> dl] by (auto simp: env_ok_def ext_refl)
 next
-  case (Term_Not a)
+  case (CoreTerm_Not a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using Term_Not.prems(5) A by auto
-  have wa: \<open>wt ws ds a\<close> using Term_Not.prems(1) by simp
-  have b1: \<open>fst s1 < 2 ^ 64\<close> using Term_Not.prems(6) E by simp
-  note IA = Term_Not.IH[OF wa Term_Not.prems(2-4) A b1]
+  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTerm_Not.prems(5) A by auto
+  have wa: \<open>cwt ws ds a\<close> using CoreTerm_Not.prems(1) by simp
+  have b1: \<open>fst s1 < 2 ^ 64\<close> using CoreTerm_Not.prems(6) E by simp
+  note IA = CoreTerm_Not.IH[OF wa CoreTerm_Not.prems(2-4) A b1]
   show ?case using IA not_correct[of \<open>fst s1\<close> la] by (auto simp: E)
 next
-  case (Term_Bin op a b)
+  case (CoreTerm_Bin op a b)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
   obtain s2 lb where B: \<open>blast_m vs dl s1 b = (s2, lb)\<close> by (cases \<open>blast_m vs dl s1 b\<close>)
-  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using Term_Bin.prems(5) A B by simp
+  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTerm_Bin.prems(5) A B by simp
   have le2: \<open>fst s2 \<le> fst s'\<close> using blast_bin_m_mono[of \<open>fst s2\<close> s2 op la lb] C by simp
   have le1: \<open>fst s1 \<le> fst s2\<close> using blast_m_mono[of \<open>fst s1\<close> s1 vs dl b] B by simp
-  have wa: \<open>wt ws ds a\<close> and wb: \<open>wt ws ds b\<close>
-    and weq: \<open>op \<noteq> BinOp_Concat \<longrightarrow> width ws ds a = width ws ds b\<close>
-    using Term_Bin.prems(1) by simp_all
+  have wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
+    and weq: \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ws ds a = cwidth ws ds b\<close>
+    using CoreTerm_Bin.prems(1) by simp_all
   have b1: \<open>fst s1 < 2 ^ 64\<close> and b2: \<open>fst s2 < 2 ^ 64\<close>
-    using le1 le2 Term_Bin.prems(6) by linarith+
-  note IA = Term_Bin.IH(1)[OF wa Term_Bin.prems(2-4) A b1]
+    using le1 le2 CoreTerm_Bin.prems(6) by linarith+
+  note IA = CoreTerm_Bin.IH(1)[OF wa CoreTerm_Bin.prems(2-4) A b1]
   have e1: \<open>ext s s1\<close> and wf1: \<open>wf_st s1\<close> using IA by simp_all
   have env1: \<open>env_ok (fst s1) ws vs\<close> \<open>env_ok (fst s1) ds dl\<close>
-    using Term_Bin.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
-  note IB = Term_Bin.IH(2)[OF wb wf1 env1 B b2]
+    using CoreTerm_Bin.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
+  note IB = CoreTerm_Bin.IH(2)[OF wb wf1 env1 B b2]
   have e2: \<open>ext s1 s2\<close> and wf2: \<open>wf_st s2\<close> using IB by simp_all
   have la2: \<open>lits_lt (fst s2) la\<close> using IA le1 lits_lt_mono by blast
   have lb2: \<open>lits_lt (fst s2) lb\<close> using IB by simp
   have len: \<open>op \<noteq> BinOp_Concat \<longrightarrow> length la = length lb\<close> using IA IB weq by simp
-  note BB = blast_bin_correct[OF wf2 la2 lb2 len C Term_Bin.prems(6)]
+  note BB = blast_bin_correct[OF wf2 la2 lb2 len C CoreTerm_Bin.prems(6)]
   have e3: \<open>ext s2 s'\<close> using BB by simp
   show ?case
   proof (intro conjI allI impI)
     show \<open>wf_st s'\<close> \<open>lits_lt (fst s') ls\<close> using BB by simp_all
     show \<open>ext s s'\<close> using ext_trans[OF ext_trans[OF e1 e2] e3] .
-    show \<open>length ls = width ws ds (Term_Bin op a b)\<close>
+    show \<open>length ls = cwidth ws ds (CoreTerm_Bin op a b)\<close>
       using BB IA IB by (simp add: bin_width_def)
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s')\<close>
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using ext_cnf_sem[OF e3 S] .
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF e2 S2] .
-    show \<open>val \<sigma> ls = eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (Term_Bin op a b)\<close>
+    show \<open>val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (CoreTerm_Bin op a b)\<close>
       using BB IA IB S S1 S2 by simp
   qed
 next
-  case (Term_Extract hi lo a)
+  case (CoreTerm_Extract hi lo a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using Term_Extract.prems(5) A by auto
-  have wa: \<open>wt ws ds a\<close> and lohi: \<open>unat lo \<le> unat hi\<close> and hiw: \<open>unat hi < width ws ds a\<close>
-    using Term_Extract.prems(1) by simp_all
-  have b1: \<open>fst s1 < 2 ^ 64\<close> using Term_Extract.prems(6) E by simp
-  note IA = Term_Extract.IH[OF wa Term_Extract.prems(2-4) A b1]
+  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTerm_Extract.prems(5) A by auto
+  have wa: \<open>cwt ws ds a\<close> and lohi: \<open>unat lo \<le> unat hi\<close> and hiw: \<open>unat hi < cwidth ws ds a\<close>
+    using CoreTerm_Extract.prems(1) by simp_all
+  have b1: \<open>fst s1 < 2 ^ 64\<close> using CoreTerm_Extract.prems(6) E by simp
+  note IA = CoreTerm_Extract.IH[OF wa CoreTerm_Extract.prems(2-4) A b1]
   have hil: \<open>unat hi < length la\<close> using IA hiw by simp
   show ?case using IA extract_correct[OF lohi hil, where n = \<open>fst s1\<close>] by (auto simp: E)
 next
-  case (Term_Ite c a b)
+  case (CoreTerm_Ite c a b)
   obtain s1 lc where A: \<open>blast_m vs dl s c = (s1, lc)\<close> by (cases \<open>blast_m vs dl s c\<close>)
   obtain s2 la where B: \<open>blast_m vs dl s1 a = (s2, la)\<close> by (cases \<open>blast_m vs dl s1 a\<close>)
   obtain s3 lb where C: \<open>blast_m vs dl s2 b = (s3, lb)\<close> by (cases \<open>blast_m vs dl s2 b\<close>)
-  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using Term_Ite.prems(5) A B C by simp
+  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTerm_Ite.prems(5) A B C by simp
   have le3: \<open>fst s3 \<le> fst s'\<close> using ite_vec_m_mono_le[of \<open>fst s3\<close> s3 \<open>lc ! 0\<close> la lb] D by simp
   have le2: \<open>fst s2 \<le> fst s3\<close> using blast_m_mono[of \<open>fst s2\<close> s2 vs dl b] C by simp
   have le1: \<open>fst s1 \<le> fst s2\<close> using blast_m_mono[of \<open>fst s1\<close> s1 vs dl a] B by simp
-  have wc: \<open>wt ws ds c\<close> and wa: \<open>wt ws ds a\<close> and wb: \<open>wt ws ds b\<close>
-    and wc1: \<open>width ws ds c = 1\<close> and wab: \<open>width ws ds a = width ws ds b\<close>
-    using Term_Ite.prems(1) by simp_all
+  have wc: \<open>cwt ws ds c\<close> and wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
+    and wc1: \<open>cwidth ws ds c = 1\<close> and wab: \<open>cwidth ws ds a = cwidth ws ds b\<close>
+    using CoreTerm_Ite.prems(1) by simp_all
   have b1: \<open>fst s1 < 2 ^ 64\<close> and b2: \<open>fst s2 < 2 ^ 64\<close> and b3: \<open>fst s3 < 2 ^ 64\<close>
-    using le1 le2 le3 Term_Ite.prems(6) by linarith+
-  note IC = Term_Ite.IH(1)[OF wc Term_Ite.prems(2-4) A b1]
+    using le1 le2 le3 CoreTerm_Ite.prems(6) by linarith+
+  note IC = CoreTerm_Ite.IH(1)[OF wc CoreTerm_Ite.prems(2-4) A b1]
   have e1: \<open>ext s s1\<close> and wf1: \<open>wf_st s1\<close> using IC by simp_all
   have env1: \<open>env_ok (fst s1) ws vs\<close> \<open>env_ok (fst s1) ds dl\<close>
-    using Term_Ite.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
-  note IA = Term_Ite.IH(2)[OF wa wf1 env1 B b2]
+    using CoreTerm_Ite.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
+  note IA = CoreTerm_Ite.IH(2)[OF wa wf1 env1 B b2]
   have e2: \<open>ext s1 s2\<close> and wf2: \<open>wf_st s2\<close> using IA by simp_all
   have env2: \<open>env_ok (fst s2) ws vs\<close> \<open>env_ok (fst s2) ds dl\<close>
     using env1 le1 env_ok_mono by blast+
-  note IB = Term_Ite.IH(3)[OF wb wf2 env2 C b3]
+  note IB = CoreTerm_Ite.IH(3)[OF wb wf2 env2 C b3]
   have e3: \<open>ext s2 s3\<close> and wf3: \<open>wf_st s3\<close> using IB by simp_all
   have lc1: \<open>length lc = 1\<close> using IC wc1 by simp
   have \<open>lc ! 0 \<in> set lc\<close> using lc1 by (auto intro!: nth_mem)
@@ -314,20 +314,20 @@ next
   have la3: \<open>lits_lt (fst s3) la\<close> using IA le2 lits_lt_mono by blast
   have lb3: \<open>lits_lt (fst s3) lb\<close> using IB by simp
   have len: \<open>length la = length lb\<close> using IA IB wab by simp
-  note IV = ite_vec_correct[OF wf3 lc3 la3 lb3 len D Term_Ite.prems(6)]
+  note IV = ite_vec_correct[OF wf3 lc3 la3 lb3 len D CoreTerm_Ite.prems(6)]
   have e4: \<open>ext s3 s'\<close> using IV by simp
   show ?case
   proof (intro conjI allI impI)
     show \<open>wf_st s'\<close> \<open>lits_lt (fst s') ls\<close> using IV by simp_all
     show \<open>ext s s'\<close> using ext_trans[OF ext_trans[OF ext_trans[OF e1 e2] e3] e4] .
-    show \<open>length ls = width ws ds (Term_Ite c a b)\<close> using IV IA by simp
+    show \<open>length ls = cwidth ws ds (CoreTerm_Ite c a b)\<close> using IV IA by simp
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s')\<close>
     have S3: \<open>cnf_sem \<sigma> (snd s3)\<close> using ext_cnf_sem[OF e4 S] .
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using ext_cnf_sem[OF e3 S3] .
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF e2 S2] .
     have vc: \<open>val \<sigma> lc = (if lit_sem \<sigma> (lc ! 0) then 1 else 0)\<close> using val_single_enc[OF lc1] .
-    show \<open>val \<sigma> ls = eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (Term_Ite c a b)\<close>
+    show \<open>val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (CoreTerm_Ite c a b)\<close>
       using IV IA IB IC S S1 S2 S3 vc by auto
   qed
 qed
@@ -385,10 +385,10 @@ next
 qed
 
 lemma defs_inv:
-  assumes \<open>wf_st s0\<close> \<open>env_ok (fst s0) ws vs\<close> \<open>defs_wt ws [] D\<close>
+  assumes \<open>wf_st s0\<close> \<open>env_ok (fst s0) ws vs\<close> \<open>cdefs_wt ws [] D\<close>
   shows \<open>k \<le> length D \<Longrightarrow> foldl (defs_step vs D) (s0, []) [0..<k] = (s, dl) \<Longrightarrow> fst s < 2 ^ 64 \<Longrightarrow>
-   wf_st s \<and> ext s0 s \<and> env_ok (fst s) (def_widths ws [] (take k D)) dl \<and>
-   (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> map (val \<sigma>) dl = def_values ws [] (map (val \<sigma>) vs) [] (take k D))\<close>
+   wf_st s \<and> ext s0 s \<and> env_ok (fst s) (cdef_widths ws [] (take k D)) dl \<and>
+   (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> map (val \<sigma>) dl = cdef_values ws [] (map (val \<sigma>) vs) [] (take k D))\<close>
 proof (induction k arbitrary: s dl)
   case 0
   then have E: \<open>s = s0\<close> \<open>dl = []\<close> by auto
@@ -404,13 +404,13 @@ next
   have bp: \<open>fst sp < 2 ^ 64\<close> using le Suc.prems(3) E by simp
   have kl: \<open>k < length D\<close> using Suc.prems(1) by simp
   note IH = Suc.IH[OF _ A bp]
-  have IH': \<open>wf_st sp \<and> ext s0 sp \<and> env_ok (fst sp) (def_widths ws [] (take k D)) dp \<and>
-   (\<forall>\<sigma>. cnf_sem \<sigma> (snd sp) \<longrightarrow> map (val \<sigma>) dp = def_values ws [] (map (val \<sigma>) vs) [] (take k D))\<close>
+  have IH': \<open>wf_st sp \<and> ext s0 sp \<and> env_ok (fst sp) (cdef_widths ws [] (take k D)) dp \<and>
+   (\<forall>\<sigma>. cnf_sem \<sigma> (snd sp) \<longrightarrow> map (val \<sigma>) dp = cdef_values ws [] (map (val \<sigma>) vs) [] (take k D))\<close>
     using IH kl by simp
   have envv: \<open>env_ok (fst sp) ws vs\<close> using assms(2) IH' ext_fst env_ok_mono by blast
-  have wtk: \<open>wt ws (def_widths ws [] (take k D)) (D ! k)\<close> using defs_wt_nth[OF assms(3) kl] .
+  have wtk: \<open>cwt ws (cdef_widths ws [] (take k D)) (D ! k)\<close> using defs_wt_nth[OF assms(3) kl] .
   have b1: \<open>fst s1 < 2 ^ 64\<close> using Suc.prems(3) E by simp
-  have wfp: \<open>wf_st sp\<close> and envd: \<open>env_ok (fst sp) (def_widths ws [] (take k D)) dp\<close>
+  have wfp: \<open>wf_st sp\<close> and envd: \<open>env_ok (fst sp) (cdef_widths ws [] (take k D)) dp\<close>
     using IH' by simp_all
   note BC = blast_correct[OF wtk wfp envv envd B b1]
   have tk: \<open>take (Suc k) D = take k D @ [D ! k]\<close> using take_Suc_conv_app_nth[OF kl] .
@@ -418,29 +418,29 @@ next
   proof (intro conjI allI impI)
     show \<open>wf_st s\<close> using BC E by simp
     show \<open>ext s0 s\<close> using ext_trans IH' BC E by blast
-    have \<open>env_ok (fst s1) (def_widths ws [] (take k D)) dp\<close>
+    have \<open>env_ok (fst s1) (cdef_widths ws [] (take k D)) dp\<close>
       using envd le env_ok_mono by blast
-    then have \<open>env_ok (fst s1) (def_widths ws [] (take k D) @ [length ls]) (dp @ [ls])\<close>
+    then have \<open>env_ok (fst s1) (cdef_widths ws [] (take k D) @ [length ls]) (dp @ [ls])\<close>
       using env_ok_snoc BC by blast
-    then show \<open>env_ok (fst s) (def_widths ws [] (take (Suc k) D)) dl\<close>
+    then show \<open>env_ok (fst s) (cdef_widths ws [] (take (Suc k) D)) dl\<close>
       using BC by (simp add: E tk def_widths_snoc)
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s)\<close>
     have Sp: \<open>cnf_sem \<sigma> (snd sp)\<close> using ext_cnf_sem S BC E by blast
-    show \<open>map (val \<sigma>) dl = def_values ws [] (map (val \<sigma>) vs) [] (take (Suc k) D)\<close>
+    show \<open>map (val \<sigma>) dl = cdef_values ws [] (map (val \<sigma>) vs) [] (take (Suc k) D)\<close>
       using BC IH' S Sp by (simp add: E tk def_values_snoc def_widths_snoc)
   qed
 qed
 
 lemma asserts_inv:
   assumes \<open>wf_st s0\<close> \<open>env_ok (fst s0) ws vs\<close> \<open>env_ok (fst s0) ds dl\<close>
-    \<open>\<forall>t \<in> set A. wt ws ds t \<and> width ws ds t = 1\<close>
+    \<open>\<forall>t \<in> set A. cwt ws ds t \<and> cwidth ws ds t = 1\<close>
   shows \<open>k \<le> length A \<Longrightarrow> foldl (asserts_step vs dl A) s0 [0..<k] = s \<Longrightarrow> fst s < 2 ^ 64 \<Longrightarrow>
    wf_st s \<and> fst s0 \<le> fst s \<and> (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> cnf_sem \<sigma> (snd s0)) \<and>
    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow>
-      (\<forall>j < k. eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1)) \<and>
+      (\<forall>j < k. ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1)) \<and>
    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s0) \<longrightarrow>
-      (\<forall>j < k. eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1) \<longrightarrow>
+      (\<forall>j < k. ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1) \<longrightarrow>
       (\<exists>\<sigma>'. (\<forall>v < fst s0. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd s)))\<close>
 proof (induction k arbitrary: s)
   case 0
@@ -458,12 +458,12 @@ next
   have kl: \<open>k < length A\<close> using Suc.prems(1) by simp
   have IH: \<open>wf_st sp \<and> fst s0 \<le> fst sp \<and> (\<forall>\<sigma>. cnf_sem \<sigma> (snd sp) \<longrightarrow> cnf_sem \<sigma> (snd s0)) \<and>
    (\<forall>\<sigma>. cnf_sem \<sigma> (snd sp) \<longrightarrow>
-      (\<forall>j < k. eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1)) \<and>
+      (\<forall>j < k. ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1)) \<and>
    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s0) \<longrightarrow>
-      (\<forall>j < k. eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1) \<longrightarrow>
+      (\<forall>j < k. ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1) \<longrightarrow>
       (\<exists>\<sigma>'. (\<forall>v < fst s0. \<sigma>' v = \<sigma> v) \<and> cnf_sem \<sigma>' (snd sp)))\<close>
     using Suc.IH[OF _ sp_def[symmetric] bp] kl by simp
-  have wtk: \<open>wt ws ds (A ! k)\<close> and wk1: \<open>width ws ds (A ! k) = 1\<close>
+  have wtk: \<open>cwt ws ds (A ! k)\<close> and wk1: \<open>cwidth ws ds (A ! k) = 1\<close>
     using assms(4) nth_mem[OF kl] by simp_all
   have envs: \<open>env_ok (fst sp) ws vs\<close> \<open>env_ok (fst sp) ds dl\<close>
     using assms(2,3) IH env_ok_mono by blast+
@@ -490,7 +490,7 @@ next
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> and U: \<open>lit_sem \<sigma> (ls ! 0)\<close>
       using S E by (simp_all add: cnf_sem_append_enc cnf_sem_unit)
     have Sp: \<open>cnf_sem \<sigma> (snd sp)\<close> using ext_cnf_sem[OF e1 S1] .
-    show \<open>eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1\<close>
+    show \<open>ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1\<close>
     proof (cases \<open>j < k\<close>)
       case True
       then show ?thesis using IH Sp by blast
@@ -501,15 +501,15 @@ next
     qed
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s0)\<close>
-      and V: \<open>\<forall>j < Suc k. eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1\<close>
+      and V: \<open>\<forall>j < Suc k. ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! j) = 1\<close>
     obtain \<sigma>1 where T1: \<open>\<forall>v < fst s0. \<sigma>1 v = \<sigma> v\<close> \<open>cnf_sem \<sigma>1 (snd sp)\<close>
       using IH S V by auto
     obtain \<sigma>2 where T2: \<open>\<forall>v < fst sp. \<sigma>2 v = \<sigma>1 v\<close> \<open>cnf_sem \<sigma>2 (snd s1)\<close>
       using e1 T1(2) unfolding ext_def by blast
     have ag: \<open>\<forall>v < fst s0. \<sigma>2 v = \<sigma> v\<close> using T1(1) T2(1) IH by auto
-    have \<open>val \<sigma>2 ls = eval ws ds (map (val \<sigma>2) vs) (map (val \<sigma>2) dl) (A ! k)\<close>
+    have \<open>val \<sigma>2 ls = ceval ws ds (map (val \<sigma>2) vs) (map (val \<sigma>2) dl) (A ! k)\<close>
       using BC T2(2) by blast
-    also have \<open>\<dots> = eval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! k)\<close>
+    also have \<open>\<dots> = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (A ! k)\<close>
     proof -
       have m1: \<open>map (val \<sigma>2) vs = map (val \<sigma>) vs\<close> by (rule map_val_agree[OF envl(1) ag])
       have m2: \<open>map (val \<sigma>2) dl = map (val \<sigma>) dl\<close> by (rule map_val_agree[OF envl(2) ag])
@@ -535,18 +535,18 @@ lemma asserts_step_mono: \<open>fst x \<le> fst (asserts_step vs dl A x i)\<clos
   by (simp add: asserts_step_def split_def Let_def blast_m_mono)
 
 lemma encode_main:
-  assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
-  shows \<open>wf_st s \<and> length vs = length (Problem_widths p) \<and>
-    (\<forall>i < length vs. length (vs ! i) = unat (Problem_widths p ! i)) \<and>
+  assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
+  shows \<open>wf_st s \<and> length vs = length (CoreProblem_widths p) \<and>
+    (\<forall>i < length vs. length (vs ! i) = unat (CoreProblem_widths p ! i)) \<and>
     (\<forall>ls \<in> set vs. lits_lt (fst s) ls) \<and>
-    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> satisfies p (map (map (lit_sem \<sigma>)) vs)) \<and>
-    (\<forall>m. is_assignment p m \<longrightarrow> satisfies p m \<longrightarrow> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)))\<close>
+    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> csatisfies p (map (map (lit_sem \<sigma>)) vs)) \<and>
+    (\<forall>m. cis_assignment p m \<longrightarrow> csatisfies p m \<longrightarrow> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)))\<close>
 proof -
-  let ?W = \<open>Problem_widths p\<close>
-  let ?D = \<open>Problem_defs p\<close>
-  let ?A = \<open>Problem_asserts p\<close>
-  let ?ws = \<open>var_widths p\<close>
-  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  let ?W = \<open>CoreProblem_widths p\<close>
+  let ?D = \<open>CoreProblem_defs p\<close>
+  let ?A = \<open>CoreProblem_asserts p\<close>
+  let ?ws = \<open>cvar_widths p\<close>
+  let ?ds = \<open>cdef_widths ?ws [] ?D\<close>
   obtain s1 vs1 where V: \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W] = (s1, vs1)\<close>
     by (cases \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W]\<close>)
   obtain s2 dl where Dl: \<open>foldl (defs_step vs1 ?D) (s1, []) [0..<length ?D] = (s2, dl)\<close>
@@ -565,11 +565,11 @@ proof -
   have b1: \<open>fst s1 < 2 ^ 64\<close> and b2: \<open>fst s2 < 2 ^ 64\<close> using le1 le2 assms(3) by linarith+
   note VI = vars_inv[OF order_refl V b1]
   have wf1: \<open>wf_st s1\<close> using VI by simp
-  have env1: \<open>env_ok (fst s1) ?ws vs1\<close> using VI by (simp add: env_ok_def var_widths_def)
-  have dwt: \<open>defs_wt ?ws [] ?D\<close> and awt: \<open>\<forall>t \<in> set ?A. wt ?ws ?ds t \<and> width ?ws ?ds t = 1\<close>
-    using assms(1) by (simp_all add: problem_wt_def Let_def)
+  have env1: \<open>env_ok (fst s1) ?ws vs1\<close> using VI by (simp add: env_ok_def cvar_widths_def)
+  have dwt: \<open>cdefs_wt ?ws [] ?D\<close> and awt: \<open>\<forall>t \<in> set ?A. cwt ?ws ?ds t \<and> cwidth ?ws ?ds t = 1\<close>
+    using assms(1) by (simp_all add: cproblem_wt_def Let_def)
   have DI: \<open>wf_st s2 \<and> ext s1 s2 \<and> env_ok (fst s2) ?ds dl \<and>
-    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> map (val \<sigma>) dl = def_values ?ws [] (map (val \<sigma>) vs1) [] ?D)\<close>
+    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> map (val \<sigma>) dl = cdef_values ?ws [] (map (val \<sigma>) vs1) [] ?D)\<close>
     using defs_inv[OF wf1 env1 dwt order_refl Dl b2] by simp
   have wf2: \<open>wf_st s2\<close> and e12: \<open>ext s1 s2\<close> and envd: \<open>env_ok (fst s2) ?ds dl\<close> using DI by simp_all
   have envv: \<open>env_ok (fst s2) ?ws vs1\<close> using env1 ext_fst[OF e12] env_ok_mono by blast
@@ -585,19 +585,19 @@ proof -
   next
     fix \<sigma> assume Sg: \<open>cnf_sem \<sigma> (snd s)\<close>
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using AI Sg by blast
-    have ev: \<open>\<forall>j < length ?A. eval ?ws ?ds (map (val \<sigma>) vs1) (map (val \<sigma>) dl) (?A ! j) = 1\<close>
+    have ev: \<open>\<forall>j < length ?A. ceval ?ws ?ds (map (val \<sigma>) vs1) (map (val \<sigma>) dl) (?A ! j) = 1\<close>
       using AI Sg by blast
-    have dv: \<open>map (val \<sigma>) dl = def_values ?ws [] (map (val \<sigma>) vs1) [] ?D\<close> using DI S2 by blast
-    show \<open>satisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
+    have dv: \<open>map (val \<sigma>) dl = cdef_values ?ws [] (map (val \<sigma>) vs1) [] ?D\<close> using DI S2 by blast
+    show \<open>csatisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
     proof -
       have mv: \<open>map bits_nat (map (map (lit_sem \<sigma>)) vs1) = map (val \<sigma>) vs1\<close>
         by (simp add: val_def)
       show ?thesis
-        unfolding satisfies_def Let_def Evs mv using ev dv by (auto simp: in_set_conv_nth)
+        unfolding csatisfies_def Let_def Evs mv using ev dv by (auto simp: in_set_conv_nth)
     qed
   next
-    fix m assume M: \<open>is_assignment p m\<close> and Sm: \<open>satisfies p m\<close>
-    have mw: \<open>map length m = map unat ?W\<close> using M by (simp add: is_assignment_def var_widths_def)
+    fix m assume M: \<open>cis_assignment p m\<close> and Sm: \<open>csatisfies p m\<close>
+    have mw: \<open>map length m = map unat ?W\<close> using M by (simp add: cis_assignment_def cvar_widths_def)
     have lm: \<open>length m = length ?W\<close> using arg_cong[OF mw, of length] by simp
     have \<open>\<forall>i < length ?W. length (m ! i) = unat (?W ! i)\<close>
       using mw lm list_eq_iff_nth_eq[of \<open>map length m\<close> \<open>map unat ?W\<close>] by simp
@@ -610,32 +610,32 @@ proof -
     have m1: \<open>map (map (lit_sem \<sigma>1)) vs1 = m\<close>
       using map_map_lit_agree[OF vl T1(1)] T0(2) by simp
     have vv: \<open>map (val \<sigma>1) vs1 = map bits_nat m\<close> using m1 by (simp add: map_val_bits)
-    have dv: \<open>map (val \<sigma>1) dl = def_values ?ws [] (map bits_nat m) [] ?D\<close>
+    have dv: \<open>map (val \<sigma>1) dl = cdef_values ?ws [] (map bits_nat m) [] ?D\<close>
       using DI T1(2) vv by simp
-    have \<open>\<forall>t \<in> set ?A. eval ?ws ?ds (map bits_nat m) (def_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
-      using Sm by (simp add: satisfies_def Let_def)
-    then have \<open>\<forall>j < length ?A. eval ?ws ?ds (map (val \<sigma>1) vs1) (map (val \<sigma>1) dl) (?A ! j) = 1\<close>
+    have \<open>\<forall>t \<in> set ?A. ceval ?ws ?ds (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
+      using Sm by (simp add: csatisfies_def Let_def)
+    then have \<open>\<forall>j < length ?A. ceval ?ws ?ds (map (val \<sigma>1) vs1) (map (val \<sigma>1) dl) (?A ! j) = 1\<close>
       using vv dv by simp
     then show \<open>\<exists>\<sigma>. cnf_sem \<sigma> (snd s)\<close> using AI T1(2) by blast
   qed
 qed
 
 theorem encode_sound:
-  assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>cnf_sem \<sigma> (snd s)\<close>
-  shows \<open>is_assignment p (map (map (lit_sem \<sigma>)) vs) \<and> satisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
+  assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>cnf_sem \<sigma> (snd s)\<close>
+  shows \<open>cis_assignment p (map (map (lit_sem \<sigma>)) vs) \<and> csatisfies p (map (map (lit_sem \<sigma>)) vs)\<close>
   using encode_main[OF assms(1-3)] assms(4)
-  by (auto simp: is_assignment_def var_widths_def list_eq_iff_nth_eq)
+  by (auto simp: cis_assignment_def cvar_widths_def list_eq_iff_nth_eq)
 
 theorem encode_complete:
-  assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>is_assignment p m\<close> \<open>satisfies p m\<close>
+  assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close> \<open>cis_assignment p m\<close> \<open>csatisfies p m\<close>
   shows \<open>\<exists>\<sigma>. cnf_sem \<sigma> (snd s)\<close>
   using encode_main[OF assms(1-3)] assms(4,5) by blast
 
 theorem encode_wf:
-  assumes \<open>problem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
+  assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
   shows \<open>(\<forall>c \<in> set (snd s). lits_lt (fst s) c) \<and> (\<forall>ls \<in> set vs. lits_lt (fst s) ls) \<and>
-         length vs = length (Problem_widths p) \<and>
-         (\<forall>i < length vs. length (vs ! i) = unat (Problem_widths p ! i))\<close>
+         length vs = length (CoreProblem_widths p) \<and>
+         (\<forall>i < length vs. length (vs ! i) = unat (CoreProblem_widths p ! i))\<close>
   using encode_main[OF assms(1-3)] by (simp add: wf_st_def)
 
 end

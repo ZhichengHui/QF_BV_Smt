@@ -1,5 +1,5 @@
 theory BVSmt_Defs
-  imports BVSmt_Spec.BVSmt_Spec
+  imports BVSmt_Core
 begin
 
 section \<open>Functional models of the Rust functions\<close>
@@ -179,24 +179,24 @@ definition blast_bin_m :: \<open>st \<Rightarrow> BinOp \<Rightarrow> Lit list \
       | BinOp_Eq \<Rightarrow> (let (s1, x) = eq_m s a b in (s1, [x]))
       | BinOp_Ult \<Rightarrow> (let (s1, x) = ult_m s a b in (s1, [x])))\<close>
 
-text \<open>The width of the result of a binary operator on operands of widths \<open>wa\<close>, \<open>wb\<close>.\<close>
+text \<open>The cwidth of the result of a binary operator on operands of widths \<open>wa\<close>, \<open>wb\<close>.\<close>
 definition bin_width :: \<open>BinOp \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
   \<open>bin_width op wa wb \<equiv>
      (case op of BinOp_Concat \<Rightarrow> wa + wb | BinOp_Eq \<Rightarrow> 1 | BinOp_Ult \<Rightarrow> 1 | _ \<Rightarrow> wa)\<close>
 
 text \<open>\<^verbatim>\<open>blast\<close>, given the literals of the variables and of the definitions.\<close>
-primrec blast_m :: \<open>Lit list list \<Rightarrow> Lit list list \<Rightarrow> st \<Rightarrow> Term \<Rightarrow> st \<times> Lit list\<close> where
-  \<open>blast_m vs dl s (Term_Const bs) = (s, const_m bs)\<close>
-| \<open>blast_m vs dl s (Term_Var i) = (s, vs ! unat i)\<close>
-| \<open>blast_m vs dl s (Term_Ref i) = (s, dl ! unat i)\<close>
-| \<open>blast_m vs dl s (Term_Not a) = (let (s1, la) = blast_m vs dl s a in (s1, not_m la))\<close>
-| \<open>blast_m vs dl s (Term_Bin op a b) =
+primrec blast_m :: \<open>Lit list list \<Rightarrow> Lit list list \<Rightarrow> st \<Rightarrow> CoreTerm \<Rightarrow> st \<times> Lit list\<close> where
+  \<open>blast_m vs dl s (CoreTerm_Const bs) = (s, const_m bs)\<close>
+| \<open>blast_m vs dl s (CoreTerm_Var i) = (s, vs ! unat i)\<close>
+| \<open>blast_m vs dl s (CoreTerm_Ref i) = (s, dl ! unat i)\<close>
+| \<open>blast_m vs dl s (CoreTerm_Not a) = (let (s1, la) = blast_m vs dl s a in (s1, not_m la))\<close>
+| \<open>blast_m vs dl s (CoreTerm_Bin op a b) =
      (let (s1, la) = blast_m vs dl s a in
       let (s2, lb) = blast_m vs dl s1 b in
       blast_bin_m s2 op la lb)\<close>
-| \<open>blast_m vs dl s (Term_Extract hi lo a) =
+| \<open>blast_m vs dl s (CoreTerm_Extract hi lo a) =
      (let (s1, la) = blast_m vs dl s a in (s1, extract_m la (unat hi) (unat lo)))\<close>
-| \<open>blast_m vs dl s (Term_Ite c a b) =
+| \<open>blast_m vs dl s (CoreTerm_Ite c a b) =
      (let (s1, lc) = blast_m vs dl s c in
       let (s2, la) = blast_m vs dl s1 a in
       let (s3, lb) = blast_m vs dl s2 b in
@@ -209,20 +209,20 @@ text \<open>The three loops of \<^verbatim>\<open>encode\<close>: allocate the v
 definition vars_step :: \<open>64 word list \<Rightarrow> st \<times> Lit list list \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
   \<open>vars_step ws \<equiv> \<lambda>(s, vs) i. let (s1, ls) = fresh_vec_m s (unat (ws ! i)) in (s1, vs @ [ls])\<close>
 
-definition defs_step :: \<open>Lit list list \<Rightarrow> Term list \<Rightarrow> st \<times> Lit list list \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
+definition defs_step :: \<open>Lit list list \<Rightarrow> CoreTerm list \<Rightarrow> st \<times> Lit list list \<Rightarrow> nat \<Rightarrow> st \<times> Lit list list\<close> where
   \<open>defs_step vs ts \<equiv> \<lambda>(s, dl) j. let (s1, ls) = blast_m vs dl s (ts ! j) in (s1, dl @ [ls])\<close>
 
-definition asserts_step :: \<open>Lit list list \<Rightarrow> Lit list list \<Rightarrow> Term list \<Rightarrow> st \<Rightarrow> nat \<Rightarrow> st\<close> where
+definition asserts_step :: \<open>Lit list list \<Rightarrow> Lit list list \<Rightarrow> CoreTerm list \<Rightarrow> st \<Rightarrow> nat \<Rightarrow> st\<close> where
   \<open>asserts_step vs dl ts \<equiv> \<lambda>s k. let (s1, ls) = blast_m vs dl s (ts ! k) in addc_m s1 [ls ! 0]\<close>
 
 definition init_st :: st where
   \<open>init_st \<equiv> (1, [[lconst True]])\<close>
 
-definition encode_m :: \<open>Problem \<Rightarrow> st \<times> Lit list list\<close> where
+definition encode_m :: \<open>CoreProblem \<Rightarrow> st \<times> Lit list list\<close> where
   \<open>encode_m p \<equiv>
-     let (s1, vs) = foldl (vars_step (Problem_widths p)) (init_st, []) [0..<length (Problem_widths p)] in
-     let (s2, dl) = foldl (defs_step vs (Problem_defs p)) (s1, []) [0..<length (Problem_defs p)] in
-     let s3 = foldl (asserts_step vs dl (Problem_asserts p)) s2 [0..<length (Problem_asserts p)] in
+     let (s1, vs) = foldl (vars_step (CoreProblem_widths p)) (init_st, []) [0..<length (CoreProblem_widths p)] in
+     let (s2, dl) = foldl (defs_step vs (CoreProblem_defs p)) (s1, []) [0..<length (CoreProblem_defs p)] in
+     let s3 = foldl (asserts_step vs dl (CoreProblem_asserts p)) s2 [0..<length (CoreProblem_asserts p)] in
      (s3, vs)\<close>
 
 subsection \<open>DPLL\<close>
@@ -297,21 +297,21 @@ definition sigma_of :: \<open>bool option list \<Rightarrow> nat \<Rightarrow> b
 section \<open>Bounds\<close>
 
 text \<open>A bound on the iterations of every loop that blasting \<open>t\<close> runs (each loop runs over at
-  most twice the width of a subterm) and on the depth of the recursion.\<close>
-definition tbound :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
-  \<open>tbound ws ds t \<equiv> max (Suc (size t)) (Max (set (map (\<lambda>u. 2 * width ws ds u + 2) (subterms t))))\<close>
+  most twice the cwidth of a subterm) and on the depth of the recursion.\<close>
+definition tbound :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat\<close> where
+  \<open>tbound ws ds t \<equiv> max (Suc (size t)) (Max (set (map (\<lambda>u. 2 * cwidth ws ds u + 2) (csubterms t))))\<close>
 
 text \<open>The fuel the solver needs: a bound on the iterations of every loop and on the depth of
   every recursion, for the problem \<open>p\<close>. It depends on \<open>p\<close> only.\<close>
-definition fuel_bound :: \<open>Problem \<Rightarrow> nat\<close> where
+definition fuel_bound :: \<open>CoreProblem \<Rightarrow> nat\<close> where
   \<open>fuel_bound p \<equiv>
-     let ws = var_widths p in
-     let ds = def_widths ws [] (Problem_defs p) in
+     let ws = cvar_widths p in
+     let ds = cdef_widths ws [] (CoreProblem_defs p) in
      let (s, vs) = encode_m p in
-     Max ({fst s + 2, length (snd s) + 2, length ws + 2, length (Problem_defs p) + 2,
-           length (Problem_asserts p) + 2} \<union>
+     Max ({fst s + 2, length (snd s) + 2, length ws + 2, length (CoreProblem_defs p) + 2,
+           length (CoreProblem_asserts p) + 2} \<union>
           set (map (\<lambda>w. w + 2) ws) \<union>
           set (map (\<lambda>c. length c + 2) (snd s)) \<union>
-          set (map (tbound ws ds) (Problem_defs p @ Problem_asserts p)))\<close>
+          set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p)))\<close>
 
 end

@@ -510,10 +510,10 @@ qed
 lemma bits_bop:
   assumes \<open>op \<in> {BinOp_And, BinOp_Or, BinOp_Xor}\<close> \<open>length a = n\<close> \<open>length b = n\<close>
   shows \<open>bits_nat (map (\<lambda>i. bop op (lit_sem \<sigma> (a ! i)) (lit_sem \<sigma> (b ! i))) [0..<n]) =
-         bin_sem op n (val \<sigma> a) n (val \<sigma> b)\<close>
+         cbin_sem op n (val \<sigma> a) n (val \<sigma> b)\<close>
 proof -
   have \<open>bit (bits_nat (map (\<lambda>i. bop op (lit_sem \<sigma> (a ! i)) (lit_sem \<sigma> (b ! i))) [0..<n])) k =
-        bit (bin_sem op n (val \<sigma> a) n (val \<sigma> b)) k\<close> for k
+        bit (cbin_sem op n (val \<sigma> a) n (val \<sigma> b)) k\<close> for k
   proof -
     consider \<open>op = BinOp_And\<close> | \<open>op = BinOp_Or\<close> | \<open>op = BinOp_Xor\<close> using assms(1) by blast
     then show ?thesis
@@ -1089,7 +1089,7 @@ proof -
 qed
 
 lemma shift_sem_shl:
-  \<open>(if y < n then shv True n x y else 0) = bin_sem BinOp_Shl n x v y\<close>
+  \<open>(if y < n then shv True n x y else 0) = cbin_sem BinOp_Shl n x v y\<close>
 proof (cases \<open>y < n\<close>)
   case True then show ?thesis by (simp add: shv_def)
 next
@@ -1100,7 +1100,7 @@ next
 qed
 
 lemma shift_sem_lshr:
-  \<open>x < 2 ^ n \<Longrightarrow> (if y < n then shv False n x y else 0) = bin_sem BinOp_Lshr n x v y\<close>
+  \<open>x < 2 ^ n \<Longrightarrow> (if y < n then shv False n x y else 0) = cbin_sem BinOp_Lshr n x v y\<close>
 proof (cases \<open>y < n\<close>)
   case True then show ?thesis by (simp add: shv_def)
 next
@@ -1489,10 +1489,10 @@ lemma bin_correct_bitwise:
     and d: \<open>bitwise_m op s a b = (s', r)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
   shows \<open>wf_st s' \<and> ext s s' \<and> lits_lt (fst s') r \<and> length r = bin_width op (length a) (length b) \<and>
          (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow>
-            val \<sigma> r = bin_sem op (length a) (val \<sigma> a) (length b) (val \<sigma> b))\<close>
+            val \<sigma> r = cbin_sem op (length a) (val \<sigma> a) (length b) (val \<sigma> b))\<close>
 proof -
   note L = bitwise_ok[OF wf la lb len d lt]
-  have \<open>val \<sigma> r = bin_sem op (length a) (val \<sigma> a) (length b) (val \<sigma> b)\<close> if \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
+  have \<open>val \<sigma> r = cbin_sem op (length a) (val \<sigma> a) (length b) (val \<sigma> b)\<close> if \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
     using L that bits_bop[OF op refl len[symmetric], of \<sigma>] len by (simp add: val_def)
   moreover have \<open>bin_width op (length a) (length b) = length a\<close> using op by (auto simp: bin_width_def)
   ultimately show ?thesis using L by simp
@@ -1504,7 +1504,7 @@ lemma blast_bin_correct:
     \<open>blast_bin_m s op a b = (s', r)\<close> \<open>fst s' < 2 ^ 64\<close>
   shows \<open>wf_st s' \<and> ext s s' \<and> lits_lt (fst s') r \<and> length r = bin_width op (length a) (length b) \<and>
          (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow>
-            val \<sigma> r = bin_sem op (length a) (val \<sigma> a) (length b) (val \<sigma> b))\<close>
+            val \<sigma> r = cbin_sem op (length a) (val \<sigma> a) (length b) (val \<sigma> b))\<close>
 proof (cases op)
   case BinOp_And
   have len: \<open>length a = length b\<close> using assms(4) BinOp_And by simp

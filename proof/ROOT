@@ -16,3 +16,4 @@ session "BVSmt_Top" in "top" = "BVSmt_Proof" +
     BVSmt_SmtSize
     BVSmt_SmtBound
     BVSmt_SmtRefine
+    BVSmt_Top

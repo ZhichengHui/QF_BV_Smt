@@ -796,6 +796,32 @@ lemma la2_one_bool: \<open>list_all2 smt_has_sort [SmtSort_Bool] xs \<Longrighta
 lemma smt_true_VBool: \<open>smt_true \<circ> VBool = id\<close>
   by (simp add: fun_eq_iff)
 
+lemma la2_ite:
+  \<open>list_all2 smt_has_sort [SmtSort_Bool, a, a] xs \<Longrightarrow>
+     \<exists>c x y. xs = [VBool c, x, y] \<and> smt_has_sort a x \<and> smt_has_sort a y\<close>
+  by (cases xs; cases \<open>tl xs\<close>; cases \<open>tl (tl xs)\<close>) (auto split: sval.splits)
+
+lemma ex_zero_map: \<open>map f ks = map of_bool bs \<Longrightarrow> (\<exists>k \<in> set ks. f k = (0 :: nat)) = (\<exists>b \<in> set bs. \<not> b)\<close>
+proof (induction ks arbitrary: bs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons k ks)
+  then obtain b bs' where \<open>bs = b # bs'\<close> \<open>f k = of_bool b\<close> \<open>map f ks = map of_bool bs'\<close> by (cases bs) auto
+  then show ?case using Cons.IH by auto
+qed
+
+lemma distinct_lt: \<open>distinct xs = (\<forall>i j. i < j \<and> j < length xs \<longrightarrow> xs ! i \<noteq> xs ! j)\<close>
+proof -
+  have \<open>(\<forall>i < length xs. \<forall>j < length xs. i \<noteq> j \<longrightarrow> xs ! i \<noteq> xs ! j) = (\<forall>i j. i < j \<and> j < length xs \<longrightarrow> xs ! i \<noteq> xs ! j)\<close>
+  proof
+    assume \<open>\<forall>i j. i < j \<and> j < length xs \<longrightarrow> xs ! i \<noteq> xs ! j\<close>
+    then show \<open>\<forall>i < length xs. \<forall>j < length xs. i \<noteq> j \<longrightarrow> xs ! i \<noteq> xs ! j\<close>
+      by (metis linorder_neqE_nat)
+  qed auto
+  then show ?thesis by (simp add: distinct_conv_nth)
+qed
+
 lemma tr_app_correct:
   assumes \<open>smt_op_sort op ss = Some s\<close> \<open>\<forall>x \<in> set ss. frag_sort x\<close>
     \<open>length ks = length ss\<close> \<open>length xs = length ss\<close>
@@ -1142,16 +1168,91 @@ proof -
         by (simp add: fold_left_m_def width_pres_def smt_true_VBool)
     next
       case SmtOp_Implies
-      then show ?thesis sorry
+      then have ss: \<open>2 \<le> length ss\<close> \<open>set ss \<subseteq> {SmtSort_Bool}\<close> \<open>s = SmtSort_Bool\<close>
+        using assms(1) by (auto split: if_splits)
+      obtain bs where xs: \<open>xs = map VBool bs\<close> using la2_bools H ss(2) by blast
+      have l: \<open>length bs = length ks\<close> \<open>ks \<noteq> []\<close> using xs assms(3,4) ss(1) by auto
+      have t: \<open>\<forall>i < length ks. wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+          eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
+      proof (intro allI impI)
+        fix i assume i: \<open>i < length ks\<close>
+        then have \<open>ss ! i \<in> set ss\<close> using assms(3) by simp
+        then have \<open>ss ! i = SmtSort_Bool\<close> using ss(2) by blast
+        moreover have \<open>xs ! i = VBool (bs ! i)\<close> using i xs l by simp
+        ultimately show \<open>wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+            eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close> using T[of i] i assms(3) by simp
+      qed
+      have K: \<open>\<forall>k \<in> set ks. wt ws ?dw (tref k) \<and> width ws ?dw (tref k) = 1 \<and> eval ws ?dw vs ?dv (tref k) \<in> {0, 1}\<close>
+        using t by (auto simp: in_set_conv_nth)
+      have E: \<open>map (\<lambda>k. eval ws ?dw vs ?dv (tref k)) ks = map of_bool bs\<close> using t l by (auto intro!: nth_equalityI)
+      have Eb: \<open>map (\<lambda>k. eval ws ?dw vs ?dv (tref k)) (butlast ks) = map of_bool (butlast bs)\<close> using E by (metis map_butlast)
+      have c1: \<open>(\<exists>k \<in> set (butlast ks). eval ws ?dw vs ?dv (tref k) = 0) = (\<exists>b \<in> set (butlast bs). \<not> b)\<close>
+        using ex_zero_map[OF Eb] .
+      have c2: \<open>eval ws ?dw vs ?dv (tref (last ks)) = of_bool (last bs)\<close>
+        using E l by (metis last_map list.map_disc_iff)
+      have bs0: \<open>bs \<noteq> []\<close> using l by auto
+      show ?thesis using implies_eval[OF l(2) K] c1 c2 ss(3) xs SmtOp_Implies bs0
+        by (simp add: map_butlast[symmetric] last_map)
     next
       case SmtOp_Eq
-      then show ?thesis sorry
+      then have ss: \<open>2 \<le> length ss\<close> \<open>set ss \<subseteq> {hd ss}\<close> \<open>s = SmtSort_Bool\<close>
+        using assms(1) by (auto split: if_splits)
+      define s0 where \<open>s0 = hd ss\<close>
+      have s00: \<open>s0 \<in> set ss\<close> using ss(1) unfolding s0_def by (cases ss) auto
+      have fs0: \<open>frag_sort s0\<close> using assms(2) s00 by blast
+      have all: \<open>ss ! i = s0\<close> if \<open>i < length ss\<close> for i using ss(2) that nth_mem[OF that] unfolding s0_def by blast
+      have t: \<open>wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = sort_width_m s0 \<and>
+          eval ws ?dw vs ?dv (tref (ks ! i)) = enc (xs ! i)\<close> if \<open>i < length ks\<close> for i
+        using T[of i] all[of i] that assms(3) by simp
+      have hs: \<open>smt_has_sort s0 (xs ! i)\<close> if \<open>i < length xs\<close> for i
+        using H all[of i] that assms(4) by (auto simp: list_all2_conv_all_nth)
+      have K: \<open>\<forall>k \<in> set ks. wt ws ?dw (tref k) \<and> width ws ?dw (tref k) = sort_width_m s0\<close>
+        using t by (auto simp: in_set_conv_nth)
+      have ev: \<open>(eval ws ?dw vs ?dv (tref (ks ! i)) = eval ws ?dw vs ?dv (tref (ks ! j))) = (xs ! i = xs ! j)\<close>
+        if \<open>i < length ks\<close> \<open>j < length ks\<close> for i j
+        using t[OF that(1)] t[OF that(2)] enc_inj[OF hs hs fs0] that assms(3,4) by simp
+      have c: \<open>(\<forall>i. Suc i < length ks \<longrightarrow> eval ws ?dw vs ?dv (tref (ks ! i)) = eval ws ?dw vs ?dv (tref (ks ! Suc i))) =
+          (\<forall>i. Suc i < length xs \<longrightarrow> xs ! i = xs ! Suc i)\<close>
+        using ev assms(3,4) by (metis Suc_lessD)
+      show ?thesis using chain_eval[OF _ K] c ss SmtOp_Eq assms(3) by simp
     next
       case SmtOp_Distinct
-      then show ?thesis sorry
+      then have ss: \<open>2 \<le> length ss\<close> \<open>set ss \<subseteq> {hd ss}\<close> \<open>s = SmtSort_Bool\<close>
+        using assms(1) by (auto split: if_splits)
+      define s0 where \<open>s0 = hd ss\<close>
+      have s00: \<open>s0 \<in> set ss\<close> using ss(1) unfolding s0_def by (cases ss) auto
+      have fs0: \<open>frag_sort s0\<close> using assms(2) s00 by blast
+      have all: \<open>ss ! i = s0\<close> if \<open>i < length ss\<close> for i using ss(2) that nth_mem[OF that] unfolding s0_def by blast
+      have t: \<open>wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = sort_width_m s0 \<and>
+          eval ws ?dw vs ?dv (tref (ks ! i)) = enc (xs ! i)\<close> if \<open>i < length ks\<close> for i
+        using T[of i] all[of i] that assms(3) by simp
+      have hs: \<open>smt_has_sort s0 (xs ! i)\<close> if \<open>i < length xs\<close> for i
+        using H all[of i] that assms(4) by (auto simp: list_all2_conv_all_nth)
+      have K: \<open>\<forall>k \<in> set ks. wt ws ?dw (tref k) \<and> width ws ?dw (tref k) = sort_width_m s0\<close>
+        using t by (auto simp: in_set_conv_nth)
+      have ev: \<open>(eval ws ?dw vs ?dv (tref (ks ! i)) = eval ws ?dw vs ?dv (tref (ks ! j))) = (xs ! i = xs ! j)\<close>
+        if \<open>i < length ks\<close> \<open>j < length ks\<close> for i j
+        using t[OF that(1)] t[OF that(2)] enc_inj[OF hs hs fs0] that assms(3,4) by simp
+      have c: \<open>(\<forall>i j. i < j \<and> j < length ks \<longrightarrow> eval ws ?dw vs ?dv (tref (ks ! i)) \<noteq> eval ws ?dw vs ?dv (tref (ks ! j))) =
+          distinct xs\<close>
+      proof -
+        have \<open>(eval ws ?dw vs ?dv (tref (ks ! i)) \<noteq> eval ws ?dw vs ?dv (tref (ks ! j))) = (xs ! i \<noteq> xs ! j)\<close>
+          if \<open>i < j\<close> \<open>j < length ks\<close> for i j using ev that by simp
+        then show ?thesis unfolding distinct_lt using assms(3,4) by metis
+      qed
+      show ?thesis using pairwise_eval[OF _ K] c ss SmtOp_Distinct assms(3) by simp
     next
       case SmtOp_Ite
-      then show ?thesis sorry
+      then obtain s' where ss: \<open>ss = [SmtSort_Bool, s', s']\<close> \<open>s = s'\<close>
+        using assms(1) by (auto split: list.splits if_splits)
+      have fs: \<open>frag_sort s'\<close> using assms(2) ss by auto
+      obtain c x y where xs: \<open>xs = [VBool c, x, y]\<close> \<open>smt_has_sort s' x\<close> \<open>smt_has_sort s' y\<close>
+        using la2_ite H ss(1) by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = 1\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = of_bool c\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = sort_width_m s'\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = enc x\<close>
+        \<open>wt ws ?dw (tref (ks ! 2))\<close> \<open>width ws ?dw (tref (ks ! 2)) = sort_width_m s'\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 2)) = enc y\<close>
+        using T[of 0] T[of 1] T[of 2] ss xs by auto
+      show ?thesis using t ss xs SmtOp_Ite by (cases c) auto
     qed (use False in simp_all)
   qed
 qed

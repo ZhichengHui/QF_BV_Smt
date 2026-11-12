@@ -1796,4 +1796,76 @@ next
   qed
 qed
 
+subsection \<open>The translated problem\<close>
+
+lemma sort_width_lt: \<open>frag_sort s \<Longrightarrow> sort_width_m s < 2 ^ 64\<close>
+  by (cases s) (auto intro: unat_lt2p[THEN less_le_trans])
+
+text \<open>For an interpretation \<open>I\<close> of the constants and the values \<open>vs\<close> of the variables of the
+  translation that agree, the translation is well-sorted and its assertions hold exactly when those
+  of \<open>p\<close> hold under \<open>I\<close>.\<close>
+lemma tr_problem_sem:
+  assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>interp_sound (SmtProblem_funs p) I\<close>
+    \<open>length vs = length (SmtProblem_funs p)\<close> \<open>\<forall>f < length (SmtProblem_funs p). vs ! f = enc (I f [])\<close>
+    \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close>
+  shows \<open>problem_wt (tr_problem_m p) \<and>
+    var_widths (tr_problem_m p) = map (\<lambda>f. sort_width_m (SmtFun_ret f)) (SmtProblem_funs p) \<and>
+    ((\<forall>t \<in> set (Problem_asserts (tr_problem_m p)).
+        eval (var_widths (tr_problem_m p)) (def_widths (var_widths (tr_problem_m p)) [] (Problem_defs (tr_problem_m p))) vs
+          (def_values (var_widths (tr_problem_m p)) [] vs [] (Problem_defs (tr_problem_m p))) t = 1) =
+     smt_satisfies p I)\<close>
+proof -
+  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close>
+  let ?ws = \<open>map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close>
+  have frs: \<open>\<forall>f \<in> set ?fs. frag_sort (SmtFun_ret f)\<close>
+    using assms(1,2) frag_of_wf by (auto simp: smt_wf_def Let_def)
+  have vw: \<open>var_widths (tr_problem_m p) = ?ws\<close>
+    using frs sort_width_lt by (auto simp: var_widths_def tr_problem_m_def Let_def unat_of_nat_eq)
+  have c0: \<open>ctx_ok p I ?ws vs 0 [] []\<close> using assms(1-5) by (simp add: ctx_ok_def Let_def)
+  obtain S0 dm where d: \<open>tr_defs_m p = (S0, dm)\<close> by (cases \<open>tr_defs_m p\<close>)
+  obtain S' ts where a: \<open>tr_asserts_m p (S0, dm) = (S', ts)\<close> by (cases \<open>tr_asserts_m p (S0, dm)\<close>)
+  have af: \<open>foldl (tr_asserts_step p dm) (S0, []) (SmtProblem_asserts p) = (S', ts)\<close>
+    using a by (simp add: tr_asserts_m_step)
+  have len0: \<open>length S0 < 2 ^ 64\<close> using tr_prefix_asserts[OF af] assms(6) a d by auto
+  have D: \<open>ctx_ok p I ?ws vs (length ?ds) dm S0 \<and> defs_wt ?ws [] S0\<close>
+    using tr_defs_correct[OF c0, of \<open>length ?ds\<close>] len0 d by (simp add: tr_defs_m_step)
+  have ta: \<open>\<forall>t \<in> set (SmtProblem_asserts p). smt_tsort ?fs ?ds [] t = Some SmtSort_Bool\<close>
+    using assms(1) by (simp add: smt_wf_def Let_def)
+  have A: \<open>(\<exists>E. S' = S0 @ E) \<and> defs_wt ?ws [] S' \<and> (\<exists>new. ts = [] @ new \<and> length new = length (SmtProblem_asserts p) \<and>
+           (\<forall>i < length (SmtProblem_asserts p). aok p I ?ws vs S' (new ! i) (SmtProblem_asserts p ! i)))\<close>
+    using tr_asserts_gen[OF conjunct1[OF D] conjunct2[OF D] ta af] assms(6) a d by simp
+  have tp: \<open>tr_problem_m p = make_Problem (map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) ?fs) S' ts\<close>
+    using a d by (simp add: tr_problem_m_def)
+  have hs: \<open>smt_has_sort SmtSort_Bool (smt_eval I (smt_def_sems I ?ds) [] t)\<close> if \<open>t \<in> set (SmtProblem_asserts p)\<close> for t
+    using val_sort[OF conjunct1[OF D], of \<open>[]\<close> t SmtSort_Bool \<open>[]\<close>] ta that by simp
+  have ev: \<open>(enc (smt_eval I (smt_def_sems I ?ds) [] t) = 1) = (smt_eval I (smt_def_sems I ?ds) [] t = VBool True)\<close>
+    if \<open>t \<in> set (SmtProblem_asserts p)\<close> for t
+    using hs[OF that] by (cases \<open>smt_eval I (smt_def_sems I ?ds) [] t\<close>) auto
+  obtain new where nw: \<open>ts = new\<close> \<open>length new = length (SmtProblem_asserts p)\<close>
+    \<open>\<forall>i < length (SmtProblem_asserts p). aok p I ?ws vs S' (new ! i) (SmtProblem_asserts p ! i)\<close>
+    using A by auto
+  have pf: \<open>Problem_defs (tr_problem_m p) = S'\<close> \<open>Problem_asserts (tr_problem_m p) = ts\<close> using tp by simp_all
+  let ?E = \<open>\<lambda>t. eval ?ws (def_widths ?ws [] S') vs (def_values ?ws [] vs [] S') t\<close>
+  have eqv: \<open>(\<forall>t \<in> set ts. ?E t = 1) = smt_satisfies p I\<close>
+  proof -
+    have \<open>(\<forall>t \<in> set ts. ?E t = 1) = (\<forall>i < length ts. ?E (ts ! i) = 1)\<close> by (rule all_set_conv_all_nth)
+    also have \<open>\<dots> = (\<forall>i < length (SmtProblem_asserts p).
+        smt_eval I (smt_def_sems I ?ds) [] (SmtProblem_asserts p ! i) = VBool True)\<close>
+      using nw ev by (auto simp: aok_def)
+    also have \<open>\<dots> = (\<forall>t \<in> set (SmtProblem_asserts p). smt_eval I (smt_def_sems I ?ds) [] t = VBool True)\<close>
+      by (rule all_set_conv_all_nth[symmetric])
+    finally show ?thesis by (simp add: smt_satisfies_def Let_def)
+  qed
+  show ?thesis
+  proof (intro conjI)
+    show \<open>problem_wt (tr_problem_m p)\<close>
+      using A nw vw pf unfolding problem_wt_def Let_def by (auto simp: aok_def all_set_conv_all_nth)
+    show \<open>var_widths (tr_problem_m p) = ?ws\<close> using vw .
+    show \<open>(\<forall>t \<in> set (Problem_asserts (tr_problem_m p)).
+        eval (var_widths (tr_problem_m p)) (def_widths (var_widths (tr_problem_m p)) [] (Problem_defs (tr_problem_m p))) vs
+          (def_values (var_widths (tr_problem_m p)) [] vs [] (Problem_defs (tr_problem_m p))) t = 1) = smt_satisfies p I\<close>
+      using eqv vw pf by simp
+  qed
+qed
+
 end

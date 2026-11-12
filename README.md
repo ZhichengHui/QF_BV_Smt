@@ -1,92 +1,91 @@
 # BVSmt
 
-一个支持 QF_BV（无量词定长位向量）的 SMT 求解器，能给出模型。求解器核心用 Rust 写成，经 AutoCorrode 前端翻译到
-Isabelle/HOL，并证明满足顶层规约。
+一个支持 QF_BV（无量词定长位向量）的 SMT 求解器，能给出模型。求解器用 Rust 写成，经 AutoCorrode 前端翻译到
+Isabelle/HOL，并证明它满足以 SMT-LIB 语义写成的顶层规约。另一个项目 AutoCorrode-QFUF（QF_UF 求解器）与本项目
+共用前端、通用问题结构和语义，目录结构和命名一一对应。
 
 ## 目录结构
 
 | 路径 | 内容 |
 |---|---|
-| `core/src/lib.rs` | 求解器核心（被验证的部分）：把位向量问题位爆破为 CNF，再用带单元传播的 DPLL 求解，Sat 时读出模型。入口 `pub fn solve(p: &Problem) -> Answer` |
-| `cli/src/main.rs` | SMT-LIB 前端（未验证）：解析 QF_BV 脚本并转换成核心的问题结构（不展开位向量运算）；负责 SMT-LIB 的语法简写（多参数的 `bvand`/`bvor`/`bvadd`/`bvmul`/`distinct`、`let`、`define-fun`）和 Bool 部分；调用 `solve` 并输出结果 |
+| `core/src/lib.rs` | 被验证的部分：求解器核心 `solve`（扩展位向量语言 → 改写 → 位爆破 → DPLL），以及通用问题结构上的入口 `check_sat`（片段检查、规模检查、翻译、模型翻译） |
+| `frontend/` | SMT-LIB 2.6 前端（未验证，两个项目相同）：解析脚本，构造通用问题结构，在 `check-sat` 时调用求解器，输出回答和 `get-model` |
+| `cli/src/main.rs` | 可执行程序 `bvsmt`：前端加 `check_sat` |
 | `urust/` | AutoCorrode 前端从 `core/src/lib.rs` 生成的 Isabelle 翻译，session `BVSmt` |
-| `spec/` | 顶层规约 `BVSmt_Spec.thy`，session `BVSmt_Spec` |
-| `proof/` | 证明，session `BVSmt_Proof` |
-| `tools/` | 测试与检查脚本 |
+| `spec/` | 规约，session `BVSmt_Spec`：`SMT_Semantics.thy`（通用问题结构的语义，两个项目相同）、`BVSmt_Spec.thy`（契约与顶层陈述）、`smtlib-2.6/`（所依据的 SMT-LIB 原文） |
+| `proof/` | 核心 `solve` 的证明，session `BVSmt_Proof` |
+| `proof/smt/` | 翻译的函数式模型及其语义正确性，session `BVSmt_Smt` |
+| `proof/top/` | Rust 翻译函数的精化、规模检查、规模界与顶层定理，session `BVSmt_Top` |
+| `tools/` | 检查、测试与评测脚本 |
 
 ## 求解器
 
-核心覆盖 SMT-LIB 2.6 的 FixedSizeBitVectors 理论和 QF_BV 逻辑规定的全部位向量运算：
-`concat`、`extract`、`bvnot`、`bvand`、`bvor`、`bvneg`、`bvadd`、`bvmul`、`bvudiv`、`bvurem`、`bvshl`、`bvlshr`、`bvult`，
-以及 `bvnand`、`bvnor`、`bvxor`、`bvxnor`、`bvcomp`、`bvsub`、`bvsdiv`、`bvsrem`、`bvsmod`、`bvashr`、`repeat`、`zero_extend`、
-`sign_extend`、`rotate_left`、`rotate_right`、`bvule`、`bvugt`、`bvuge`、`bvslt`、`bvsle`、`bvsgt`、`bvsge`，再加上位向量上的
-`=`、`distinct`、`ite`。
+`check_sat(p: &SmtProblem) -> SmtAnswer` 依次：
 
-问题由变量（给定位宽）、定义（可引用之前的定义，用于共享子项）和断言（宽度为 1 的项）组成，项可直接写出上述任一运算，
-每个运算取 SMT-LIB 定义它时用的二元形式。核心的输入是这个问题结构，不是 SMT-LIB 文本：多参数写法（SMT-LIB 把它定义为
-二元形式的简写）、`let`、`define-fun` 和 Bool 部分由未验证的前端转换。
-核心先把扩展的项按 SMT-LIB 的定义改写（lower）成一小组基本运算（`not`、`and`、`or`、`xor`、`add`、`mul`、`udiv`、`urem`、
-`shl`、`lshr`、`concat`、`extract`、`=`、`bvult`、`ite`），再做位爆破和 DPLL。改写保持语义，已在 Isabelle 中证明。
+1. 检查 `p` 是否在本求解器的片段内（没有未解释类型，声明的符号都是常量），不在则回答 `Unknown`；
+2. 用饱和到 `2^63` 的算术计算翻译后的定义个数，达到 `2^63` 则回答 `Unknown`；
+3. 把 `p` 翻译成扩展位向量语言的问题 `q`（Bool 为宽度 1，每个参数成为一个定义，带参数的定义在应用处展开）；
+4. 计算 `q` 的 `size_bound`，不小于 `2^63` 则回答 `Unknown`（核心的证明要求这个界）；
+5. 调用 `solve q`；`Sat` 时把赋值翻译回通用模型。
 
-构建（需要 Rust 工具链）：
+核心覆盖 SMT-LIB 2.6 的 FixedSizeBitVectors 理论和 QF_BV 逻辑的全部运算，以及 Core 理论的全部运算。
+`bvand`、`bvor`、`bvadd`、`bvmul`（`:left-assoc`）和 `bvxor`（QF_BV 规定左结合）接受多个参数。
+
+## 构建与运行
+
+需要 Rust 工具链：
 
     cargo build --release
 
-产物为 `target/release/bvsmt`。用法：`bvsmt FILE.smt2`，或从标准输入读入脚本。
+产物为 `target/release/bvsmt`。用法：`bvsmt FILE.smt2`，或从标准输入读入脚本。支持 `get-model`，输出满足
+SMT-COMP 模型验证的格式；标准错误上不输出任何内容。
 
 ## 规约与定理
 
-规约 `spec/BVSmt_Spec.thy` 按 SMT-LIB 2.6 的 FixedSizeBitVectors 原文逐条给出每个运算的语义（值为小于 `2^w` 的自然数，
-有符号运算按补码，除以 0 等边界按原文），不以"等于其他运算的组合"来定义；二元运算见 `bin_sem`，其余项见 `eval`。规约还定义：
+`spec/SMT_Semantics.thy` 定义通用问题的语义：良类型 `smt_wf`、表示条件 `smt_repr_ok`（每个 `Vec` 少于 `2^63`
+个元素，任何 Rust 值都满足）、求值 `smt_eval`、模型 `smt_is_model`、可满足性 `smt_satisfiable`，以及规模度量
+`smt_size_bound`。`spec/BVSmt_Spec.thy` 中：
 
-- `problem_wt p`：问题良类型。项中出现的宽度都至少为 1；没有被任何项引用的变量不受检查，可以声明为宽度 0；
-- `is_assignment p m`：`m` 给每个变量一个宽度正确的位串；
-- `is_model p m`：`m` 是使全部断言为 1 的赋值；
-- `size_bound p`：由变量位宽、定义和断言的个数、各子项的宽度算出的问题规模；
-- `sizes_ok p`：`size_bound p < 2^64`。它保证求解器的 `usize` 计数器不溢出，但只是充分条件：`size_bound` 估计得很宽
-  （乘了 1000000，并对每个宽度取三次方），一个宽度 30000 的 `bvmul` 就会使它超过 `2^64`，定理对这样的问题不作保证；
-- `solve_contract p`：前置条件为 `problem_wt p`（扩展问题的良类型）；返回 `Answer_Sat m` 时 `is_model p m`，返回 `Answer_Unsat` 时不存在模型；求解器不崩溃；
-- `solve_correct Γ`：对每个满足 `problem_wt p` 和 `sizes_ok p` 的问题 `p`，存在 `N`，使得翻译取任意不小于 `N` 的 fuel 时，
-  `solve p` 都满足 `solve_contract p`。fuel 是翻译给每个循环和递归设的次数上限（`BVSmt_ctx` 的参数 `urust_fuel`）；
-  `solve_correct` 在去掉 fuel 参数的 locale `BVSmt_heap` 中陈述，对 fuel 取存在量词，不规定它要多大。
+- `check_sat_contract p`：前置条件 `smt_wf p ∧ smt_repr_ok p`；回答 `Sat m` 时 `smt_is_model p m`，回答 `Unsat`
+  时 `p` 不可满足，回答 `Unknown` 时 `p` 不在片段内或 `smt_size_bound p ≥ 2^64`；不 panic；
+- `check_sat_correct Γ`：对每个满足前置条件的 `p`，存在 `N`，使翻译取任意不小于 `N` 的 fuel 时 `check_sat p`
+  满足 `check_sat_contract p`。fuel 是翻译给每个循环和递归设的次数上限，对它取存在量词。
 
-顶层定理 `BVSmt_heap.solve_correct`（`proof/BVSmt_Proof.thy`）证明 `solve_correct Γ`。证明中的 `N` 取 `size_bound p`，
-来自 `BVSmt_ctx.solve_spec`：若 `size_bound p ≤ urust_fuel` 且 `size_bound p < 2^64`，则 `solve p` 满足 `solve_contract p`。
+顶层定理是 `BVSmt_heap.check_sat_correct`（`proof/top/BVSmt_Top.thy`），`N` 取 `fuel_top p`。规约还保留核心的
+契约 `solve_contract` 和定理 `solve_correct`。
 
-信任基础（不在本仓库中证明）：
+信任基础（不在本仓库中证明）：AutoCorrode 翻译的正确性（fuel 足够时翻译出的函数与 Rust 函数行为一致）；
+locale `BVSmt_heap` 的假设（AutoCorrode 引用模型的假设）；未验证的前端（把 SMT-LIB 文本转成通用问题结构，
+把模型打印成文本）。程序逻辑不模拟内存和栈的耗尽，契约对它们不作断言。
 
-- 定理讲的是 AutoCorrode 翻译出的函数。它能推到编译后的 Rust 程序，依赖于翻译的正确性：fuel 足够时，翻译出的函数和
-  Rust 函数行为一致；fuel 只在耗尽时额外引入中止。
-- `solve_correct` 陈述在 locale `BVSmt_heap` 中，其假设描述一个对每种可变局部变量类型各有一类引用的堆。本仓库没有给出
-  这个 locale 的具体实例；和其他 AutoCorrode 项目一样，这些假设就是 AutoCorrode 引用模型的假设，定理对满足它们的
-  每个堆成立。
-- 未验证的前端负责把 SMT-LIB 文本转换成核心的问题结构（见上文）。
-
-证明的组成：
+## 证明的组成
 
 | 文件 | 内容 |
 |---|---|
-| `proof/BVSmt_Core.thy` | 基本运算的核心项语言 `CoreTerm` 的语义（原规约，常量名加前缀 `c`）与求解合约 `csolve_contract` |
-| `proof/BVSmt_Lower.thy` | 改写的函数式模型 `lower_m`/`lower_problem_m`，及改写保持语义：`lower_problem_correct` |
-| `proof/BVSmt_LowerRefine.thy` | Rust 改写函数（翻译）的行为等于 `lower_m`/`lower_problem_m`：`lower_spec`、`lower_problem_spec` |
-| `proof/BVSmt_LowerBound.thy` | 改写后的核心问题规模不超过原问题的 `size_bound`：`lower_size_bound` |
-| `proof/BVSmt_Defs.thy` | 每个 Rust 函数的函数式模型，CNF 的语义 |
-| `proof/BVSmt_Circuits.thy` | 各个门和位向量电路的语义 |
-| `proof/BVSmt_Encode.thy` | 编码的可靠性和完备性：CNF 可满足当且仅当问题有模型 |
-| `proof/BVSmt_Refine.thy` | Rust 函数（翻译）的行为等于对应的函数式模型 |
-| `proof/BVSmt_Dpll.thy` | DPLL 的正确性 |
-| `proof/BVSmt_Bound.thy` | 编码产生的变量数和子句数的上界，由此得到实现所需的次数不超过 `size_bound` |
-| `proof/BVSmt_Proof.thy` | `solve_spec`（fuel 不小于 `size_bound` 时满足合约）与顶层定理 `solve_correct` |
+| `proof/BVSmt_Core.thy` … `proof/BVSmt_Proof.thy` | 核心 `solve`：改写、位爆破、DPLL 的模型与精化，`solve_spec`、`solve_correct` |
+| `proof/smt/BVSmt_SmtModel.thy` | 翻译的函数式模型 `tr_problem_m`、`tr_model_m`；翻译保持语义（`tr_problem_sem`、`tr_model_correct`、`tr_complete`） |
+| `proof/top/BVSmt_SmtSize.thy` | 规模检查 `tr_size`、`size_ok` 的契约（饱和算术），及其前置条件由良类型推出 |
+| `proof/top/BVSmt_SmtBound.thy` | `smt_size_bound p < 2^64` 时两项规模检查都通过：`tr_size_bound` |
+| `proof/top/BVSmt_SmtRefine.thy` | Rust 翻译函数的行为等于函数式模型：`tr_problem_spec`、`tr_model_spec`、`in_fragment_spec` |
+| `proof/top/BVSmt_Top.thy` | `check_sat_spec` 与顶层定理 `check_sat_correct` |
 
 ## 检查证明
 
-需要 Isabelle2026 和已构建的 AutoCorrode heap。在仓库根目录：
+    tools/check.sh BVSmt_Top [MINUTES]
 
-    isabelle process_theories -l AutoCorrode -d urust -d spec -d proof -O -o threads=8 BVSmt_Proof.BVSmt_Proof
-
-全部通过时输出以 `Finished` 结束、退出码为 0。`tools/check.sh` 把上述目录复制到计算服务器上执行同一检查。
+把 `urust/`、`spec/`、`proof/` 复制到计算服务器上本项目登记在 `ROOTS` 中的目录，用 `isabelle build -b` 构建
+`BVSmt_Top` 及其祖先，输出构建的 session、错误和退出码。需要 Isabelle2026 和已构建的 AutoCorrode heap。
 
 ## 测试
 
-`tools/fuzz.py BVSMT Z3 N [SEED]` 随机生成 N 个 QF_BV 问题，与 z3 比较 sat/unsat 结论，并把 bvsmt 给出的模型作为断言加回问题，
-用 z3 检验其成立。`tools/remote_fuzz.sh N SEED...` 在计算服务器上并行运行它。
+- `cargo test --release`：`core/tests/solve.rs` 直接测试核心；`cli/tests/check_sat.rs` 把 SMT-LIB 脚本经前端交给
+  `check_sat`，并用前端的参考求值器检查每个模型。
+- `tools/fuzz.py BIN Z3 N [SEED]`：随机 QF_BV 问题，与 z3 比较 sat/unsat，并用 z3 检查模型；
+  `tools/remote_fuzz.sh N SEED...` 在计算服务器上并行运行它。
+- `tools/eval.py`：在 SMT-LIB 基准上评测（回答与 `:status` 比较，模型用 z3 检查）。
+
+## 重新生成翻译
+
+`core/src/lib.rs` 改动后，在仓库根目录运行 AutoCorrode 前端：
+
+    urust-frontend.sh --out urust --name BVSmt core/src/lib.rs

@@ -1,7 +1,7 @@
 # BVSmt
 
 一个支持 QF_BV（无量词定长位向量）的 SMT 求解器，能给出模型。求解器用 Rust 写成，经 AutoCorrode 前端翻译到
-Isabelle/HOL，并证明它满足以 SMT-LIB 语义写成的顶层规约。另一个项目 AutoCorrode-QFUF（QF_UF 求解器）与本项目
+Isabelle/HOL，并证明它满足以 SMT-LIB 语义写成的顶层规约。另一个项目 QF_UF_Smt（QF_UF 求解器）与本项目
 共用前端、通用问题结构和语义，目录结构和命名一一对应。
 
 ## 目录结构
@@ -9,7 +9,7 @@ Isabelle/HOL，并证明它满足以 SMT-LIB 语义写成的顶层规约。另�
 | 路径 | 内容 |
 |---|---|
 | `core/src/lib.rs` | 被验证的部分：求解器核心 `solve`（扩展位向量语言 → 改写 → 位爆破 → DPLL），以及通用问题结构上的入口 `check_sat`（片段检查、规模检查、翻译、模型翻译） |
-| `frontend/` | SMT-LIB 2.6 前端（未验证，两个项目相同）：解析脚本，构造通用问题结构，在 `check-sat` 时调用求解器，输出回答和 `get-model` |
+| `frontend/` | SMT-LIB 2.6 前端（未验证，两个项目共用；git submodule，仓库 SMTLIB-frontend）：解析脚本，构造通用问题结构，在 `check-sat` 时调用求解器，输出回答和 `get-model` |
 | `cli/src/main.rs` | 可执行程序 `bvsmt`：前端加 `check_sat` |
 | `urust/` | AutoCorrode 前端从 `core/src/lib.rs` 生成的 Isabelle 翻译，session `BVSmt` |
 | `spec/` | 规约，session `BVSmt_Spec`：`SMT_Semantics.thy`（通用问题结构的语义，两个项目相同）、`BVSmt_Spec.thy`（契约与顶层陈述）、`smtlib-2.6/`（所依据的 SMT-LIB 原文） |
@@ -33,7 +33,8 @@ Isabelle/HOL，并证明它满足以 SMT-LIB 语义写成的顶层规约。另�
 
 ## 构建与运行
 
-需要 Rust 工具链：
+需要 Rust 工具链。前端是 submodule，克隆时加 `--recursive`，或在克隆后运行
+`git submodule update --init`：
 
     cargo build --release
 

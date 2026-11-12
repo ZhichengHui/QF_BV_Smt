@@ -732,7 +732,7 @@ next
   have k1: \<open>wt ws dw (tref k1) \<and> width ws dw (tref k1) = 1 \<and> eval ws dw vs dv (tref k1) \<in> {0, 1}\<close> using 3 by simp
   have e: \<open>implies_m (k1 # k2 # ks) = Term_Bin Op_Or (Term_Not (tref k1)) ?r\<close> by (simp add: implies_m_def)
   show ?case using ih k1 unfolding e
-    by (auto simp: or_bool_s[of \<open>eval ws dw vs dv (tref k1) = 0\<close>, simplified] Bit_Operations.or_eq_0_iff)
+    by (cases \<open>eval ws dw vs dv (tref k1) = 0\<close>) (auto simp: Bit_Operations.or_eq_0_iff)
 qed simp
 
 lemma fold_op_width_pres: \<open>fold_op op \<Longrightarrow> width_pres (tr_op op)\<close>
@@ -747,6 +747,14 @@ lemma tr_app_fold:
 
 lemma foldl_map_h: \<open>foldl (\<lambda>a k. f a (h k)) a ks = foldl f a (map h ks)\<close>
   by (induction ks arbitrary: a) auto
+
+lemma la2_one_bv: \<open>list_all2 smt_has_sort [SmtSort_BitVec m] xs \<Longrightarrow> \<exists>v. xs = [VBv (unat m) v] \<and> v < 2 ^ unat m\<close>
+  by (cases xs) (auto split: sval.splits)
+
+lemma la2_two_bv:
+  \<open>list_all2 smt_has_sort [SmtSort_BitVec a, SmtSort_BitVec b] xs \<Longrightarrow>
+     \<exists>x y. xs = [VBv (unat a) x, VBv (unat b) y] \<and> x < 2 ^ unat a \<and> y < 2 ^ unat b\<close>
+  by (cases xs; cases \<open>tl xs\<close>) (auto split: sval.splits)
 
 lemma tr_app_correct:
   assumes \<open>smt_op_sort op ss = Some s\<close> \<open>\<forall>x \<in> set ss. frag_sort x\<close>
@@ -814,7 +822,230 @@ proof -
       by (simp add: foldl_map_h del: smt_bv_bin.simps)
   next
     case False
-    then show ?thesis sorry
+    then show ?thesis
+    proof (cases op)
+      case (SmtOp_Bvnot)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_Bvnot
+        by (auto simp: Let_def  split: if_splits)
+    next
+      case (SmtOp_Bvneg)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_Bvneg
+        by (auto simp: Let_def  split: if_splits)
+    next
+      case (SmtOp_Extract i j)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_Extract
+        by (auto simp: Let_def unat_extract_s split: if_splits)
+    next
+      case (SmtOp_Repeat i)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_Repeat
+        by (auto simp: Let_def unat_mult_s mult.commute helper_defs_eq split: if_splits)
+    next
+      case (SmtOp_ZeroExtend i)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_ZeroExtend
+        by (auto simp: Let_def unat_add_s split: if_splits)
+    next
+      case (SmtOp_SignExtend i)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_SignExtend
+        by (auto simp: Let_def unat_add_s helper_defs_eq split: if_splits)
+    next
+      case (SmtOp_RotateLeft i)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_RotateLeft
+        by (auto simp: Let_def split: if_splits)
+    next
+      case (SmtOp_RotateRight i)
+      then obtain m where ss: \<open>ss = [SmtSort_BitVec m]\<close> and sx: \<open>s \<noteq> SmtSort_Bool\<close>
+        using assms(1) by (auto split: list.splits SmtSort.splits if_splits)
+      obtain v where xs: \<open>xs = [VBv (unat m) v]\<close> \<open>v < 2 ^ unat m\<close>
+        using la2_one_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat m\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = v\<close>
+        using T[of 0] ss xs by auto
+      have m1: \<open>1 \<le> unat m\<close> using assms(2) ss by auto
+      show ?thesis using t ss xs m1 assms(1) SmtOp_RotateRight
+        by (auto simp: Let_def split: if_splits)
+    next
+      case SmtOp_Concat
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Concat
+        by (auto simp: Let_def unat_add_s dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvcomp
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvcomp
+        by (auto simp: Let_def  dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvult
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvult
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvule
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvule
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvugt
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvugt
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvuge
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvuge
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvslt
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvslt
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvsle
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvsle
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvsgt
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvsgt
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Bvsge
+      then obtain a b where ss: \<open>ss = [SmtSort_BitVec a, SmtSort_BitVec b]\<close>
+        using assms(1) by (auto dest!: smt_bin_width_Some split: list.splits SmtSort.splits if_splits)
+      obtain x y where xs: \<open>xs = [VBv (unat a) x, VBv (unat b) y]\<close> \<open>x < 2 ^ unat a\<close> \<open>y < 2 ^ unat b\<close>
+        using la2_two_bv H ss by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = unat a\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = x\<close>
+        \<open>wt ws ?dw (tref (ks ! 1))\<close> \<open>width ws ?dw (tref (ks ! 1)) = unat b\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 1)) = y\<close>
+        using T[of 0] T[of 1] ss xs by auto
+      show ?thesis using t ss xs assms(1) SmtOp_Bvsge
+        by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
+    next
+      case SmtOp_Not
+      then show ?thesis sorry
+    next
+      case SmtOp_And
+      then show ?thesis sorry
+    next
+      case SmtOp_Or
+      then show ?thesis sorry
+    next
+      case SmtOp_Xor
+      then show ?thesis sorry
+    next
+      case SmtOp_Implies
+      then show ?thesis sorry
+    next
+      case SmtOp_Eq
+      then show ?thesis sorry
+    next
+      case SmtOp_Distinct
+      then show ?thesis sorry
+    next
+      case SmtOp_Ite
+      then show ?thesis sorry
+    qed (use False in simp_all)
   qed
 qed
 

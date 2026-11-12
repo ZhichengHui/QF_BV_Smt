@@ -986,7 +986,7 @@ text \<open>\<^verbatim>\<open>BVSmt_heap\<close> has the assumptions of \<^loca
 lemma BVSmt_ctxI:
   \<open>BVSmt_ctx update_raw_fun dereference_raw_fun reference_raw_fun points_to_raw' gref_can_store
      new_gref_can_store can_alloc_reference prism_1 prism_2 prism_3 prism_4 prism_5 prism_6
-     prism_7 prism_8 prism_9 prism_10 prism_11 prism_12 prism_13\<close>
+     prism_7 prism_8 prism_9 prism_10 prism_11 prism_12 prism_13 prism_14 prism_15 prism_16 prism_17\<close>
   by intro_locales
 
 text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>BVSmt_Spec\<close>. The bound on

@@ -1447,6 +1447,13 @@ proof -
     by (simp add: smt_def_sems_length)
 qed
 
+lemma wf_of_frag: \<open>frag_sort s \<Longrightarrow> smt_wf_sort ns s\<close>
+  by (cases s) auto
+
+lemma la2_of_refs:
+  \<open>length xs = length ps \<Longrightarrow> \<forall>i < length ps. ref_ok ws vs S (env ! i) (ps ! i) (xs ! i) \<Longrightarrow> list_all2 smt_has_sort ps xs\<close>
+  by (auto simp: list_all2_conv_all_nth ref_ok_def)
+
 lemma tr_term_args_correct:
   shows \<open>tr_term_m p dm env n S t = (S', t') \<Longrightarrow> ctx_ok p I ws vs n dm S \<Longrightarrow>
      smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps t = Some s \<Longrightarrow>
@@ -1465,8 +1472,82 @@ lemma tr_term_args_correct:
      (\<exists>E. S' = S @ E) \<and> defs_wt ws [] S' \<and> length ks = length ts \<and>
      (\<forall>i < length ts. ref_ok ws vs S' (ks ! i) (ss ! i)
         (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs (ts ! i)))\<close>
-  apply (induction p dm env n S t and p dm env n S ts arbitrary: S' t' ps s xs and S' ks ps ss xs
-      rule: tr_term_m_tr_args_m.induct)
-  sorry
+proof (induction p dm env n S t and p dm env n S ts arbitrary: S' t' ps s xs and S' ks ps ss xs
+    rule: tr_term_m_tr_args_m.induct)
+  case (1 p dm env n S b S' t' ps s xs)
+  then show ?case by auto
+next
+  case (2 p dm env n S bs S' t' ps s xs)
+  then show ?case by (auto simp: unat_of_nat_eq helper_defs_eq split: if_splits)
+next
+  case (3 p dm env n S k S' t' ps s xs)
+  then have k: \<open>unat k < length ps\<close> \<open>s = ps ! unat k\<close> by (auto split: if_splits)
+  then have \<open>frag_sort (ps ! unat k)\<close> using 3 by simp
+  then show ?case using 3 k tref_ok[OF 3(7)[rule_format, OF k(1)]] by auto
+next
+  case (4 p dm env n S i args S' t' ps s xs)
+  let ?fs = \<open>SmtProblem_funs p\<close>
+  have i: \<open>unat i < length ?fs\<close> \<open>map (smt_tsort ?fs (take n (SmtProblem_defs p)) ps) args = map Some (SmtFun_args (?fs ! unat i))\<close>
+    \<open>s = SmtFun_ret (?fs ! unat i)\<close> using 4(3) by (auto split: if_splits)
+  have fr: \<open>smt_fragment p\<close> \<open>ws = map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close> \<open>length vs = length ?fs\<close>
+    \<open>vs ! unat i = enc (I (unat i) [])\<close> using 4(2) i(1) by (auto simp: ctx_ok_def Let_def)
+  have na: \<open>SmtFun_args (?fs ! unat i) = []\<close> using fr(1) i(1) by (auto simp: smt_fragment_def)
+  then have a: \<open>args = []\<close> using i(2) by simp
+  have \<open>frag_sort s\<close> using frag_of_wf[OF fr(1)] ctx_ok_wf_sorts(1)[OF 4(2)] i(1,3) by (metis nth_mem)
+  then show ?case using 4(1,8) i fr a sort_width_frag[of s] by auto
+next
+  case (5 p dm env n S d args S' t' ps s xs)
+  then show ?case sorry
+next
+  case (6 p dm env n S op args S' t' ps s xs)
+  then show ?case sorry
+next
+  case (7 p dm env n S S' ks ps ss xs)
+  then show ?case by auto
+next
+  case (8 p dm env n S a rest S' ks ps ss xs)
+  obtain S1 t1 where r1: \<open>tr_term_m p dm env n S a = (S1, t1)\<close> by (cases \<open>tr_term_m p dm env n S a\<close>)
+  obtain S2 ks2 where r2: \<open>tr_args_m p dm env n (S1 @ [t1]) rest = (S2, ks2)\<close>
+    by (cases \<open>tr_args_m p dm env n (S1 @ [t1]) rest\<close>)
+  have res: \<open>S' = S2\<close> \<open>ks = length S1 # ks2\<close> using 8(3) r1 r2 by (auto simp: Let_def)
+  obtain s0 ss' where ss: \<open>ss = s0 # ss'\<close> \<open>smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps a = Some s0\<close>
+    \<open>map (smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps) rest = map Some ss'\<close>
+    using 8(5) by (cases ss) auto
+  obtain E2 where E2: \<open>S2 = (S1 @ [t1]) @ E2\<close> using tr_prefix(2)[OF r2] by blast
+  have len1: \<open>length S1 < 2 ^ 64\<close> using 8(11) res E2 by simp
+  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> wt ws (def_widths ws [] S1) t1 \<and>
+      width ws (def_widths ws [] S1) t1 = sort_width_m s0 \<and>
+      eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) t1 =
+        enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+    using 8(1)[OF r1 8(4) ss(2) 8(6,7,8,9,10) len1] .
+  have hs: \<open>smt_has_sort s0 (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+    using val_sort[OF 8(4) ss(2)] 8(6) la2_of_refs[OF 8(8,9)] wf_of_frag by blast
+  have refa: \<open>ref_ok ws vs (S1 @ [t1]) (length S1) s0 (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+    using A hs len1 by (simp add: ref_ok_def def_snoc)
+  have dw1: \<open>defs_wt ws [] (S1 @ [t1])\<close> using A by (simp add: def_snoc)
+  obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
+  have ctx1: \<open>ctx_ok p I ws vs n dm (S1 @ [t1])\<close> using ctx_ok_ext[OF 8(4), of \<open>E1 @ [t1]\<close>] E1 by simp
+  have env1: \<open>\<forall>i < length ps. ref_ok ws vs (S1 @ [t1]) (env ! i) (ps ! i) (xs ! i)\<close>
+    using 8(9) ref_ok_ext[of ws vs S _ _ _ \<open>E1 @ [t1]\<close>] E1 by simp
+  have B: \<open>(\<exists>E. S2 = (S1 @ [t1]) @ E) \<and> defs_wt ws [] S2 \<and> length ks2 = length rest \<and>
+      (\<forall>i < length rest. ref_ok ws vs S2 (ks2 ! i) (ss' ! i)
+        (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs (rest ! i)))\<close>
+    using 8(2)[of \<open>(S1, t1)\<close> S2 ks2 ps ss' xs] r1 r2 ctx1 ss(3) 8(6,7,8) env1 dw1 res 8(11) by auto
+  have r0: \<open>ref_ok ws vs S2 (length S1) s0 (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+    using ref_ok_ext[OF refa, of E2] E2 by simp
+  show ?case
+  proof (intro conjI)
+    show \<open>\<exists>E. S' = S @ E\<close> using res E1 E2 by simp
+    show \<open>defs_wt ws [] S'\<close> using B res by simp
+    show \<open>length ks = length (a # rest)\<close> using B res by simp
+    show \<open>\<forall>i < length (a # rest). ref_ok ws vs S' (ks ! i) (ss ! i)
+        (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs ((a # rest) ! i))\<close>
+    proof (intro allI impI)
+      fix i assume \<open>i < length (a # rest)\<close>
+      then show \<open>ref_ok ws vs S' (ks ! i) (ss ! i) (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs ((a # rest) ! i))\<close>
+        using r0 B res ss(1) by (cases i) auto
+    qed
+  qed
+qed
 
 end

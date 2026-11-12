@@ -30,11 +30,13 @@ text \<open>
   (\<^typ>\<open>Term\<close>) have a constructor for every function symbol of the theory FixedSizeBitVectors and of
   the logic QF_BV of SMT-LIB 2.6 (\<^verbatim>\<open>spec/smtlib-2.6/\<close> holds the two source files), and for \<open>=\<close>,
   \<open>distinct\<close> and \<open>ite\<close> of the Core theory on bit-vectors. Each constructor takes the operands of the
-  binary form in which SMT-LIB defines the function. The front end (\<^verbatim>\<open>cli/src/main.rs\<close>) is not
-  verified: it parses the SMT-LIB text and turns it into a \<^typ>\<open>Problem\<close>. This includes the forms
-  that SMT-LIB defines as abbreviations of the binary ones (\<open>bvand\<close>, \<open>bvor\<close>, \<open>bvadd\<close>, \<open>bvmul\<close> with more
-  than two operands, which have the attribute \<open>:left-assoc\<close>, and \<open>distinct\<close> with more than two
-  operands), \<open>let\<close>, \<open>define-fun\<close>, and the Bool terms of the Core theory (Bool is read as width 1).
+  binary form in which SMT-LIB defines the function. This core is reached through
+  \<^verbatim>\<open>check_sat\<close> (the second section of this theory), which takes a general problem
+  (\<^typ>\<open>SmtProblem\<close>, built by the unverified SMT-LIB front end \<^verbatim>\<open>frontend/\<close>) and translates
+  it into a \<^typ>\<open>Problem\<close>: the forms that SMT-LIB defines as abbreviations of the binary ones
+  (\<open>bvand\<close>, \<open>bvor\<close>, \<open>bvadd\<close>, \<open>bvmul\<close>, \<open>bvxor\<close> with more than two operands, and \<open>distinct\<close> and
+  \<open>=\<close> with more than two operands), definitions with parameters, and the Bool terms of the Core
+  theory (Bool is read as width 1) are handled by that translation, which is verified.
   The function symbols, by source:
 
   \<^item> FixedSizeBitVectors: \<open>concat\<close>, \<open>extract\<close>, \<open>bvnot\<close>, \<open>bvneg\<close>, \<open>bvand\<close>, \<open>bvor\<close>, \<open>bvadd\<close>, \<open>bvmul\<close>,

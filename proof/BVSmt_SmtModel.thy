@@ -756,6 +756,46 @@ lemma la2_two_bv:
      \<exists>x y. xs = [VBv (unat a) x, VBv (unat b) y] \<and> x < 2 ^ unat a \<and> y < 2 ^ unat b\<close>
   by (cases xs; cases \<open>tl xs\<close>) (auto split: sval.splits)
 
+lemma la2_bools: \<open>list_all2 smt_has_sort ss xs \<Longrightarrow> set ss \<subseteq> {SmtSort_Bool} \<Longrightarrow> \<exists>bs. xs = map VBool bs\<close>
+proof (induction ss xs rule: list_all2_induct)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons s ss x xs)
+  then obtain bs where \<open>xs = map VBool bs\<close> by auto
+  moreover obtain b where \<open>x = VBool b\<close> using Cons by (cases x) auto
+  ultimately show ?case by (metis list.simps(9))
+qed
+
+lemma bool_fold_eval:
+  assumes \<open>width_pres bop\<close> \<open>ks \<noteq> []\<close> \<open>length ks = length bs\<close>
+    \<open>\<forall>i < length ks. wt ws dw (tref (ks ! i)) \<and> width ws dw (tref (ks ! i)) = 1 \<and> eval ws dw vs dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
+  shows \<open>wt ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) \<and>
+     width ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) = 1 \<and>
+     eval ws dw vs dv (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) =
+       foldl (\<lambda>a b. bin_sem bop 1 a 1 (of_bool b)) (of_bool (hd bs)) (tl bs)\<close>
+proof -
+  have K: \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = 1\<close>
+    using assms(4) by (auto simp: in_set_conv_nth)
+  have E: \<open>map (\<lambda>k. eval ws dw vs dv (tref k)) ks = map of_bool bs\<close>
+    using assms(3,4) by (auto intro!: nth_equalityI)
+  have h: \<open>eval ws dw vs dv (tref (hd ks)) = of_bool (hd bs)\<close>
+    using E assms(2,3) by (metis hd_map list.map_disc_iff)
+  have tl: \<open>map (\<lambda>k. eval ws dw vs dv (tref k)) (tl ks) = map of_bool (tl bs)\<close> using E by (metis map_tl)
+  have hk: \<open>hd ks \<in> set ks\<close> \<open>\<forall>k \<in> set (tl ks). k \<in> set ks\<close> using assms(2) by (auto simp: list.set_sel)
+  show ?thesis
+    using fold_left_eval[OF assms(1), where ws=ws and dw=dw and ks=\<open>tl ks\<close> and w=1 and acc=\<open>tref (hd ks)\<close> and vs=vs and dv=dv]
+      K hk h tl foldl_map_h[of \<open>\<lambda>a. bin_sem bop 1 a 1\<close> \<open>\<lambda>k. eval ws dw vs dv (tref k)\<close>]
+      foldl_map_h[of \<open>\<lambda>a. bin_sem bop 1 a 1\<close> of_bool]
+    by auto
+qed
+
+lemma la2_one_bool: \<open>list_all2 smt_has_sort [SmtSort_Bool] xs \<Longrightarrow> \<exists>b. xs = [VBool b]\<close>
+  by (cases xs) (auto split: sval.splits)
+
+lemma smt_true_VBool: \<open>smt_true \<circ> VBool = id\<close>
+  by (simp add: fun_eq_iff)
+
 lemma tr_app_correct:
   assumes \<open>smt_op_sort op ss = Some s\<close> \<open>\<forall>x \<in> set ss. frag_sort x\<close>
     \<open>length ks = length ss\<close> \<open>length xs = length ss\<close>
@@ -1023,16 +1063,83 @@ proof -
         by (auto simp: Let_def helper_defs_eq dest!: smt_bin_width_Some split: if_splits)
     next
       case SmtOp_Not
-      then show ?thesis sorry
+      then have ss: \<open>ss = [SmtSort_Bool]\<close> \<open>s = SmtSort_Bool\<close> using assms(1) by (auto split: if_splits)
+      obtain b where xs: \<open>xs = [VBool b]\<close> using la2_one_bool H ss(1) by blast
+      have t: \<open>wt ws ?dw (tref (ks ! 0))\<close> \<open>width ws ?dw (tref (ks ! 0)) = 1\<close> \<open>eval ws ?dw vs ?dv (tref (ks ! 0)) = of_bool b\<close>
+        using T[of 0] ss xs by auto
+      show ?thesis using t ss xs SmtOp_Not by (cases b) auto
     next
       case SmtOp_And
-      then show ?thesis sorry
+      then have ss: \<open>2 \<le> length ss\<close> \<open>set ss \<subseteq> {SmtSort_Bool}\<close> \<open>s = SmtSort_Bool\<close>
+        using assms(1) by (auto split: if_splits)
+      obtain bs where xs: \<open>xs = map VBool bs\<close> using la2_bools H ss(2) by blast
+      have l: \<open>length bs = length ks\<close> \<open>ks \<noteq> []\<close> using xs assms(3,4) ss(1) by auto
+      have t: \<open>\<forall>i < length ks. wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+          eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
+      proof (intro allI impI)
+        fix i assume i: \<open>i < length ks\<close>
+        then have \<open>ss ! i \<in> set ss\<close> using assms(3) by simp
+        then have \<open>ss ! i = SmtSort_Bool\<close> using ss(2) by blast
+        moreover have \<open>xs ! i = VBool (bs ! i)\<close> using i xs l by simp
+        ultimately show \<open>wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+            eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close> using T[of i] i assms(3) by simp
+      qed
+      have bs: \<open>bs = hd bs # tl bs\<close> using l by (cases bs) auto
+      have sb: \<open>set bs = insert (hd bs) (set (tl bs))\<close> using bs by (metis list.simps(15))
+      have fb: \<open>filter id bs = filter id (hd bs # tl bs)\<close> using bs by metis
+      have r: \<open>foldl (\<lambda>a b. Bit_Operations.and a (of_bool b)) (of_bool (hd bs)) (tl bs) = (of_bool (\<forall>b \<in> set bs. b) :: nat)\<close>
+        unfolding sb ball_simps by (rule fold_and_bool)
+      show ?thesis
+        using bool_fold_eval[OF _ l(2) l(1)[symmetric] t, of Op_And] r ss(3) xs SmtOp_And bs
+        by (auto simp: fold_left_m_def width_pres_def)
     next
       case SmtOp_Or
-      then show ?thesis sorry
+      then have ss: \<open>2 \<le> length ss\<close> \<open>set ss \<subseteq> {SmtSort_Bool}\<close> \<open>s = SmtSort_Bool\<close>
+        using assms(1) by (auto split: if_splits)
+      obtain bs where xs: \<open>xs = map VBool bs\<close> using la2_bools H ss(2) by blast
+      have l: \<open>length bs = length ks\<close> \<open>ks \<noteq> []\<close> using xs assms(3,4) ss(1) by auto
+      have t: \<open>\<forall>i < length ks. wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+          eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
+      proof (intro allI impI)
+        fix i assume i: \<open>i < length ks\<close>
+        then have \<open>ss ! i \<in> set ss\<close> using assms(3) by simp
+        then have \<open>ss ! i = SmtSort_Bool\<close> using ss(2) by blast
+        moreover have \<open>xs ! i = VBool (bs ! i)\<close> using i xs l by simp
+        ultimately show \<open>wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+            eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close> using T[of i] i assms(3) by simp
+      qed
+      have bs: \<open>bs = hd bs # tl bs\<close> using l by (cases bs) auto
+      have sb: \<open>set bs = insert (hd bs) (set (tl bs))\<close> using bs by (metis list.simps(15))
+      have fb: \<open>filter id bs = filter id (hd bs # tl bs)\<close> using bs by metis
+      have r: \<open>foldl (\<lambda>a b. Bit_Operations.or a (of_bool b)) (of_bool (hd bs)) (tl bs) = (of_bool (\<exists>b \<in> set bs. b) :: nat)\<close>
+        unfolding sb bex_simps by (rule fold_or_bool)
+      show ?thesis
+        using bool_fold_eval[OF _ l(2) l(1)[symmetric] t, of Op_Or] r ss(3) xs SmtOp_Or bs
+        by (auto simp: fold_left_m_def width_pres_def)
     next
       case SmtOp_Xor
-      then show ?thesis sorry
+      then have ss: \<open>2 \<le> length ss\<close> \<open>set ss \<subseteq> {SmtSort_Bool}\<close> \<open>s = SmtSort_Bool\<close>
+        using assms(1) by (auto split: if_splits)
+      obtain bs where xs: \<open>xs = map VBool bs\<close> using la2_bools H ss(2) by blast
+      have l: \<open>length bs = length ks\<close> \<open>ks \<noteq> []\<close> using xs assms(3,4) ss(1) by auto
+      have t: \<open>\<forall>i < length ks. wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+          eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
+      proof (intro allI impI)
+        fix i assume i: \<open>i < length ks\<close>
+        then have \<open>ss ! i \<in> set ss\<close> using assms(3) by simp
+        then have \<open>ss ! i = SmtSort_Bool\<close> using ss(2) by blast
+        moreover have \<open>xs ! i = VBool (bs ! i)\<close> using i xs l by simp
+        ultimately show \<open>wt ws ?dw (tref (ks ! i)) \<and> width ws ?dw (tref (ks ! i)) = 1 \<and>
+            eval ws ?dw vs ?dv (tref (ks ! i)) = of_bool (bs ! i)\<close> using T[of i] i assms(3) by simp
+      qed
+      have bs: \<open>bs = hd bs # tl bs\<close> using l by (cases bs) auto
+      have sb: \<open>set bs = insert (hd bs) (set (tl bs))\<close> using bs by (metis list.simps(15))
+      have fb: \<open>filter id bs = filter id (hd bs # tl bs)\<close> using bs by metis
+      have r: \<open>foldl (\<lambda>a b. Bit_Operations.xor a (of_bool b)) (of_bool (hd bs)) (tl bs) = (of_bool (odd (length (filter id bs))) :: nat)\<close>
+        unfolding fb by (rule fold_xor_bool)
+      show ?thesis
+        using bool_fold_eval[OF _ l(2) l(1)[symmetric] t, of Op_Xor] r ss(3) xs SmtOp_Xor
+        by (simp add: fold_left_m_def width_pres_def smt_true_VBool)
     next
       case SmtOp_Implies
       then show ?thesis sorry

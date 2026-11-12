@@ -1497,10 +1497,76 @@ next
   then show ?case using 4(1,8) i fr a sort_width_frag[of s] by auto
 next
   case (5 p dm env n S d args S' t' ps s xs)
-  then show ?case sorry
+  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close> and ?dv = \<open>smt_def_sems I (SmtProblem_defs p)\<close>
+  have d: \<open>unat d < length (take n ?ds)\<close> \<open>map (smt_tsort ?fs (take n ?ds) ps) args = map Some (SmtDef_params (?ds ! unat d))\<close>
+    \<open>s = SmtDef_ret (?ds ! unat d)\<close> using 5(5) by (auto split: if_splits)
+  have dn: \<open>unat d < n\<close> \<open>unat d < length ?ds\<close> using d(1) by auto
+  have fr: \<open>smt_fragment p\<close> using 5(4) by (simp add: ctx_ok_def Let_def)
+  have wfr: \<open>frag_sort (SmtDef_ret (?ds ! unat d))\<close> \<open>\<forall>x \<in> set (SmtDef_params (?ds ! unat d)). frag_sort x\<close>
+    using ctx_ok_wf_sorts(2)[OF 5(4)] frag_of_wf[OF fr] dn(2) by (meson nth_mem)+
+  show ?case
+  proof (cases \<open>SmtDef_params (?ds ! unat d) = []\<close>)
+    case True
+    then have a: \<open>args = []\<close> using d(2) by simp
+    have res: \<open>S' = S\<close> \<open>t' = tref (dm ! unat d)\<close> using 5(3) True by auto
+    have r: \<open>ref_ok ws vs S (dm ! unat d) (SmtDef_ret (?ds ! unat d)) ((?dv ! unat d) [])\<close>
+      using 5(4) dn True unfolding ctx_ok_def Let_def by blast
+    show ?thesis using tref_ok[OF r wfr(1)] res a d(3) 5(10) by simp
+  next
+    case False
+    obtain S1 ks1 where r: \<open>tr_args_m p dm env n S args = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S args\<close>)
+    have res: \<open>tr_term_m p dm ks1 (unat d) S1 (SmtDef_body (?ds ! unat d)) = (S', t')\<close>
+      using 5(3) False dn(1) r by (simp add: Let_def)
+    obtain E2 where E2: \<open>S' = S1 @ E2\<close> using tr_prefix(1)[OF res] by blast
+    have len1: \<open>length S1 < 2 ^ 64\<close> using 5(11) E2 by simp
+    let ?xs' = \<open>map (smt_eval I ?dv xs) args\<close>
+    have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length args \<and>
+        (\<forall>i < length args. ref_ok ws vs S1 (ks1 ! i) (SmtDef_params (?ds ! unat d) ! i) (smt_eval I ?dv xs (args ! i)))\<close>
+      using 5(1)[OF False dn(1) r 5(4) d(2) 5(6,7,8,9,10) len1] .
+    obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
+    have la: \<open>length args = length (SmtDef_params (?ds ! unat d))\<close> using d(2) by (metis length_map)
+    have ctx1: \<open>ctx_ok p I ws vs (unat d) dm S1\<close> using ctx_ok_mono[OF ctx_ok_ext[OF 5(4), of E1]] E1 dn(1) by simp
+    have tb: \<open>smt_tsort ?fs (take (unat d) ?ds) (SmtDef_params (?ds ! unat d)) (SmtDef_body (?ds ! unat d)) = Some (SmtDef_ret (?ds ! unat d))\<close>
+      using ctx_ok_wf_sorts(3)[OF 5(4)] dn(2) by blast
+    have B: \<open>(\<exists>E. S' = S1 @ E) \<and> defs_wt ws [] S' \<and> wt ws (def_widths ws [] S') t' \<and>
+        width ws (def_widths ws [] S') t' = sort_width_m (SmtDef_ret (?ds ! unat d)) \<and>
+        eval ws (def_widths ws [] S') vs (def_values ws [] vs [] S') t' = enc (smt_eval I ?dv ?xs' (SmtDef_body (?ds ! unat d)))\<close>
+      using 5(2)[of \<open>(S1, ks1)\<close> S' t' \<open>SmtDef_params (?ds ! unat d)\<close> \<open>SmtDef_ret (?ds ! unat d)\<close> ?xs'] False dn(1) r res ctx1 tb wfr(2)
+        A la 5(11) by auto
+    have v: \<open>smt_eval I ?dv xs (SmtTerm_Def d args) = smt_eval I ?dv ?xs' (SmtDef_body (?ds ! unat d))\<close>
+      using smt_def_sems_nth[OF dn(2), of I] tb
+        smt_eval_take[of ?fs \<open>unat d\<close> ?ds \<open>SmtDef_params (?ds ! unat d)\<close> \<open>SmtDef_body (?ds ! unat d)\<close> ?dv I ?xs']
+      by (simp add: smt_def_sems_length)
+    show ?thesis using B v d(3) E1 E2 by auto
+  qed
 next
   case (6 p dm env n S op args S' t' ps s xs)
-  then show ?case sorry
+  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close> and ?dv = \<open>smt_def_sems I (SmtProblem_defs p)\<close>
+  let ?ss = \<open>map (the \<circ> smt_tsort ?fs (take n ?ds) ps) args\<close>
+  obtain S1 ks1 where r: \<open>tr_args_m p dm env n S args = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S args\<close>)
+  have res: \<open>S' = S1\<close> \<open>t' = tr_app_m op ks1\<close> using 6(2) r by (auto simp: Let_def)
+  have o: \<open>None \<notin> set (map (smt_tsort ?fs (take n ?ds) ps) args)\<close> \<open>smt_op_sort op ?ss = Some s\<close>
+    using 6(4) by (auto split: if_splits)
+  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) args = map Some ?ss\<close> using o(1) by (induction args) auto
+  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length args \<and>
+      (\<forall>i < length args. ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (args ! i)))\<close>
+    using 6(1)[OF r 6(3) m 6(5,6,7,8,9)] res 6(10) by simp
+  have fr: \<open>smt_fragment p\<close> using 6(3) by (simp add: ctx_ok_def Let_def)
+  note w = ctx_ok_wf_sorts[OF 6(3)]
+  have frs: \<open>\<forall>x \<in> set ?ss. frag_sort x\<close>
+  proof
+    fix x assume \<open>x \<in> set ?ss\<close>
+    then obtain a where a: \<open>a \<in> set args\<close> \<open>x = the (smt_tsort ?fs (take n ?ds) ps a)\<close> by auto
+    then have \<open>smt_tsort ?fs (take n ?ds) ps a = Some x\<close> using o(1) by (metis image_eqI option.collapse set_map)
+    then have \<open>smt_wf_sort (unat (SmtProblem_num_sorts p)) x\<close>
+      using smt_tsort_wf[of ?fs \<open>take n ?ds\<close> ps a x] 6(5) wf_of_frag w(1,2) set_take_subset[of n ?ds] by blast
+    then show \<open>frag_sort x\<close> using frag_of_wf[OF fr] by blast
+  qed
+  have C: \<open>wt ws (def_widths ws [] S1) (tr_app_m op ks1) \<and> width ws (def_widths ws [] S1) (tr_app_m op ks1) = sort_width_m s \<and>
+      eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) (tr_app_m op ks1) =
+        enc (smt_op_sem op (map (smt_eval I ?dv xs) args))\<close>
+    using tr_app_correct[OF o(2) frs, of ks1 \<open>map (smt_eval I ?dv xs) args\<close> ws vs S1] A by simp
+  show ?case using A C res by simp
 next
   case (7 p dm env n S S' ks ps ss xs)
   then show ?case by auto

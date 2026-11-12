@@ -1,4 +1,5 @@
 session "BVSmt_Spec" = "BVSmt" +
   options [document = false]
   theories
+    SMT_Semantics
     BVSmt_Spec

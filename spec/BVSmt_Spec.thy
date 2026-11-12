@@ -1,5 +1,5 @@
 theory BVSmt_Spec
-  imports BVSmt.BVSmt_Funs
+  imports SMT_Semantics
 begin
 
 text \<open>\<open>map\<close> below is \<^const>\<open>List.map\<close>, not the iterator function of AutoCorrode.\<close>
@@ -422,6 +422,10 @@ locale BVSmt_heap =
   + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>CoreTerm list\<close>
   + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>(64 word) list\<close>
   + ref_13: reference_allocatable reference_types _ _ _ _ _ _ _ prism_13 \<comment> \<open>Lower\<close>
+  + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term list\<close>
+  + ref_15: reference_allocatable reference_types _ _ _ _ _ _ _ prism_15 \<comment> \<open>Term\<close>
+  + ref_16: reference_allocatable reference_types _ _ _ _ _ _ _ prism_16 \<comment> \<open>Tr\<close>
+  + ref_17: reference_allocatable reference_types _ _ _ _ _ _ _ prism_17 \<comment> \<open>SmtInterp list\<close>
   for reference_types :: \<open>'s::{sepalg} \<Rightarrow> 'addr \<Rightarrow> 'gv \<Rightarrow> 'abort \<Rightarrow> 'i prompt \<Rightarrow> 'o prompt_output \<Rightarrow> unit\<close>
   and prism_1 :: \<open>('gv, (Lit list) list) prism\<close>
   and prism_2 :: \<open>('gv, Lit list) prism\<close>
@@ -436,6 +440,10 @@ locale BVSmt_heap =
   and prism_11 :: \<open>('gv, CoreTerm list) prism\<close>
   and prism_12 :: \<open>('gv, (64 word) list) prism\<close>
   and prism_13 :: \<open>('gv, Lower) prism\<close>
+  and prism_14 :: \<open>('gv, Term list) prism\<close>
+  and prism_15 :: \<open>('gv, Term) prism\<close>
+  and prism_16 :: \<open>('gv, Tr) prism\<close>
+  and prism_17 :: \<open>('gv, SmtInterp list) prism\<close>
 begin
 
 abbreviation solve :: \<open>nat \<Rightarrow> Problem \<Rightarrow> ('s, Answer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
@@ -450,6 +458,66 @@ abbreviation solve_contract :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort)
 definition solve_correct where
   \<open>solve_correct \<Gamma> \<equiv>
      \<forall>p. problem_wt p \<and> sizes_ok p \<longrightarrow> (\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p)\<close>
+
+end
+
+
+section \<open>The specification of the solver on general problems\<close>
+
+text \<open>
+  The Rust entry point on general problems is \<^verbatim>\<open>pub fn check_sat(p: &SmtProblem) -> SmtAnswer\<close>,
+  translated to \<^verbatim>\<open>BVSmt_ctx.check_sat\<close>. Its specification uses the semantics of
+  \<^verbatim>\<open>SMT_Semantics\<close> (the same theory in both solvers) and differs from that of the QF\_UF solver
+  only in the fragment: this solver handles the problems without uninterpreted sorts whose declared
+  symbols are all constants.\<close>
+
+text \<open>The fragment of this solver: no uninterpreted sort, and every declared symbol a constant.\<close>
+definition smt_fragment :: \<open>SmtProblem \<Rightarrow> bool\<close> where
+  \<open>smt_fragment p \<equiv> unat (SmtProblem_num_sorts p) = 0 \<and> (\<forall>f \<in> set (SmtProblem_funs p). SmtFun_args f = [])\<close>
+
+context BVSmt_ctx
+begin
+
+definition check_sat_contract :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort) function_contract\<close> where
+  \<open>check_sat_contract p \<equiv>
+     let pre = can_alloc_reference \<star> \<langle>smt_wf p \<and> smt_sizes_ok p\<rangle> in
+     let post = \<lambda>r. can_alloc_reference \<star>
+        \<langle>case r of
+           SmtAnswer_Sat m \<Rightarrow> smt_is_model p m
+         | SmtAnswer_Unsat \<Rightarrow> \<not> smt_satisfiable p
+         | SmtAnswer_Unknown \<Rightarrow> \<not> smt_fragment p\<rangle> in
+     make_function_contract pre post\<close>
+
+text \<open>\<^const>\<open>check_sat_contract\<close> \<open>p\<close>:
+  \<^item> Precondition: \<open>p\<close> is well-sorted (\<^const>\<open>smt_wf\<close>) and its \<^const>\<open>smt_size_bound\<close> is below
+    \<open>2^64\<close> (\<^const>\<open>smt_sizes_ok\<close>).
+  \<^item> \<^verbatim>\<open>Sat(m)\<close>: \<open>m\<close> is a model of \<open>p\<close>. \<^verbatim>\<open>Unsat\<close>: \<open>p\<close> has no model. \<^verbatim>\<open>Unknown\<close>: \<open>p\<close> is not in
+    the fragment of this solver; for a problem in the fragment the answer is \<^verbatim>\<open>Sat\<close> or
+    \<^verbatim>\<open>Unsat\<close>.
+  \<^item> No panic (the abort postcondition is false), as for \<^const>\<open>solve_contract\<close>.\<close>
+
+end
+
+context BVSmt_heap
+begin
+
+abbreviation check_sat :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>check_sat fuel \<equiv>
+     BVSmt_ctx.check_sat update_raw_fun dereference_raw_fun reference_raw_fun
+       prism_1 prism_2 prism_3 prism_4 prism_5 prism_6 prism_7 prism_8 prism_9
+       prism_10 prism_11 prism_12 prism_13 prism_14 prism_15 prism_16 prism_17 fuel\<close>
+
+abbreviation check_sat_contract :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort) function_contract\<close> where
+  \<open>check_sat_contract \<equiv> BVSmt_ctx.check_sat_contract can_alloc_reference\<close>
+
+definition check_sat_correct where
+  \<open>check_sat_correct \<Gamma> \<equiv>
+     \<forall>p. smt_wf p \<and> smt_sizes_ok p \<longrightarrow> (\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; check_sat fuel p \<Turnstile>\<^sub>F check_sat_contract p)\<close>
+
+text \<open>\<^const>\<open>check_sat_correct\<close> \<open>\<Gamma>\<close> is the top-level statement: for every problem that satisfies the
+  precondition of \<^const>\<open>BVSmt_ctx.check_sat_contract\<close> there is a bound \<open>N\<close> such that, with any
+  fuel at least \<open>N\<close>, \<^verbatim>\<open>check_sat\<close> satisfies the contract. \<^verbatim>\<open>BVSmt_Top\<close> proves it as the theorem
+  \<open>check_sat_correct\<close>.\<close>
 
 end
 

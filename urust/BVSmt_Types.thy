@@ -4,6 +4,8 @@ theory BVSmt_Types
   imports BVSmt_TypesExternal_Template
 begin
 
+declare [[urust_ground_body_types]]
+
 (* Rust: Lit *)
 datatype_record Lit =
   Lit_var :: \<open>64 word\<close>

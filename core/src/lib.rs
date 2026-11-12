@@ -1149,6 +1149,13 @@ pub struct Tr {
     pub defs: Vec<Term>,
 }
 
+/// The bit list `[b]`.
+fn bits1(b: bool) -> Vec<bool> {
+    let mut v = Vec::new();
+    v.push(b);
+    v
+}
+
 /// Adds `t` as a definition; returns its index.
 fn tr_push(s: Tr, t: Term) -> (Tr, usize) {
     let k = s.defs.len();
@@ -1181,7 +1188,7 @@ fn in_fragment(p: &SmtProblem) -> bool {
     }
     let mut i: usize = 0;
     while i < p.funs.len() {
-        if !p.funs[i].args.is_empty() {
+        if p.funs[i].args.len() != 0 {
             return false;
         }
         i += 1;
@@ -1316,12 +1323,12 @@ fn tr_args(p: &SmtProblem, dm: &Vec<usize>, env: &Vec<usize>, s: Tr, ts: &Vec<Sm
 /// translated so far.
 fn tr_term(p: &SmtProblem, dm: &Vec<usize>, env: &Vec<usize>, s: Tr, t: &SmtTerm) -> (Tr, Term) {
     match t {
-        SmtTerm::BoolConst(b) => (s, Term::Const(vec![*b])),
+        SmtTerm::BoolConst(b) => (s, Term::Const(bits1(*b))),
         SmtTerm::BvConst(bits) => (s, Term::Const(bits.clone())),
         SmtTerm::Param(k) => (s, tref(env[*k])),
         SmtTerm::Fun(i, _) => (s, Term::Var(*i)),
         SmtTerm::Def(d, args) => {
-            if p.defs[*d].params.is_empty() {
+            if p.defs[*d].params.len() == 0 {
                 (s, tref(dm[*d]))
             } else {
                 let (s, ks) = tr_args(p, dm, env, s, args);
@@ -1348,7 +1355,7 @@ fn tr_problem(p: &SmtProblem) -> Problem {
     let no_params = Vec::new();
     let mut d: usize = 0;
     while d < p.defs.len() {
-        if p.defs[d].params.is_empty() {
+        if p.defs[d].params.len() == 0 {
             let (s1, t) = tr_term(p, &dm, &no_params, s, &p.defs[d].body);
             let (s2, k) = tr_push(s1, t);
             s = s2;
@@ -1384,13 +1391,196 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
     SmtModel { domains: Vec::new(), funs }
 }
 
-/// The solver on a general problem: `Unknown` outside the fragment; otherwise the problem is
-/// translated into the extended language and solved.
+// ---------------------------------------------------------------------------------------------
+// Size checks. The solver of the extended language (`solve`) is verified for problems whose
+// `size_bound` (spec/BVSmt_Spec.thy) is below 2^64, and the translation indexes its definitions
+// by `usize`. `check_sat` answers `Unknown` when the translation would add 2^63 definitions or
+// more, or when the translated problem is too large for `solve`. The computations below saturate
+// at 2^63: each returns the exact value if it is below 2^63, and 2^63 otherwise.
+
+/// The bound at which the size computations saturate: 2^63.
+fn cap() -> usize {
+    9223372036854775808
+}
+
+/// `a + b`, saturated at `cap()`.
+fn sat_add(a: usize, b: usize) -> usize {
+    if a >= cap() || b >= cap() - a {
+        cap()
+    } else {
+        a + b
+    }
+}
+
+/// `a * b`, saturated at `cap()`.
+fn sat_mul(a: usize, b: usize) -> usize {
+    if a == 0 || b == 0 {
+        0
+    } else if a >= cap() || b >= cap() || b > (cap() - 1) / a {
+        cap()
+    } else {
+        a * b
+    }
+}
+
+/// The number of definitions the translation of `t` adds. `dc` gives, for each definition with
+/// parameters of `p` before the current one, the number its body adds where it is expanded.
+fn tr_count(p: &SmtProblem, dc: &Vec<usize>, t: &SmtTerm) -> usize {
+    match t {
+        SmtTerm::Def(d, args) => {
+            if p.defs[*d].params.len() == 0 {
+                0
+            } else {
+                sat_add(tr_count_args(p, dc, args), dc[*d])
+            }
+        }
+        SmtTerm::App(_, args) => tr_count_args(p, dc, args),
+        _ => 0,
+    }
+}
+
+/// The number of definitions the translation of the arguments `ts` adds (each argument is
+/// itself added as a definition).
+fn tr_count_args(p: &SmtProblem, dc: &Vec<usize>, ts: &Vec<SmtTerm>) -> usize {
+    let mut n: usize = 0;
+    let mut i: usize = 0;
+    while i < ts.len() {
+        n = sat_add(n, sat_add(1, tr_count(p, dc, &ts[i])));
+        i += 1;
+    }
+    n
+}
+
+/// The number of definitions of the translation of `p` (`tr_problem`).
+fn tr_size(p: &SmtProblem) -> usize {
+    let mut dc = Vec::new();
+    let mut n: usize = 0;
+    let mut d: usize = 0;
+    while d < p.defs.len() {
+        let c = tr_count(p, &dc, &p.defs[d].body);
+        if p.defs[d].params.len() == 0 {
+            n = sat_add(n, sat_add(1, c));
+            dc.push(0);
+        } else {
+            dc.push(c);
+        }
+        d += 1;
+    }
+    let mut j: usize = 0;
+    while j < p.asserts.len() {
+        n = sat_add(n, tr_count(p, &dc, &p.asserts[j]));
+        j += 1;
+    }
+    n
+}
+
+/// The width of the result of the binary operator `op` on operands of widths `wa` and `wb`.
+fn op_width(op: &Op, wa: usize, wb: usize) -> usize {
+    match op {
+        Op::Concat => sat_add(wa, wb),
+        Op::Comp | Op::Eq | Op::Distinct => 1,
+        Op::Ult | Op::Ule | Op::Ugt | Op::Uge => 1,
+        Op::Slt | Op::Sle | Op::Sgt | Op::Sge => 1,
+        _ => wa,
+    }
+}
+
+/// `(w + 1)^3`.
+fn cube1(w: usize) -> usize {
+    let v = sat_add(w, 1);
+    sat_mul(v, sat_mul(v, v))
+}
+
+/// The width of `t` and its weight (`width` and `term_weight` of the specification), for the
+/// widths `ws` of the variables and `ds` of the definitions.
+fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
+    let (w, g) = match t {
+        Term::Const(bs) => (bs.len(), 0),
+        Term::Var(i) => (ws[*i], 0),
+        Term::Ref(i) => (ds[*i], 0),
+        Term::Not(a) => term_size(ws, ds, a),
+        Term::Neg(a) => term_size(ws, ds, a),
+        Term::Bin(op, a, b) => {
+            let (wa, ga) = term_size(ws, ds, a);
+            let (wb, gb) = term_size(ws, ds, b);
+            (op_width(op, wa, wb), sat_add(ga, gb))
+        }
+        Term::Extract(hi, lo, a) => {
+            let (_, ga) = term_size(ws, ds, a);
+            (sat_add(*hi - *lo, 1), ga)
+        }
+        Term::Repeat(i, a) => {
+            let (wa, ga) = term_size(ws, ds, a);
+            (sat_mul(*i, wa), ga)
+        }
+        Term::ZeroExtend(i, a) => {
+            let (wa, ga) = term_size(ws, ds, a);
+            (sat_add(wa, *i), ga)
+        }
+        Term::SignExtend(i, a) => {
+            let (wa, ga) = term_size(ws, ds, a);
+            (sat_add(wa, *i), ga)
+        }
+        Term::RotateLeft(_, a) => term_size(ws, ds, a),
+        Term::RotateRight(_, a) => term_size(ws, ds, a),
+        Term::Ite(c, a, b) => {
+            let (_, gc) = term_size(ws, ds, c);
+            let (wa, ga) = term_size(ws, ds, a);
+            let (_, gb) = term_size(ws, ds, b);
+            (wa, sat_add(gc, sat_add(ga, gb)))
+        }
+    };
+    (w, sat_add(cube1(w), g))
+}
+
+/// Whether the `size_bound` of `q` is below 2^63.
+fn size_ok(q: &Problem) -> bool {
+    let mut ds = Vec::new();
+    let mut d: usize = 0;
+    while d < q.defs.len() {
+        let (w, _) = term_size(&q.widths, &ds, &q.defs[d]);
+        ds.push(w);
+        d += 1;
+    }
+    let mut n: usize = 1;
+    let mut i: usize = 0;
+    while i < q.widths.len() {
+        n = sat_add(n, q.widths[i]);
+        i += 1;
+    }
+    n = sat_add(n, q.widths.len());
+    n = sat_add(n, q.defs.len());
+    n = sat_add(n, q.asserts.len());
+    let mut k: usize = 0;
+    while k < q.defs.len() {
+        let (_, g) = term_size(&q.widths, &ds, &q.defs[k]);
+        n = sat_add(n, g);
+        k += 1;
+    }
+    let mut j: usize = 0;
+    while j < q.asserts.len() {
+        let (_, g) = term_size(&q.widths, &ds, &q.asserts[j]);
+        n = sat_add(n, g);
+        j += 1;
+    }
+    sat_mul(1000000, n) < cap()
+}
+
+/// The solver on a general problem: `Unknown` outside the fragment, or if the problem is too
+/// large (see the size checks above); otherwise the problem is translated into the extended
+/// language and solved.
 pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
     if !in_fragment(p) {
         return SmtAnswer::Unknown;
     }
-    match solve(&tr_problem(p)) {
+    if tr_size(p) >= cap() {
+        return SmtAnswer::Unknown;
+    }
+    let q = tr_problem(p);
+    if !size_ok(&q) {
+        return SmtAnswer::Unknown;
+    }
+    match solve(&q) {
         Answer::Sat(m) => SmtAnswer::Sat(tr_model(p, &m)),
         Answer::Unsat => SmtAnswer::Unsat,
     }

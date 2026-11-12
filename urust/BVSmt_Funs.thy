@@ -4,6 +4,8 @@ theory BVSmt_Funs
   imports BVSmt_FunsExternal_Template BVSmt_FunsForeign_Template
 begin
 
+declare [[urust_ground_body_types]]
+
 context BVSmt_ctx
 begin
 
@@ -1120,6 +1122,14 @@ definition "solve" :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort, 'i promp
     solve_core(q)
   \<rbrakk>\<close>
 
+(* Rust: bits1 *)
+definition "bits1" :: \<open>bool \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>bits1 \<equiv> \<lambda>b. FunctionBody \<lbrakk>
+    let mut v = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    vec_push(v, b);
+    * v
+  \<rbrakk>\<close>
+
 (* Rust: tr_push *)
 definition "tr_push" :: \<open>Tr \<Rightarrow> Term \<Rightarrow> ('s, (Tr \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_push \<equiv> \<lambda>s t. FunctionBody \<lbrakk>
@@ -1165,7 +1175,7 @@ definition "in_fragment" :: \<open>SmtProblem \<Rightarrow> ('s, bool, 'abort, '
     };
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(p.SmtProblem_funs) {
-      if !ext_alloc_vec_Vec_is_empty(p.SmtProblem_funs[* i].SmtFun_args) {
+      if len(p.SmtProblem_funs[* i].SmtFun_args) != 0_usize {
         return false;
       };
       * i += 1_usize;
@@ -1397,7 +1407,7 @@ definition "tr_args_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) li
    \<lambda>p dm env s t. FunctionBody \<lbrakk>
     match t {
       SmtTerm_BoolConst(b) \<Rightarrow> {
-        (s, Term_Const_mk(ext_alloc_boxed_box_assume_init_into_vec_unsafe(ext_alloc_intrinsics_write_box_via_move({ let res_1 = ext_alloc_boxed_Box_new_uninit(); \<llangle>res_1 :: (bool list) ext_core_mem_maybe_uninit_MaybeUninit\<rrangle> }, [b]))))
+        (s, Term_Const_mk(bits1(b)))
       },
       SmtTerm_BvConst(bits) \<Rightarrow> {
         (s, Term_Const_mk(bits))
@@ -1409,19 +1419,19 @@ definition "tr_args_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) li
         (s, Term_Var_mk(i))
       },
       SmtTerm_Def(d, args) \<Rightarrow> {
-        if ext_alloc_vec_Vec_is_empty(p.SmtProblem_defs[d].SmtDef_params) {
+        if len(p.SmtProblem_defs[d].SmtDef_params) == 0_usize {
           (s, tref(dm[d]))
         } else {
-          let destr_2 = \<epsilon>\<open>rec_tr_args\<close>(p, dm, env, s, args);
-          let s = destr_2.0;
-          let ks = destr_2.1;
+          let destr_1 = \<epsilon>\<open>rec_tr_args\<close>(p, dm, env, s, args);
+          let s = destr_1.0;
+          let ks = destr_1.1;
           \<epsilon>\<open>rec_tr_term\<close>(p, dm, ks, s, p.SmtProblem_defs[d].SmtDef_body)
         }
       },
       SmtTerm_App(o_v, args) \<Rightarrow> {
-        let destr_3 = \<epsilon>\<open>rec_tr_args\<close>(p, dm, env, s, args);
-        let s = destr_3.0;
-        let ks = destr_3.1;
+        let destr_2 = \<epsilon>\<open>rec_tr_args\<close>(p, dm, env, s, args);
+        let s = destr_2.0;
+        let ks = destr_2.1;
         (s, tr_app(o_v, ks))
       }
     }
@@ -1451,7 +1461,7 @@ definition "tr_problem" :: \<open>SmtProblem \<Rightarrow> ('s, Problem, 'abort,
     let no_params = { let res_6 = []; \<llangle>res_6 :: (64 word) list\<rrangle> };
     let mut d = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < len(p.SmtProblem_defs) {
-      if ext_alloc_vec_Vec_is_empty(p.SmtProblem_defs[* d].SmtDef_params) {
+      if len(p.SmtProblem_defs[* d].SmtDef_params) == 0_usize {
         let destr_7 = tr_term(p, * dm, no_params, * s, p.SmtProblem_defs[* d].SmtDef_body);
         let s1 = destr_7.0;
         let t = destr_7.1;
@@ -1498,13 +1508,258 @@ definition "tr_model" :: \<open>SmtProblem \<Rightarrow> ((bool list) list) \<Ri
     SmtModel_mk { SmtModel_domains: { let res_4 = []; \<llangle>res_4 :: (64 word) list\<rrangle> }, SmtModel_funs: * funs }
   \<rbrakk>\<close>
 
+(* Rust: cap *)
+definition "cap" :: \<open>('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cap \<equiv> FunctionBody \<lbrakk>
+    9223372036854775808_usize
+  \<rbrakk>\<close>
+
+(* Rust: sat_add *)
+definition "sat_add" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>sat_add \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
+    if (a >= cap()) || (b >= (cap() - a)) {
+      cap()
+    } else {
+      a + b
+    }
+  \<rbrakk>\<close>
+
+(* Rust: sat_mul *)
+definition "sat_mul" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>sat_mul \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
+    if (a == 0_usize) || (b == 0_usize) {
+      0_usize
+    } else {
+      if ((a >= cap()) || (b >= cap())) || (b > ((cap() - 1_usize) / a)) {
+        cap()
+      } else {
+        a * b
+      }
+    }
+  \<rbrakk>\<close>
+
+text \<open>Recursive group tr_count, tr_count_args: defined by iterating tr_count_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "tr_count_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>tr_count_rec_step \<equiv> \<lambda>(rec_tr_count, rec_tr_count_args). (\<lambda>p dc t. FunctionBody \<lbrakk>
+    match t {
+      SmtTerm_Def(d, args) \<Rightarrow> {
+        if len(p.SmtProblem_defs[d].SmtDef_params) == 0_usize {
+          0_usize
+        } else {
+          sat_add(\<epsilon>\<open>rec_tr_count_args\<close>(p, dc, args), dc[d])
+        }
+      },
+      SmtTerm_App(_, args) \<Rightarrow> {
+        \<epsilon>\<open>rec_tr_count_args\<close>(p, dc, args)
+      },
+      _ \<Rightarrow> {
+        0_usize
+      }
+    }
+  \<rbrakk>,
+   \<lambda>p dc ts. FunctionBody \<lbrakk>
+    let mut n = 0_usize;
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ts) {
+      * n = sat_add(* n, sat_add(1_usize, \<epsilon>\<open>rec_tr_count\<close>(p, dc, ts[* i])));
+      * i += 1_usize;
+    };
+    * n
+  \<rbrakk>)\<close>
+
+(* Rust: tr_count *)
+definition "tr_count" :: \<open>SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>tr_count \<equiv> (fst ((tr_count_rec_step ^^ urust_fuel) (\<lambda>p dc t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>,
+   \<lambda>p dc ts. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>)))\<close>
+
+(* Rust: tr_count_args *)
+definition "tr_count_args" :: \<open>SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>tr_count_args \<equiv> (snd ((tr_count_rec_step ^^ urust_fuel) (\<lambda>p dc t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>,
+   \<lambda>p dc ts. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>)))\<close>
+
+(* Rust: tr_size *)
+definition "tr_size" :: \<open>SmtProblem \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>tr_size \<equiv> \<lambda>p. FunctionBody \<lbrakk>
+    let mut dc = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut n = 0_usize;
+    let mut d = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < len(p.SmtProblem_defs) {
+      let c = tr_count(p, * dc, p.SmtProblem_defs[* d].SmtDef_body);
+      if len(p.SmtProblem_defs[* d].SmtDef_params) == 0_usize {
+        * n = sat_add(* n, sat_add(1_usize, c));
+        vec_push(dc, 0_usize);
+      } else {
+        vec_push(dc, c);
+      };
+      * d += 1_usize;
+    };
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(p.SmtProblem_asserts) {
+      * n = sat_add(* n, tr_count(p, * dc, p.SmtProblem_asserts[* j]));
+      * j += 1_usize;
+    };
+    * n
+  \<rbrakk>\<close>
+
+(* Rust: op_width *)
+definition "op_width" :: \<open>Op \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>op_width \<equiv> \<lambda>op_v wa wb. FunctionBody \<lbrakk>
+    match op_v {
+      Op_Concat \<Rightarrow> {
+        sat_add(wa, wb)
+      },
+      Op_Comp | Op_Eq | Op_Distinct \<Rightarrow> {
+        1_usize
+      },
+      Op_Ult | Op_Ule | Op_Ugt | Op_Uge \<Rightarrow> {
+        1_usize
+      },
+      Op_Slt | Op_Sle | Op_Sgt | Op_Sge \<Rightarrow> {
+        1_usize
+      },
+      _ \<Rightarrow> {
+        wa
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: cube1 *)
+definition "cube1" :: \<open>(64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cube1 \<equiv> \<lambda>w. FunctionBody \<lbrakk>
+    let v = sat_add(w, 1_usize);
+    sat_mul(v, sat_mul(v, v))
+  \<rbrakk>\<close>
+
+text \<open>Recursive group term_size: defined by iterating term_size_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "term_size_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>term_size_rec_step \<equiv> \<lambda>rec_term_size. (\<lambda>ws ds t. FunctionBody \<lbrakk>
+    let destr_10 = match t {
+      Term_Const(bs) \<Rightarrow> {
+        (len(bs), 0_usize)
+      },
+      Term_Var(i) \<Rightarrow> {
+        (ws[i], 0_usize)
+      },
+      Term_Ref(i) \<Rightarrow> {
+        (ds[i], 0_usize)
+      },
+      Term_Not(a) \<Rightarrow> {
+        \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
+      },
+      Term_Neg(a) \<Rightarrow> {
+        \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
+      },
+      Term_Bin(op_v, a, b) \<Rightarrow> {
+        let destr_1 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_1.0;
+        let ga = destr_1.1;
+        let destr_2 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, b);
+        let wb = destr_2.0;
+        let gb = destr_2.1;
+        (op_width(op_v, wa, wb), sat_add(ga, gb))
+      },
+      Term_Extract(hi, lo, a) \<Rightarrow> {
+        let destr_3 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let ga = destr_3.1;
+        (sat_add(hi - lo, 1_usize), ga)
+      },
+      Term_Repeat(i, a) \<Rightarrow> {
+        let destr_4 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_4.0;
+        let ga = destr_4.1;
+        (sat_mul(i, wa), ga)
+      },
+      Term_ZeroExtend(i, a) \<Rightarrow> {
+        let destr_5 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_5.0;
+        let ga = destr_5.1;
+        (sat_add(wa, i), ga)
+      },
+      Term_SignExtend(i, a) \<Rightarrow> {
+        let destr_6 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_6.0;
+        let ga = destr_6.1;
+        (sat_add(wa, i), ga)
+      },
+      Term_RotateLeft(_, a) \<Rightarrow> {
+        \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
+      },
+      Term_RotateRight(_, a) \<Rightarrow> {
+        \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
+      },
+      Term_Ite(c, a, b) \<Rightarrow> {
+        let destr_7 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, c);
+        let gc = destr_7.1;
+        let destr_8 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_8.0;
+        let ga = destr_8.1;
+        let destr_9 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, b);
+        let gb = destr_9.1;
+        (wa, sat_add(gc, sat_add(ga, gb)))
+      }
+    };
+    let w = destr_10.0;
+    let g = destr_10.1;
+    (w, sat_add(cube1(w), g))
+  \<rbrakk>)\<close>
+
+(* Rust: term_size *)
+definition "term_size" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>term_size \<equiv> ((term_size_rec_step ^^ urust_fuel) (\<lambda>ws ds t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+
+(* Rust: size_ok *)
+definition "size_ok" :: \<open>Problem \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>size_ok \<equiv> \<lambda>q. FunctionBody \<lbrakk>
+    let mut ds = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut d = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < len(q.Problem_defs) {
+      let destr_3 = term_size(q.Problem_widths, * ds, q.Problem_defs[* d]);
+      let w = destr_3.0;
+      vec_push(ds, w);
+      * d += 1_usize;
+    };
+    let mut n = 1_usize;
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(q.Problem_widths) {
+      * n = sat_add(* n, q.Problem_widths[* i]);
+      * i += 1_usize;
+    };
+    * n = sat_add(* n, len(q.Problem_widths));
+    * n = sat_add(* n, len(q.Problem_defs));
+    * n = sat_add(* n, len(q.Problem_asserts));
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(q.Problem_defs) {
+      let destr_4 = term_size(q.Problem_widths, * ds, q.Problem_defs[* k]);
+      let g = destr_4.1;
+      * n = sat_add(* n, g);
+      * k += 1_usize;
+    };
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(q.Problem_asserts) {
+      let destr_5 = term_size(q.Problem_widths, * ds, q.Problem_asserts[* j]);
+      let g = destr_5.1;
+      * n = sat_add(* n, g);
+      * j += 1_usize;
+    };
+    sat_mul(1000000_usize, * n) < cap()
+  \<rbrakk>\<close>
+
 (* Rust: check_sat *)
 definition "check_sat" :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>check_sat \<equiv> \<lambda>p. FunctionBody \<lbrakk>
     if !in_fragment(p) {
       return SmtAnswer_Unknown;
     };
-    match solve(tr_problem(p)) {
+    if tr_size(p) >= cap() {
+      return SmtAnswer_Unknown;
+    };
+    let q = tr_problem(p);
+    if !size_ok(q) {
+      return SmtAnswer_Unknown;
+    };
+    match solve(q) {
       Answer_Sat(m) \<Rightarrow> {
         SmtAnswer_Sat_mk(tr_model(p, m))
       },

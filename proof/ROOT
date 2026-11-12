@@ -2,3 +2,16 @@ session "BVSmt_Proof" = "BVSmt_Spec" +
   options [document = false]
   theories
     BVSmt_Proof
+
+session "BVSmt_Smt" in "smt" = "BVSmt_Spec" +
+  options [document = false]
+  theories
+    BVSmt_SmtModel
+
+session "BVSmt_Top" in "top" = "BVSmt_Proof" +
+  options [document = false]
+  sessions
+    "BVSmt_Smt"
+  theories
+    BVSmt_SmtSize
+    BVSmt_SmtRefine

@@ -941,4 +941,273 @@ lemma size_ok_spec [crush_specs]:
 
 end
 
+subsection \<open>The preconditions from well-sortedness\<close>
+
+lemma size_args_le: \<open>length args \<le> size_list size args\<close>
+  by (induction args) auto
+
+lemma size_arg_le: \<open>a \<in> set args \<Longrightarrow> size a \<le> size_list size args\<close>
+  by (induction args) auto
+
+lemma tsort_dok:
+  \<open>smt_tsort fs ds ps t \<noteq> None \<Longrightarrow> smt_term_repr t \<Longrightarrow> size t \<le> F \<Longrightarrow> dok (length ds) F t\<close>
+proof (induction t arbitrary: ps)
+  case (SmtTerm_Def d args)
+  have a: \<open>smt_tsort fs ds ps x \<noteq> None\<close> if \<open>x \<in> set args\<close> for x
+  proof -
+    have m: \<open>map (smt_tsort fs ds ps) args = map Some (SmtDef_params (ds ! unat d))\<close>
+      using SmtTerm_Def.prems(1) by (auto split: if_splits)
+    then have \<open>smt_tsort fs ds ps x \<in> set (map Some (SmtDef_params (ds ! unat d)))\<close>
+      using that by (metis image_eqI list.set_map)
+    then show ?thesis by auto
+  qed
+  have s: \<open>size x \<le> F\<close> if \<open>x \<in> set args\<close> for x
+    using size_arg_le[OF that] SmtTerm_Def.prems(3) by simp
+  have d: \<open>dok (length ds) F x\<close> if \<open>x \<in> set args\<close> for x
+    using SmtTerm_Def.IH[OF that a[OF that]] SmtTerm_Def.prems(2) s[OF that] that by simp
+  have u: \<open>unat d < length ds\<close> using SmtTerm_Def.prems(1) by (auto split: if_splits)
+  show ?case using SmtTerm_Def.prems(2,3) size_args_le[of args] d u by auto
+next
+  case (SmtTerm_App op args)
+  have a: \<open>smt_tsort fs ds ps x \<noteq> None\<close> if \<open>x \<in> set args\<close> for x
+    using SmtTerm_App.prems(1) that by (auto split: if_splits) (metis image_eqI not_None_eq)
+  have s: \<open>size x \<le> F\<close> if \<open>x \<in> set args\<close> for x
+    using size_arg_le[OF that] SmtTerm_App.prems(3) by simp
+  have d: \<open>dok (length ds) F x\<close> if \<open>x \<in> set args\<close> for x
+    using SmtTerm_App.IH[OF that a[OF that]] SmtTerm_App.prems(2) s[OF that] that by simp
+  show ?case using SmtTerm_App.prems(2,3) size_args_le[of args] d by auto
+qed auto
+
+text \<open>Every constant in \<open>t\<close> has fewer than \<open>2^64\<close> bits.\<close>
+fun cok :: \<open>Term \<Rightarrow> bool\<close> where
+  \<open>cok (Term_Const bs) = (length bs < 2 ^ 64)\<close>
+| \<open>cok (Term_Var i) = True\<close>
+| \<open>cok (Term_Ref i) = True\<close>
+| \<open>cok (Term_Not a) = cok a\<close>
+| \<open>cok (Term_Neg a) = cok a\<close>
+| \<open>cok (Term_Bin op a b) = (cok a \<and> cok b)\<close>
+| \<open>cok (Term_Extract hi lo a) = cok a\<close>
+| \<open>cok (Term_Repeat i a) = cok a\<close>
+| \<open>cok (Term_ZeroExtend i a) = cok a\<close>
+| \<open>cok (Term_SignExtend i a) = cok a\<close>
+| \<open>cok (Term_RotateLeft i a) = cok a\<close>
+| \<open>cok (Term_RotateRight i a) = cok a\<close>
+| \<open>cok (Term_Ite c a b) = (cok c \<and> cok a \<and> cok b)\<close>
+
+lemma wt_tix: \<open>wt ws ds t \<Longrightarrow> cok t \<Longrightarrow> tix (length ws) (length ds) t\<close>
+  by (induction t) auto
+
+lemma defs_wt_nth:
+  \<open>defs_wt ws [] xs \<Longrightarrow> d < length xs \<Longrightarrow> wt ws (def_widths ws [] (take d xs)) (xs ! d)\<close>
+proof -
+  assume a: \<open>defs_wt ws [] xs\<close> and d: \<open>d < length xs\<close>
+  have \<open>xs = take d xs @ [xs ! d] @ drop (Suc d) xs\<close> using d by (simp add: id_take_nth_drop)
+  then have \<open>defs_wt ws [] (take d xs @ [xs ! d] @ drop (Suc d) xs)\<close> using a by simp
+  then show ?thesis by (simp add: defs_wt_append')
+qed
+
+lemma cok_foldl: \<open>cok a \<Longrightarrow> (\<And>acc x. cok acc \<Longrightarrow> cok (f acc x)) \<Longrightarrow> cok (foldl f a xs)\<close>
+  by (induction xs arbitrary: a) auto
+
+lemma cok_foldr: \<open>cok b \<Longrightarrow> (\<And>x acc. cok acc \<Longrightarrow> cok (f x acc)) \<Longrightarrow> cok (foldr f xs b)\<close>
+  by (induction xs) auto
+
+lemma cok_tr_app: \<open>cok (tr_app_m op ks)\<close>
+  by (cases op) (auto simp: fold_left_m_def chain_m_def pairwise_m_def implies_m_def tref_def intro!: cok_foldl cok_foldr)
+
+text \<open>The constants of the translation come from the bit-vector constants of the problem, or are
+  one-bit constants for Boolean constants.\<close>
+lemma cok_tr:
+  \<open>smt_term_repr t \<Longrightarrow> n \<le> length (SmtProblem_defs p) \<Longrightarrow>
+   (\<forall>d < length (SmtProblem_defs p). smt_term_repr (SmtDef_body (SmtProblem_defs p ! d))) \<Longrightarrow> (\<forall>u \<in> set S. cok u) \<Longrightarrow>
+   (\<forall>u \<in> set (fst (tr_term_m p dm env n S t)). cok u) \<and> cok (snd (tr_term_m p dm env n S t))\<close>
+  \<open>(\<forall>a \<in> set ts. smt_term_repr a) \<Longrightarrow> n \<le> length (SmtProblem_defs p) \<Longrightarrow>
+   (\<forall>d < length (SmtProblem_defs p). smt_term_repr (SmtDef_body (SmtProblem_defs p ! d))) \<Longrightarrow> (\<forall>u \<in> set S. cok u) \<Longrightarrow>
+   (\<forall>u \<in> set (fst (tr_args_m p dm env n S ts)). cok u)\<close>
+proof (induction p dm env n S t and p dm env n S ts rule: tr_term_m_tr_args_m.induct)
+  case (5 p dm env n S d args)
+  show ?case
+  proof (cases \<open>SmtDef_params (SmtProblem_defs p ! unat d) = []\<close>)
+    case True
+    then show ?thesis using 5(3-6) by (simp add: tref_def)
+  next
+    case F: False
+    show ?thesis
+    proof (cases \<open>unat d < n\<close>)
+      case True
+      have A: \<open>\<forall>a \<in> set (fst (tr_args_m p dm env n S args)). cok a\<close>
+        using 5(1)[OF F True] 5(3-6) by simp
+      have r: \<open>smt_term_repr (SmtDef_body (SmtProblem_defs p ! unat d))\<close> using 5(4,5) True by simp
+      have B: \<open>(\<forall>a \<in> set (fst (tr_term_m p dm (snd (tr_args_m p dm env n S args)) (unat d) (fst (tr_args_m p dm env n S args))
+                   (SmtDef_body (SmtProblem_defs p ! unat d)))). cok a) \<and>
+              cok (snd (tr_term_m p dm (snd (tr_args_m p dm env n S args)) (unat d) (fst (tr_args_m p dm env n S args))
+                   (SmtDef_body (SmtProblem_defs p ! unat d))))\<close>
+        using 5(2)[OF F True refl r _ 5(5) A] 5(4) True by simp
+      show ?thesis using F True B by (simp add: Let_def)
+    next
+      case False
+      then show ?thesis using F 5(6) by simp
+    qed
+  qed
+next
+  case (6 p dm env n S op args)
+  then show ?case by (simp add: Let_def cok_tr_app)
+next
+  case (8 p dm env n S a rest)
+  have A: \<open>(\<forall>u \<in> set (fst (tr_term_m p dm env n S a)). cok u) \<and> cok (snd (tr_term_m p dm env n S a))\<close>
+    using 8(1) 8(3-6) by simp
+  have B: \<open>\<forall>u \<in> set (fst (tr_args_m p dm env n (fst (tr_term_m p dm env n S a) @ [snd (tr_term_m p dm env n S a)]) rest)). cok u\<close>
+    using 8(2)[OF refl] 8(3-5) A by simp
+  then show ?case by (simp add: Let_def)
+qed (simp_all add: tref_def)
+
+lemma cok_defs_fold:
+  \<open>(\<forall>d \<in> set ds. d < length (SmtProblem_defs p)) \<Longrightarrow>
+   (\<forall>d < length (SmtProblem_defs p). smt_term_repr (SmtDef_body (SmtProblem_defs p ! d))) \<Longrightarrow>
+   (\<forall>u \<in> set S. cok u) \<Longrightarrow> \<forall>u \<in> set (fst (foldl (tr_defs_step p) (S, dm) ds)). cok u\<close>
+proof (induction ds arbitrary: S dm)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons d ds)
+  have dl: \<open>d < length (SmtProblem_defs p)\<close> using Cons.prems(1) by simp
+  have c: \<open>\<forall>u \<in> set (fst (tr_defs_step p (S, dm) d)). cok u\<close>
+    using cok_tr(1)[of _ d p S dm \<open>[]\<close>] Cons.prems(2,3) dl by (auto simp: tr_defs_step_def Let_def)
+  obtain S' dm' where e: \<open>tr_defs_step p (S, dm) d = (S', dm')\<close> by (cases \<open>tr_defs_step p (S, dm) d\<close>)
+  show ?case using Cons.IH[of S' dm'] Cons.prems(1,2) c e by simp
+qed
+
+lemma cok_asserts_fold:
+  \<open>(\<forall>t \<in> set ts. smt_term_repr t) \<Longrightarrow>
+   (\<forall>d < length (SmtProblem_defs p). smt_term_repr (SmtDef_body (SmtProblem_defs p ! d))) \<Longrightarrow>
+   (\<forall>u \<in> set S. cok u) \<Longrightarrow> (\<forall>u \<in> set acc. cok u) \<Longrightarrow>
+   (\<forall>u \<in> set (fst (foldl (tr_asserts_step p dm) (S, acc) ts)). cok u) \<and>
+   (\<forall>u \<in> set (snd (foldl (tr_asserts_step p dm) (S, acc) ts)). cok u)\<close>
+proof (induction ts arbitrary: S acc)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons t ts)
+  have c: \<open>(\<forall>u \<in> set (fst (tr_asserts_step p dm (S, acc) t)). cok u) \<and> (\<forall>u \<in> set (snd (tr_asserts_step p dm (S, acc) t)). cok u)\<close>
+    using cok_tr(1)[of t \<open>length (SmtProblem_defs p)\<close> p S dm \<open>[]\<close>] Cons.prems by (auto simp: tr_asserts_step_def Let_def)
+  obtain S' acc' where e: \<open>tr_asserts_step p dm (S, acc) t = (S', acc')\<close> by (cases \<open>tr_asserts_step p dm (S, acc) t\<close>)
+  show ?case using Cons.IH[of S' acc'] Cons.prems(1,2) c e by simp
+qed
+
+lemma cok_problem:
+  assumes \<open>smt_repr_ok p\<close>
+  shows \<open>\<forall>t \<in> set (Problem_defs (tr_problem_m p) @ Problem_asserts (tr_problem_m p)). cok t\<close>
+proof -
+  have rd: \<open>\<forall>d < length (SmtProblem_defs p). smt_term_repr (SmtDef_body (SmtProblem_defs p ! d))\<close>
+    using assms by (auto simp: smt_repr_ok_def)
+  have ra: \<open>\<forall>t \<in> set (SmtProblem_asserts p). smt_term_repr t\<close> using assms by (simp add: smt_repr_ok_def)
+  obtain S0 dm where d: \<open>tr_defs_m p = (S0, dm)\<close> by (cases \<open>tr_defs_m p\<close>)
+  have c0: \<open>\<forall>u \<in> set S0. cok u\<close>
+    using cok_defs_fold[of \<open>[0..<length (SmtProblem_defs p)]\<close> p \<open>[]\<close> \<open>[]\<close>] rd d by (simp add: tr_defs_m_step)
+  note c1 = cok_asserts_fold[OF ra rd c0, of \<open>[]\<close> dm]
+  show ?thesis using c1 d by (simp add: tr_problem_m_def tr_asserts_m_step Let_def) blast
+qed
+
+text \<open>A value of each sort, for an interpretation of the declared constants.\<close>
+fun sdef :: \<open>SmtSort \<Rightarrow> sval\<close> where
+  \<open>sdef SmtSort_Bool = VBool False\<close>
+| \<open>sdef (SmtSort_BitVec w) = VBv (unat w) 0\<close>
+| \<open>sdef (SmtSort_Uninterpreted s) = VElem 0\<close>
+
+lemma sdef_has_sort: \<open>smt_has_sort s (sdef s)\<close>
+  by (cases s) auto
+
+lemma problem_wt_tr:
+  assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close>
+  shows \<open>problem_wt (tr_problem_m p)\<close>
+proof -
+  let ?fs = \<open>SmtProblem_funs p\<close>
+  let ?I = \<open>\<lambda>f xs. sdef (SmtFun_ret (?fs ! f))\<close>
+  have i: \<open>interp_sound ?fs ?I\<close> by (simp add: interp_sound_def sdef_has_sort)
+  show ?thesis
+    using tr_problem_sem[OF assms(1,2) i, of \<open>map (\<lambda>f. enc (?I f [])) [0..<length ?fs]\<close>] assms(3) by simp
+qed
+
+text \<open>A fuel sufficient for \<^verbatim>\<open>size_ok\<close>.\<close>
+definition fuel_q :: \<open>Problem \<Rightarrow> nat\<close> where
+  \<open>fuel_q q \<equiv> Suc (length (Problem_widths q) + length (Problem_defs q) + length (Problem_asserts q) +
+     sum_list (map size (Problem_defs q)) + sum_list (map size (Problem_asserts q)))\<close>
+
+text \<open>A fuel sufficient for \<^verbatim>\<open>tr_size\<close>.\<close>
+definition fuel_smt :: \<open>SmtProblem \<Rightarrow> nat\<close> where
+  \<open>fuel_smt p \<equiv> Suc (length (SmtProblem_defs p) + length (SmtProblem_asserts p) +
+     sum_list (map (size \<circ> SmtDef_body) (SmtProblem_defs p)) + sum_list (map size (SmtProblem_asserts p)))\<close>
+
+context BVSmt_ctx
+begin
+
+lemma size_pre_of_wt:
+  assumes \<open>problem_wt q\<close> \<open>\<forall>t \<in> set (Problem_defs q @ Problem_asserts q). cok t\<close>
+    \<open>length (Problem_widths q) < 2 ^ 63\<close> \<open>length (Problem_defs q) < 2 ^ 63\<close>
+    \<open>length (Problem_asserts q) < 2 ^ 63\<close> \<open>fuel_q q \<le> F\<close>
+  shows \<open>size_pre F q\<close>
+proof -
+  let ?ws = \<open>map unat (Problem_widths q)\<close> and ?ds = \<open>Problem_defs q\<close> and ?as = \<open>Problem_asserts q\<close>
+  have dw: \<open>defs_wt ?ws [] ?ds\<close> and aw: \<open>\<forall>t \<in> set ?as. wt ?ws (def_widths ?ws [] ?ds) t\<close>
+    using assms(1) by (auto simp: problem_wt_def var_widths_def Let_def)
+  have td: \<open>tix (length (Problem_widths q)) d (?ds ! d)\<close> if \<open>d < length ?ds\<close> for d
+    using wt_tix[OF defs_wt_nth[OF dw that]] assms(2) that by (simp add: def_widths_length')
+  have ta: \<open>tix (length (Problem_widths q)) (length ?ds) t\<close> if \<open>t \<in> set ?as\<close> for t
+    using wt_tix[of ?ws \<open>def_widths ?ws [] ?ds\<close> t] aw assms(2) that by (simp add: def_widths_length')
+  have sd: \<open>Suc (size (?ds ! d)) \<le> F\<close> if \<open>d < length ?ds\<close> for d
+  proof -
+    have m: \<open>size (?ds ! d) \<in> set (map size ?ds)\<close> using that by simp
+    have \<open>size (?ds ! d) \<le> sum_list (map size ?ds)\<close> by (meson m member_le_sum_list zero_le)
+    then show ?thesis using assms(6) by (simp add: fuel_q_def)
+  qed
+  have sa: \<open>Suc (size t) \<le> F\<close> if \<open>t \<in> set ?as\<close> for t
+  proof -
+    have m: \<open>size t \<in> set (map size ?as)\<close> using that by simp
+    have \<open>size t \<le> sum_list (map size ?as)\<close> by (meson m member_le_sum_list zero_le)
+    then show ?thesis using assms(6) by (simp add: fuel_q_def)
+  qed
+  show ?thesis using td ta sd sa assms(3-6) by (simp add: size_pre_def Let_def fuel_q_def)
+qed
+
+lemma tsize_pre_of_wf:
+  assumes \<open>smt_wf p\<close> \<open>smt_repr_ok p\<close> \<open>fuel_smt p \<le> F\<close>
+  shows \<open>tsize_pre F p\<close>
+proof -
+  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close> and ?as = \<open>SmtProblem_asserts p\<close>
+  have sd: \<open>Suc (size (SmtDef_body (?ds ! d))) \<le> F\<close> if \<open>d < length ?ds\<close> for d
+  proof -
+    have m: \<open>size (SmtDef_body (?ds ! d)) \<in> set (map (size \<circ> SmtDef_body) ?ds)\<close>
+      using that by (metis (no_types) image_eqI comp_apply list.set_map nth_mem)
+    have \<open>size (SmtDef_body (?ds ! d)) \<le> sum_list (map (size \<circ> SmtDef_body) ?ds)\<close>
+      by (meson m member_le_sum_list zero_le)
+    then show ?thesis using assms(3) by (simp add: fuel_smt_def)
+  qed
+  have sa: \<open>Suc (size t) \<le> F\<close> if \<open>t \<in> set ?as\<close> for t
+  proof -
+    have m: \<open>size t \<in> set (map size ?as)\<close> using that by simp
+    have \<open>size t \<le> sum_list (map size ?as)\<close> by (meson m member_le_sum_list zero_le)
+    then show ?thesis using assms(3) by (simp add: fuel_smt_def)
+  qed
+  have rd: \<open>smt_term_repr (SmtDef_body (?ds ! d))\<close> if \<open>d < length ?ds\<close> for d
+    using assms(2) that by (auto simp: smt_repr_ok_def)
+  have ra: \<open>smt_term_repr t\<close> if \<open>t \<in> set ?as\<close> for t
+    using assms(2) that by (auto simp: smt_repr_ok_def)
+  have td: \<open>smt_tsort ?fs (take d ?ds) (SmtDef_params (?ds ! d)) (SmtDef_body (?ds ! d)) \<noteq> None\<close>
+    if \<open>d < length ?ds\<close> for d
+    using assms(1) that by (auto simp: smt_wf_def Let_def)
+  have ta: \<open>smt_tsort ?fs ?ds [] t \<noteq> None\<close> if \<open>t \<in> set ?as\<close> for t
+    using assms(1) that by (auto simp: smt_wf_def Let_def)
+  have dd: \<open>dok d F (SmtDef_body (?ds ! d))\<close> if \<open>d < length ?ds\<close> for d
+    using tsort_dok[OF td[OF that] rd[OF that]] sd[OF that] that by simp
+  have da: \<open>dok (length ?ds) F t\<close> if \<open>t \<in> set ?as\<close> for t
+    using tsort_dok[OF ta[OF that] ra[OF that]] sa[OF that] by simp
+  have po: \<open>params_ok p\<close> using assms(2) by (auto simp: smt_repr_ok_def params_ok_def)
+  have ln: \<open>length ?ds < 2 ^ 63\<close> \<open>length ?as < 2 ^ 63\<close> using assms(2) by (simp_all add: smt_repr_ok_def)
+  have lf: \<open>length ?ds \<le> F\<close> \<open>length ?as \<le> F\<close> using assms(3) by (simp_all add: fuel_smt_def)
+  show ?thesis using sd sa dd da po ln lf by (simp add: tsize_pre_def Let_def)
+qed
+
+
+end
+
 end

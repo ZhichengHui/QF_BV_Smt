@@ -1715,4 +1715,85 @@ next
   qed
 qed
 
+text \<open>Term \<open>t\<close> of the state \<open>S\<close> translates assertion \<open>a\<close>.\<close>
+definition aok :: \<open>SmtProblem \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> Term \<Rightarrow> SmtTerm \<Rightarrow> bool\<close> where
+  \<open>aok p I ws vs S t a \<equiv>
+     wt ws (def_widths ws [] S) t \<and> width ws (def_widths ws [] S) t = 1 \<and>
+     eval ws (def_widths ws [] S) vs (def_values ws [] vs [] S) t = enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) [] a)\<close>
+
+lemma aok_ext: \<open>aok p I ws vs S t a \<Longrightarrow> aok p I ws vs (S @ E) t a\<close>
+proof -
+  assume h: \<open>aok p I ws vs S t a\<close>
+  obtain e where e: \<open>def_widths ws [] (S @ E) = def_widths ws [] S @ e\<close>
+    using def_widths_append'[of ws \<open>[]\<close> S E] def_widths_prefix'[of ws \<open>def_widths ws [] S\<close> E] by auto
+  obtain f where f: \<open>def_values ws [] vs [] (S @ E) = def_values ws [] vs [] S @ f\<close>
+    using def_values_append'[of ws \<open>[]\<close> vs \<open>[]\<close> S E] def_values_prefix'[of ws _ vs \<open>def_values ws [] vs [] S\<close> E] by auto
+  have l: \<open>length (def_values ws [] vs [] S) = length (def_widths ws [] S)\<close> by (simp add: def_widths_length' def_values_length')
+  show ?thesis using h wt_width_eval_append[OF _ l, of ws t e vs f] e f by (simp add: aok_def)
+qed
+
+definition tr_asserts_step :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> Term list \<times> Term list \<Rightarrow> SmtTerm \<Rightarrow> Term list \<times> Term list\<close> where
+  \<open>tr_asserts_step p dm \<equiv> \<lambda>(S, ts) t. let r = tr_term_m p dm [] (length (SmtProblem_defs p)) S t in (fst r, ts @ [snd r])\<close>
+
+lemma tr_asserts_m_step: \<open>tr_asserts_m p Sd = foldl (tr_asserts_step p (snd Sd)) (fst Sd, []) (SmtProblem_asserts p)\<close>
+  by (simp add: tr_asserts_m_def tr_asserts_step_def)
+
+lemma tr_prefix_asserts: \<open>foldl (tr_asserts_step p dm) (S, acc) ass = (S', acc') \<Longrightarrow> \<exists>E. S' = S @ E\<close>
+proof (induction ass arbitrary: S acc)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a ass)
+  obtain S1 t1 where r: \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a = (S1, t1)\<close>
+    by (cases \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a\<close>)
+  have \<open>foldl (tr_asserts_step p dm) (S1, acc @ [t1]) ass = (S', acc')\<close>
+    using Cons.prems r by (simp add: tr_asserts_step_def)
+  then obtain E2 where \<open>S' = S1 @ E2\<close> using Cons.IH by blast
+  moreover obtain E1 where \<open>S1 = S @ E1\<close> using tr_prefix(1)[OF r] by blast
+  ultimately show ?case by auto
+qed
+
+lemma tr_asserts_gen:
+  assumes \<open>ctx_ok p I ws vs (length (SmtProblem_defs p)) dm S\<close> \<open>defs_wt ws [] S\<close>
+    \<open>\<forall>a \<in> set ass. smt_tsort (SmtProblem_funs p) (SmtProblem_defs p) [] a = Some SmtSort_Bool\<close>
+    \<open>foldl (tr_asserts_step p dm) (S, acc) ass = (S', acc')\<close> \<open>length S' < 2 ^ 64\<close>
+  shows \<open>(\<exists>E. S' = S @ E) \<and> defs_wt ws [] S' \<and> (\<exists>new. acc' = acc @ new \<and> length new = length ass \<and>
+           (\<forall>i < length ass. aok p I ws vs S' (new ! i) (ass ! i)))\<close>
+  using assms
+proof (induction ass arbitrary: S acc)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons a ass)
+  obtain S1 t1 where r: \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a = (S1, t1)\<close>
+    by (cases \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a\<close>)
+  have f: \<open>foldl (tr_asserts_step p dm) (S1, acc @ [t1]) ass = (S', acc')\<close>
+    using Cons.prems(4) r by (simp add: tr_asserts_step_def)
+  obtain E1 where E1: \<open>S1 = S @ E1\<close> using tr_prefix(1)[OF r] by blast
+  have ta: \<open>smt_tsort (SmtProblem_funs p) (take (length (SmtProblem_defs p)) (SmtProblem_defs p)) [] a = Some SmtSort_Bool\<close>
+    using Cons.prems(3) by simp
+  have ctx1: \<open>ctx_ok p I ws vs (length (SmtProblem_defs p)) dm S1\<close> using ctx_ok_ext[OF Cons.prems(1)] E1 by simp
+  have IH0: \<open>(\<exists>E. S' = S1 @ E) \<and> defs_wt ws [] S' \<and> (\<exists>new. acc' = (acc @ [t1]) @ new \<and> length new = length ass \<and>
+           (\<forall>i < length ass. aok p I ws vs S' (new ! i) (ass ! i)))\<close>
+    if \<open>defs_wt ws [] S1\<close> using Cons.IH[OF ctx1 that _ f Cons.prems(5)] Cons.prems(3) by simp
+  obtain E2 where E2: \<open>S' = S1 @ E2\<close> using tr_prefix_asserts[OF f] by blast
+  have len1: \<open>length S1 < 2 ^ 64\<close> using E2 Cons.prems(5) by simp
+  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> wt ws (def_widths ws [] S1) t1 \<and>
+      width ws (def_widths ws [] S1) t1 = sort_width_m SmtSort_Bool \<and>
+      eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) t1 = enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) [] a)\<close>
+    using tr_term_args_correct(1)[OF r Cons.prems(1) ta, of \<open>[]\<close>] Cons.prems(2) len1 by simp
+  have a0: \<open>aok p I ws vs S' t1 a\<close> using aok_ext[of p I ws vs S1 t1 a E2] A E2 by (simp add: aok_def)
+  obtain new where new: \<open>acc' = (acc @ [t1]) @ new\<close> \<open>length new = length ass\<close>
+    \<open>\<forall>i < length ass. aok p I ws vs S' (new ! i) (ass ! i)\<close> \<open>defs_wt ws [] S'\<close> using IH0 A by blast
+  show ?case
+  proof (intro conjI exI)
+    show \<open>S' = S @ (E1 @ E2)\<close> using E1 E2 by simp
+    show \<open>defs_wt ws [] S'\<close> using new(4) .
+    show \<open>acc' = acc @ (t1 # new)\<close> using new(1) by simp
+    show \<open>length (t1 # new) = length (a # ass)\<close> using new(2) by simp
+    show \<open>\<forall>i < length (a # ass). aok p I ws vs S' ((t1 # new) ! i) ((a # ass) ! i)\<close>
+      using a0 new(3) by (auto simp: nth_Cons split: nat.splits)
+  qed
+qed
+
 end

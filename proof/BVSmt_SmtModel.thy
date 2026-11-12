@@ -514,6 +514,159 @@ fun frag_sort :: \<open>SmtSort \<Rightarrow> bool\<close> where
 | \<open>frag_sort (SmtSort_BitVec w) = (1 \<le> unat w)\<close>
 | \<open>frag_sort (SmtSort_Uninterpreted s) = False\<close>
 
+lemma sort_width_frag: \<open>frag_sort s \<Longrightarrow> 1 \<le> sort_width_m s\<close>
+  by (cases s) auto
+
+lemma tref_ok:
+  assumes \<open>ref_ok ws vs S k s v\<close> \<open>frag_sort s\<close>
+  shows \<open>wt ws (def_widths ws [] S) (tref k) \<and> width ws (def_widths ws [] S) (tref k) = sort_width_m s \<and>
+         eval ws (def_widths ws [] S) vs (def_values ws [] vs [] S) (tref k) = enc v\<close>
+  using assms sort_width_frag[OF assms(2)]
+  by (auto simp: ref_ok_def tref_def unat_of_nat_eq def_widths_length')
+
+lemma helper_defs_eq:
+  \<open>sint = smt_sint\<close> \<open>to_bv = smt_to_bv\<close> \<open>tdiv = smt_tdiv\<close> \<open>tmod = smt_tmod\<close> \<open>repeat_val = smt_repeat_val\<close>
+  \<open>bits_nat = smt_bits_nat\<close>
+proof -
+  show \<open>sint = smt_sint\<close> by (simp add: fun_eq_iff sint_def smt_sint_def)
+  show \<open>to_bv = smt_to_bv\<close> by (simp add: fun_eq_iff to_bv_def smt_to_bv_def)
+  show \<open>tdiv = smt_tdiv\<close> by (simp add: fun_eq_iff tdiv_def smt_tdiv_def)
+  show \<open>tmod = smt_tmod\<close> by (simp add: fun_eq_iff tmod_def smt_tmod_def tdiv_def smt_tdiv_def)
+  have \<open>repeat_val w j x = smt_repeat_val w j x\<close> for w j x by (induction j) auto
+  then show \<open>repeat_val = smt_repeat_val\<close> by (simp add: fun_eq_iff)
+  have \<open>bits_nat bs = smt_bits_nat bs\<close> for bs by (induction bs) auto
+  then show \<open>bits_nat = smt_bits_nat\<close> by (simp add: fun_eq_iff)
+qed
+
+text \<open>The binary functions of the extended language compute those of the general semantics.\<close>
+lemma bin_sem_fold: \<open>fold_op op \<Longrightarrow> bin_sem (tr_op op) w x w y = smt_bv_bin op w x y\<close>
+  by (cases op) (simp_all add: helper_defs_eq)
+
+lemma bin_sem_cmp:
+  \<open>op \<in> {SmtOp_Bvult, SmtOp_Bvule, SmtOp_Bvugt, SmtOp_Bvuge, SmtOp_Bvslt, SmtOp_Bvsle, SmtOp_Bvsgt, SmtOp_Bvsge} \<Longrightarrow>
+     bin_sem (tr_op op) w x w y = of_bool (smt_bv_cmp op w x y)\<close>
+  by (auto simp: helper_defs_eq)
+
+text \<open>A chain of binary operations that keep the width of their operands.\<close>
+lemma fold_left_eval:
+  assumes \<open>bop \<in> {Op_And, Op_Or, Op_Xor, Op_Add, Op_Mul}\<close>
+    \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = w\<close> \<open>wt ws dw acc\<close> \<open>width ws dw acc = w\<close>
+  shows \<open>wt ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) acc ks) \<and>
+         width ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) acc ks) = w \<and>
+         eval ws dw vs dv (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) acc ks) =
+           foldl (\<lambda>a k. bin_sem bop w a w (eval ws dw vs dv (tref k))) (eval ws dw vs dv acc) ks\<close>
+  using assms(2-4)
+proof (induction ks arbitrary: acc)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons k ks)
+  have \<open>wt ws dw (Term_Bin bop acc (tref k)) \<and> width ws dw (Term_Bin bop acc (tref k)) = w\<close>
+    using Cons.prems assms(1) by auto
+  then show ?case using Cons.IH[of \<open>Term_Bin bop acc (tref k)\<close>] Cons.prems assms(1) by auto
+qed
+
+lemma and_bool_s: \<open>Bit_Operations.and (of_bool a) (of_bool b) = (of_bool (a \<and> b) :: nat)\<close>
+  by (cases a; cases b) auto
+
+lemma or_bool_s: \<open>Bit_Operations.or (of_bool a) (of_bool b) = (of_bool (a \<or> b) :: nat)\<close>
+  by (cases a; cases b) auto
+
+lemma xor_bool_s: \<open>Bit_Operations.xor (of_bool a) (of_bool b) = (of_bool (a \<noteq> b) :: nat)\<close>
+  by (cases a; cases b) auto
+
+lemma fold_and_bool: \<open>foldl (\<lambda>a b. Bit_Operations.and a (of_bool b)) (of_bool x) ys = (of_bool (x \<and> (\<forall>y \<in> set ys. y)) :: nat)\<close>
+  by (induction ys arbitrary: x) (auto simp: and_bool_s)
+
+lemma fold_or_bool: \<open>foldl (\<lambda>a b. Bit_Operations.or a (of_bool b)) (of_bool x) ys = (of_bool (x \<or> (\<exists>y \<in> set ys. y)) :: nat)\<close>
+proof (induction ys arbitrary: x)
+  case (Cons y ys)
+  have \<open>Bit_Operations.or (of_bool x) (of_bool y) = (of_bool (x \<or> y) :: nat)\<close> by (rule or_bool_s)
+  then show ?case using Cons.IH[of \<open>x \<or> y\<close>] by simp
+qed simp
+
+lemma fold_xor_bool: \<open>foldl (\<lambda>a b. Bit_Operations.xor a (of_bool b)) (of_bool x) ys = (of_bool (odd (length (filter id (x # ys)))) :: nat)\<close>
+  by (induction ys arbitrary: x) (auto simp: xor_bool_s)
+
+lemma enc_inj: \<open>smt_has_sort s a \<Longrightarrow> smt_has_sort s b \<Longrightarrow> frag_sort s \<Longrightarrow> (enc a = enc b) = (a = b)\<close>
+  by (cases s) (auto split: sval.splits)
+
+lemma pairs_m_set: \<open>2 \<le> n \<Longrightarrow> insert (0, 1) (set (pairs_m n)) = {(i, j). i < j \<and> j < n}\<close>
+  by (auto simp: pairs_m_def image_iff)
+
+text \<open>The \<open>=\<close>, \<open>distinct\<close> and \<open>and\<close> of the extended language on truth values (width 1) and on
+  references of one width.\<close>
+lemma eq_ref_eval:
+  \<open>wt ws dw (tref a) \<Longrightarrow> wt ws dw (tref b) \<Longrightarrow> width ws dw (tref a) = width ws dw (tref b) \<Longrightarrow>
+     wt ws dw (Term_Bin op (tref a) (tref b)) \<and>
+     (op \<in> {Op_Eq, Op_Distinct} \<longrightarrow> width ws dw (Term_Bin op (tref a) (tref b)) = 1)\<close>
+  by auto
+
+lemma chain_idx:
+  assumes \<open>2 \<le> n\<close>
+  shows \<open>(e 0 = e 1 \<and> (\<forall>i \<in> set [2..<n]. e (i - 1) = e i)) = (\<forall>i. Suc i < n \<longrightarrow> e i = e (Suc i))\<close>
+proof
+  assume a: \<open>e 0 = e 1 \<and> (\<forall>i \<in> set [2..<n]. e (i - 1) = e i)\<close>
+  show \<open>\<forall>i. Suc i < n \<longrightarrow> e i = e (Suc i)\<close>
+  proof (intro allI impI)
+    fix i assume i: \<open>Suc i < n\<close>
+    show \<open>e i = e (Suc i)\<close>
+    proof (cases i)
+      case 0
+      then show ?thesis using a by simp
+    next
+      case (Suc j)
+      have \<open>Suc i \<in> set [2..<n]\<close> using i Suc by auto
+      then show ?thesis using a by fastforce
+    qed
+  qed
+next
+  assume a: \<open>\<forall>i. Suc i < n \<longrightarrow> e i = e (Suc i)\<close>
+  have \<open>e 0 = e 1\<close> using a assms by auto
+  moreover have \<open>\<forall>i \<in> set [2..<n]. e (i - 1) = e i\<close>
+  proof
+    fix i assume \<open>i \<in> set [2..<n]\<close>
+    then have \<open>Suc (i - 1) < n\<close> \<open>Suc (i - 1) = i\<close> by auto
+    then show \<open>e (i - 1) = e i\<close> using a by metis
+  qed
+  ultimately show \<open>e 0 = e 1 \<and> (\<forall>i \<in> set [2..<n]. e (i - 1) = e i)\<close> by blast
+qed
+
+lemma chain_eval:
+  assumes \<open>2 \<le> length ks\<close> \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = w\<close>
+  shows \<open>wt ws dw (chain_m SmtOp_Eq ks) \<and> width ws dw (chain_m SmtOp_Eq ks) = 1 \<and>
+     eval ws dw vs dv (chain_m SmtOp_Eq ks) =
+       of_bool (\<forall>i. Suc i < length ks \<longrightarrow> eval ws dw vs dv (tref (ks ! i)) = eval ws dw vs dv (tref (ks ! Suc i)))\<close>
+proof -
+  let ?e = \<open>\<lambda>i. eval ws dw vs dv (tref (ks ! i))\<close>
+  let ?f = \<open>\<lambda>acc i. Term_Bin Op_And acc (Term_Bin Op_Eq (tref (ks ! (i - 1))) (tref (ks ! i)))\<close>
+  have g: \<open>\<forall>i \<in> set ix. 1 \<le> i \<and> i < length ks \<Longrightarrow> wt ws dw acc \<Longrightarrow> width ws dw acc = 1 \<Longrightarrow> eval ws dw vs dv acc = of_bool A \<Longrightarrow>
+      wt ws dw (foldl ?f acc ix) \<and> width ws dw (foldl ?f acc ix) = 1 \<and>
+      eval ws dw vs dv (foldl ?f acc ix) = of_bool (A \<and> (\<forall>i \<in> set ix. ?e (i - 1) = ?e i))\<close> for ix acc A
+  proof (induction ix arbitrary: acc A)
+    case Nil
+    then show ?case by simp
+  next
+    case (Cons i ix)
+    have i: \<open>i - 1 < length ks\<close> \<open>i < length ks\<close> using Cons.prems by auto
+    then have r: \<open>wt ws dw (tref (ks ! (i - 1))) \<and> width ws dw (tref (ks ! (i - 1))) = w\<close>
+      \<open>wt ws dw (tref (ks ! i)) \<and> width ws dw (tref (ks ! i)) = w\<close> using assms(2) by auto
+    have \<open>eval ws dw vs dv (?f acc i) = of_bool (A \<and> ?e (i - 1) = ?e i)\<close>
+      using Cons.prems by (simp add: and_bool_s)
+    moreover have \<open>wt ws dw (?f acc i) \<and> width ws dw (?f acc i) = 1\<close> using Cons.prems r by simp
+    ultimately show ?case using Cons.IH[of \<open>?f acc i\<close> \<open>A \<and> ?e (i - 1) = ?e i\<close>] Cons.prems by auto
+  qed
+  have l: \<open>0 < length ks\<close> \<open>1 < length ks\<close> using assms(1) by linarith+
+  have m: \<open>ks ! 0 \<in> set ks\<close> \<open>ks ! 1 \<in> set ks\<close> using nth_mem[OF l(1)] nth_mem[OF l(2)] .
+  have k01: \<open>wt ws dw (tref (ks ! 0)) \<and> width ws dw (tref (ks ! 0)) = w\<close>
+    \<open>wt ws dw (tref (ks ! 1)) \<and> width ws dw (tref (ks ! 1)) = w\<close>
+    using assms(2) m by blast+
+  have \<open>(?e 0 = ?e 1 \<and> (\<forall>i \<in> set [2..<length ks]. ?e (i - 1) = ?e i)) = (\<forall>i. Suc i < length ks \<longrightarrow> ?e i = ?e (Suc i))\<close>
+    using chain_idx[OF assms(1)] .
+  then show ?thesis using g[of \<open>[2..<length ks]\<close> \<open>Term_Bin Op_Eq (tref (ks ! 0)) (tref (ks ! 1))\<close> \<open>?e 0 = ?e 1\<close>] k01
+    by (simp add: chain_m_def)
+qed
+
 lemma tr_app_correct:
   assumes \<open>smt_op_sort op ss = Some s\<close> \<open>\<forall>x \<in> set ss. frag_sort x\<close>
     \<open>length ks = length ss\<close> \<open>length xs = length ss\<close>

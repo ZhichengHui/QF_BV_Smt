@@ -1868,4 +1868,101 @@ proof -
   qed
 qed
 
+subsection \<open>Models\<close>
+
+fun bits_of :: \<open>nat \<Rightarrow> nat \<Rightarrow> bool list\<close> where
+  \<open>bits_of 0 x = []\<close>
+| \<open>bits_of (Suc w) x = odd x # bits_of w (x div 2)\<close>
+
+lemma bits_of_length: \<open>length (bits_of w x) = w\<close>
+  by (induction w arbitrary: x) auto
+
+lemma bits_of_nat: \<open>smt_bits_nat (bits_of w x) = x mod 2 ^ w\<close>
+proof (induction w arbitrary: x)
+  case 0
+  then show ?case by simp
+next
+  case (Suc w)
+  have \<open>of_bool (odd x) + 2 * (x div 2 mod 2 ^ w) = x mod 2 ^ Suc w\<close>
+    by (cases \<open>odd x\<close>) (simp_all add: mod_mult2_eq mult.commute odd_iff_mod_2_eq_one even_iff_mod_2_eq_zero)
+  then show ?case using Suc.IH by simp
+qed
+
+lemma interp_sound_iff: \<open>interp_sound (SmtProblem_funs p) I = smt_interp_ok p I\<close>
+  by (simp add: interp_sound_def smt_interp_ok_def)
+
+lemma tr_model_correct:
+  assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close>
+    \<open>is_model (tr_problem_m p) m\<close>
+  shows \<open>smt_is_model p (tr_model_m p m)\<close>
+proof -
+  let ?fs = \<open>SmtProblem_funs p\<close> and ?I = \<open>smt_model_interp (tr_model_m p m)\<close>
+  let ?ws = \<open>map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close>
+  have frs: \<open>\<forall>f \<in> set ?fs. frag_sort (SmtFun_ret f)\<close> and na: \<open>\<forall>f \<in> set ?fs. SmtFun_args f = []\<close>
+    and ns: \<open>unat (SmtProblem_num_sorts p) = 0\<close>
+    using assms(1,2) frag_of_wf by (auto simp: smt_wf_def smt_fragment_def Let_def)
+  have vw: \<open>var_widths (tr_problem_m p) = ?ws\<close>
+    using frs sort_width_lt by (auto simp: var_widths_def tr_problem_m_def Let_def unat_of_nat_eq)
+  have ml: \<open>map length m = ?ws\<close> using assms(4) vw by (simp add: is_model_def is_assignment_def)
+  have lm0: \<open>length m = length ?fs\<close> using ml by (metis length_map)
+  have lm: \<open>length m = length ?fs\<close> \<open>\<forall>f < length ?fs. length (m ! f) = sort_width_m (SmtFun_ret (?fs ! f))\<close>
+    using lm0 ml by (auto, metis nth_map)
+  have Iv: \<open>?I f [] = (case SmtFun_ret (?fs ! f) of SmtSort_Bool \<Rightarrow> VBool (m ! f ! 0)
+      | _ \<Rightarrow> VBv (length (m ! f)) (smt_bits_nat (m ! f)))\<close> if \<open>f < length ?fs\<close> for f
+    using that by (auto simp: smt_model_interp_def smt_interp_of_def tr_model_m_def split: SmtSort.splits)
+  have one: \<open>length (m ! f) = 1 \<Longrightarrow> smt_bits_nat (m ! f) = of_bool (m ! f ! 0)\<close> for f
+    by (cases \<open>m ! f\<close>) auto
+  have isd: \<open>interp_sound ?fs ?I\<close>
+    unfolding interp_sound_def
+  proof (intro allI impI)
+    fix f xs assume f: \<open>f < length ?fs\<close> and la: \<open>list_all2 smt_has_sort (SmtFun_args (?fs ! f)) xs\<close>
+    then have \<open>xs = []\<close> using na by (metis list.rel_sel nth_mem)
+    moreover have \<open>frag_sort (SmtFun_ret (?fs ! f))\<close> using frs f by simp
+    ultimately show \<open>smt_has_sort (SmtFun_ret (?fs ! f)) (?I f xs)\<close>
+      using Iv[OF f] lm f smt_bits_nat_lt_s[of \<open>m ! f\<close>] by (cases \<open>SmtFun_ret (?fs ! f)\<close>) auto
+  qed
+  have vs: \<open>\<forall>f < length ?fs. map smt_bits_nat m ! f = enc (?I f [])\<close>
+  proof (intro allI impI)
+    fix f assume f: \<open>f < length ?fs\<close>
+    then show \<open>map smt_bits_nat m ! f = enc (?I f [])\<close>
+      using Iv[OF f] lm one[of f] frs by (cases \<open>SmtFun_ret (?fs ! f)\<close>) auto
+  qed
+  have S: \<open>smt_satisfies p ?I\<close>
+    using tr_problem_sem[OF assms(1,2) isd _ vs assms(3)] assms(4) lm vw
+    by (simp add: is_model_def satisfies_def Let_def helper_defs_eq)
+  have W: \<open>smt_model_wf p (tr_model_m p m)\<close>
+    unfolding smt_model_wf_def Let_def
+    using ns lm frs[unfolded all_set_conv_all_nth] by (auto simp: tr_model_m_def split: SmtSort.splits)
+  show ?thesis using S W by (simp add: smt_is_model_def)
+qed
+
+lemma tr_complete:
+  assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close>
+    \<open>smt_satisfiable p\<close>
+  shows \<open>\<exists>m. is_model (tr_problem_m p) m\<close>
+proof -
+  obtain I where I: \<open>smt_interp_ok p I\<close> \<open>smt_satisfies p I\<close> using assms(4) by (auto simp: smt_satisfiable_def)
+  let ?fs = \<open>SmtProblem_funs p\<close>
+  let ?ws = \<open>map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close>
+  have frs: \<open>\<forall>f < length ?fs. frag_sort (SmtFun_ret (?fs ! f))\<close> and na: \<open>\<forall>f < length ?fs. SmtFun_args (?fs ! f) = []\<close>
+    using assms(1,2) frag_of_wf by (auto simp: smt_wf_def smt_fragment_def Let_def)
+  have vw: \<open>var_widths (tr_problem_m p) = ?ws\<close>
+    using frs sort_width_lt by (auto simp: var_widths_def tr_problem_m_def Let_def unat_of_nat_eq all_set_conv_all_nth)
+  define m where \<open>m = map (\<lambda>f. bits_of (sort_width_m (SmtFun_ret (?fs ! f))) (enc (I f []))) [0..<length ?fs]\<close>
+  have hs: \<open>smt_has_sort (SmtFun_ret (?fs ! f)) (I f [])\<close> if \<open>f < length ?fs\<close> for f
+    using I(1) na that by (simp add: smt_interp_ok_def)
+  have lt: \<open>enc (I f []) < 2 ^ sort_width_m (SmtFun_ret (?fs ! f))\<close> if \<open>f < length ?fs\<close> for f
+    using hs[OF that] frs that by (cases \<open>SmtFun_ret (?fs ! f)\<close>; cases \<open>I f []\<close>) auto
+  have vs: \<open>\<forall>f < length ?fs. map smt_bits_nat m ! f = enc (I f [])\<close>
+    using lt by (simp add: m_def bits_of_nat)
+  have isd: \<open>interp_sound ?fs I\<close> using I(1) interp_sound_iff by blast
+  have lmm: \<open>length (map smt_bits_nat m) = length ?fs\<close> by (simp add: m_def)
+  note T = tr_problem_sem[OF assms(1,2) isd lmm vs assms(3)]
+  note T3 = conjunct2[OF conjunct2[OF T], unfolded conjunct1[OF conjunct2[OF T]]]
+  have ml: \<open>map length m = ?ws\<close> by (auto simp: m_def bits_of_length intro: nth_equalityI)
+  have \<open>is_model (tr_problem_m p) m\<close>
+    using T3 I(2) vw ml by (simp add: is_model_def is_assignment_def satisfies_def Let_def helper_defs_eq)
+  then show ?thesis by blast
+qed
+
 end

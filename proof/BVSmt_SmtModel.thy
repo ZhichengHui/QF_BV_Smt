@@ -1616,4 +1616,103 @@ next
   qed
 qed
 
+subsection \<open>The translation of the definitions and of the assertions\<close>
+
+definition tr_defs_step :: \<open>SmtProblem \<Rightarrow> Term list \<times> nat list \<Rightarrow> nat \<Rightarrow> Term list \<times> nat list\<close> where
+  \<open>tr_defs_step p \<equiv> \<lambda>(S, dm) d.
+     if SmtDef_params (SmtProblem_defs p ! d) = [] then
+       (let r = tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d)) in (fst r @ [snd r], dm @ [length (fst r)]))
+     else (S, dm @ [0])\<close>
+
+lemma tr_defs_m_step: \<open>tr_defs_m p = foldl (tr_defs_step p) ([], []) [0..<length (SmtProblem_defs p)]\<close>
+  by (simp add: tr_defs_m_def tr_defs_step_def)
+
+lemma tr_defs_step_prefix: \<open>\<exists>E. fst (tr_defs_step p (S, dm) d) = S @ E\<close> \<open>length (snd (tr_defs_step p (S, dm) d)) = Suc (length dm)\<close>
+proof -
+  obtain S1 t1 where r: \<open>tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d)) = (S1, t1)\<close>
+    by (cases \<open>tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d))\<close>)
+  obtain E where \<open>S1 = S @ E\<close> using tr_prefix(1)[OF r] by blast
+  then show \<open>\<exists>E. fst (tr_defs_step p (S, dm) d) = S @ E\<close> using r by (auto simp: tr_defs_step_def)
+  show \<open>length (snd (tr_defs_step p (S, dm) d)) = Suc (length dm)\<close> by (simp add: tr_defs_step_def Let_def)
+qed
+
+lemma ctx_ok_Suc:
+  assumes \<open>ctx_ok p I ws vs k dm S\<close> \<open>length dm = k\<close> \<open>k < length (SmtProblem_defs p)\<close> \<open>S' = S @ E\<close>
+    \<open>SmtDef_params (SmtProblem_defs p ! k) = [] \<Longrightarrow>
+       ref_ok ws vs S' x (SmtDef_ret (SmtProblem_defs p ! k)) ((smt_def_sems I (SmtProblem_defs p) ! k) [])\<close>
+  shows \<open>ctx_ok p I ws vs (Suc k) (dm @ [x]) S'\<close>
+  using assms unfolding ctx_ok_def Let_def
+  by (auto simp: nth_append less_Suc_eq intro: ref_ok_ext)
+
+lemma tr_defs_prefix:
+  \<open>\<exists>E. fst (foldl (tr_defs_step p) (S, dm) ks) = S @ E\<close>
+proof (induction ks arbitrary: S dm)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons k ks)
+  obtain S1 dm1 where r: \<open>tr_defs_step p (S, dm) k = (S1, dm1)\<close> by (cases \<open>tr_defs_step p (S, dm) k\<close>)
+  obtain E1 where \<open>S1 = S @ E1\<close> using tr_defs_step_prefix(1)[of p S dm k] r by auto
+  moreover obtain E2 where \<open>fst (foldl (tr_defs_step p) (S1, dm1) ks) = S1 @ E2\<close> using Cons.IH by blast
+  ultimately show ?case using r by auto
+qed
+
+text \<open>After the first \<open>k\<close> definitions: the context of the translation for the definitions below
+  \<open>k\<close> holds, the state is well-sorted, and there is an entry of \<open>dm\<close> for each definition.\<close>
+lemma tr_defs_correct:
+  assumes \<open>ctx_ok p I ws vs 0 [] []\<close> \<open>k \<le> length (SmtProblem_defs p)\<close>
+    \<open>length (fst (tr_defs_m p)) < 2 ^ 64\<close>
+  shows \<open>ctx_ok p I ws vs k (snd (foldl (tr_defs_step p) ([], []) [0..<k])) (fst (foldl (tr_defs_step p) ([], []) [0..<k])) \<and>
+         defs_wt ws [] (fst (foldl (tr_defs_step p) ([], []) [0..<k])) \<and>
+         length (snd (foldl (tr_defs_step p) ([], []) [0..<k])) = k\<close>
+  using assms(2)
+proof (induction k)
+  case 0
+  then show ?case using assms(1) by simp
+next
+  case (Suc k)
+  let ?ds = \<open>SmtProblem_defs p\<close> and ?fs = \<open>SmtProblem_funs p\<close> and ?dv = \<open>smt_def_sems I (SmtProblem_defs p)\<close>
+  obtain S dm where st: \<open>foldl (tr_defs_step p) ([], []) [0..<k] = (S, dm)\<close>
+    by (cases \<open>foldl (tr_defs_step p) ([], []) [0..<k]\<close>)
+  have kd: \<open>k < length ?ds\<close> using Suc.prems by simp
+  have IH: \<open>ctx_ok p I ws vs k dm S\<close> \<open>defs_wt ws [] S\<close> \<open>length dm = k\<close> using Suc st kd by auto
+  have un: \<open>foldl (tr_defs_step p) ([], []) [0..<Suc k] = tr_defs_step p (S, dm) k\<close> using st by simp
+  have fin: \<open>\<exists>E. fst (tr_defs_m p) = fst (tr_defs_step p (S, dm) k) @ E\<close>
+  proof -
+    have \<open>[0..<length ?ds] = [0..<Suc k] @ [Suc k..<length ?ds]\<close> using kd by (metis Suc_leI le_add_diff_inverse upt_add_eq_append zero_le)
+    then have \<open>tr_defs_m p = foldl (tr_defs_step p) (tr_defs_step p (S, dm) k) [Suc k..<length ?ds]\<close>
+      using un by (simp add: tr_defs_m_step)
+    then show ?thesis using tr_defs_prefix[of p \<open>fst (tr_defs_step p (S, dm) k)\<close> \<open>snd (tr_defs_step p (S, dm) k)\<close>] by simp
+  qed
+  show ?case
+  proof (cases \<open>SmtDef_params (?ds ! k) = []\<close>)
+    case True
+    obtain S1 t1 where r: \<open>tr_term_m p dm [] k S (SmtDef_body (?ds ! k)) = (S1, t1)\<close>
+      by (cases \<open>tr_term_m p dm [] k S (SmtDef_body (?ds ! k))\<close>)
+    have stp: \<open>tr_defs_step p (S, dm) k = (S1 @ [t1], dm @ [length S1])\<close> using True r by (simp add: tr_defs_step_def)
+    have len: \<open>length S1 < 2 ^ 64\<close> using fin stp assms(3) by auto
+    have tb: \<open>smt_tsort ?fs (take k ?ds) [] (SmtDef_body (?ds ! k)) = Some (SmtDef_ret (?ds ! k))\<close>
+      using ctx_ok_wf_sorts(3)[OF IH(1)] kd True by metis
+    have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> wt ws (def_widths ws [] S1) t1 \<and>
+        width ws (def_widths ws [] S1) t1 = sort_width_m (SmtDef_ret (?ds ! k)) \<and>
+        eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) t1 = enc (smt_eval I ?dv [] (SmtDef_body (?ds ! k)))\<close>
+      using tr_term_args_correct(1)[OF r IH(1) tb, of \<open>[]\<close>] IH(2) len by simp
+    have v: \<open>(?dv ! k) [] = smt_eval I ?dv [] (SmtDef_body (?ds ! k))\<close>
+      using smt_def_sems_nth[OF kd, of I] tb smt_eval_take[of ?fs k ?ds \<open>[]\<close> \<open>SmtDef_body (?ds ! k)\<close> ?dv I \<open>[]\<close>]
+      by (simp add: smt_def_sems_length)
+    have hs: \<open>smt_has_sort (SmtDef_ret (?ds ! k)) ((?dv ! k) [])\<close> using val_sort[OF IH(1) tb] v by simp
+    obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
+    have refk: \<open>ref_ok ws vs (S1 @ [t1]) (length S1) (SmtDef_ret (?ds ! k)) ((?dv ! k) [])\<close>
+      using A hs v len by (simp add: ref_ok_def def_snoc)
+    have \<open>ctx_ok p I ws vs (Suc k) (dm @ [length S1]) (S1 @ [t1])\<close>
+      using ctx_ok_Suc[OF IH(1) IH(3) kd, of \<open>S1 @ [t1]\<close> \<open>E1 @ [t1]\<close> \<open>length S1\<close>] E1 refk by simp
+    then show ?thesis using un stp A IH(3) by (simp add: def_snoc)
+  next
+    case False
+    have stp: \<open>tr_defs_step p (S, dm) k = (S, dm @ [0])\<close> using False by (simp add: tr_defs_step_def)
+    have \<open>ctx_ok p I ws vs (Suc k) (dm @ [0]) S\<close> using ctx_ok_Suc[OF IH(1) IH(3) kd, of S \<open>[]\<close> 0] False by simp
+    then show ?thesis using un stp IH by simp
+  qed
+qed
+
 end

@@ -992,3 +992,405 @@ pub fn solve(p: &Problem) -> Answer {
     let q = lower_problem(p);
     solve_core(&q)
 }
+
+// ---------------------------------------------------------------------------------------------
+// The general problem structure: the interface to the SMT-LIB front end. These definitions are,
+// word for word, those of the front end (`frontend/src/problem.rs`); see there for their meaning.
+
+/// A sort.
+pub enum SmtSort {
+    Bool,
+    /// `(_ BitVec w)`, `w >= 1`.
+    BitVec(usize),
+    /// The uninterpreted sort with this number.
+    Uninterpreted(usize),
+}
+
+/// The theory function symbols of Core and FixedSizeBitVectors/QF_BV (SMT-LIB 2.6).
+pub enum SmtOp {
+    // Core
+    Not,
+    And,
+    Or,
+    Xor,
+    Implies,
+    Eq,
+    Distinct,
+    Ite,
+    // FixedSizeBitVectors
+    Concat,
+    /// `(_ extract i j)`.
+    Extract(usize, usize),
+    Bvnot,
+    Bvand,
+    Bvor,
+    Bvneg,
+    Bvadd,
+    Bvmul,
+    Bvudiv,
+    Bvurem,
+    Bvshl,
+    Bvlshr,
+    Bvult,
+    // QF_BV extensions
+    Bvnand,
+    Bvnor,
+    Bvxor,
+    Bvxnor,
+    Bvcomp,
+    Bvsub,
+    Bvsdiv,
+    Bvsrem,
+    Bvsmod,
+    Bvashr,
+    /// `(_ repeat i)`.
+    Repeat(usize),
+    /// `(_ zero_extend i)`.
+    ZeroExtend(usize),
+    /// `(_ sign_extend i)`.
+    SignExtend(usize),
+    /// `(_ rotate_left i)`.
+    RotateLeft(usize),
+    /// `(_ rotate_right i)`.
+    RotateRight(usize),
+    Bvule,
+    Bvugt,
+    Bvuge,
+    Bvslt,
+    Bvsle,
+    Bvsgt,
+    Bvsge,
+}
+
+/// A term.
+pub enum SmtTerm {
+    BoolConst(bool),
+    /// A bit-vector constant, least significant bit first.
+    BvConst(Vec<bool>),
+    /// The parameter with this number of the enclosing definition.
+    Param(usize),
+    /// A declared function symbol applied to arguments (none for a constant).
+    Fun(usize, Vec<SmtTerm>),
+    /// A defined function applied to arguments (one per parameter).
+    Def(usize, Vec<SmtTerm>),
+    /// A theory function symbol applied to arguments.
+    App(SmtOp, Vec<SmtTerm>),
+}
+
+/// A declared function symbol: the sorts of its arguments and of its result.
+pub struct SmtFun {
+    pub args: Vec<SmtSort>,
+    pub ret: SmtSort,
+}
+
+/// A defined function: the sorts of its parameters and of its result, and its body.
+pub struct SmtDef {
+    pub params: Vec<SmtSort>,
+    pub ret: SmtSort,
+    pub body: SmtTerm,
+}
+
+pub struct SmtProblem {
+    pub num_sorts: usize,
+    pub funs: Vec<SmtFun>,
+    pub defs: Vec<SmtDef>,
+    pub asserts: Vec<SmtTerm>,
+}
+
+/// A value: a truth value, a bit-vector (least significant bit first) or an element of an
+/// uninterpreted sort (an index into its domain).
+pub enum SmtValue {
+    Bool(bool),
+    Bv(Vec<bool>),
+    Elem(usize),
+}
+
+/// One point of a function table: the arguments and the value there.
+pub struct SmtEntry {
+    pub args: Vec<SmtValue>,
+    pub val: SmtValue,
+}
+
+/// The interpretation of a declared function symbol: at given arguments, the value of the first
+/// entry with these arguments, and `default` if there is none. A constant has no entries.
+pub struct SmtInterp {
+    pub entries: Vec<SmtEntry>,
+    pub default: SmtValue,
+}
+
+/// A model: the size of the domain of every uninterpreted sort (at least 1; the elements are
+/// `Elem(0)` to `Elem(size - 1)`) and the interpretation of every declared function symbol.
+pub struct SmtModel {
+    pub domains: Vec<usize>,
+    pub funs: Vec<SmtInterp>,
+}
+
+/// The answer to `check-sat`. `Unknown` is the answer for a problem the solver does not handle.
+pub enum SmtAnswer {
+    Sat(SmtModel),
+    Unsat,
+    Unknown,
+}
+
+// ---------------------------------------------------------------------------------------------
+// Translation of a general problem into a problem of the extended language.
+//
+// A general problem is in the fragment of this solver if it has no uninterpreted sort and every
+// declared function symbol is a constant. For a well-sorted problem (as the front end produces),
+// every sort is then Bool or a bit-vector sort: Bool becomes width 1, true being 1. The declared
+// constants become the variables, in order. Every argument of a theory function becomes a
+// definition of the extended problem, so that no subterm is copied; a definition without
+// parameters is translated once, and a definition with parameters is expanded where it is applied,
+// its parameters referring to the definitions of the arguments.
+
+/// The state of the translation: the definitions of the extended problem built so far.
+pub struct Tr {
+    pub defs: Vec<Term>,
+}
+
+/// Adds `t` as a definition; returns its index.
+fn tr_push(s: Tr, t: Term) -> (Tr, usize) {
+    let k = s.defs.len();
+    let mut defs = s.defs;
+    defs.push(t);
+    (Tr { defs }, k)
+}
+
+fn tref(k: usize) -> Term {
+    Term::Ref(k)
+}
+
+fn tbin(op: Op, a: Term, b: Term) -> Term {
+    Term::Bin(op, Box::new(a), Box::new(b))
+}
+
+/// The width of a sort of the fragment: Bool is width 1.
+fn sort_width(s: &SmtSort) -> usize {
+    match s {
+        SmtSort::Bool => 1,
+        SmtSort::BitVec(w) => *w,
+        SmtSort::Uninterpreted(_) => 0,
+    }
+}
+
+/// Whether `p` is in the fragment: no uninterpreted sort, and every declared symbol a constant.
+fn in_fragment(p: &SmtProblem) -> bool {
+    if p.num_sorts != 0 {
+        return false;
+    }
+    let mut i: usize = 0;
+    while i < p.funs.len() {
+        if !p.funs[i].args.is_empty() {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// The binary operator of the extended language for a binary theory function.
+fn tr_op(o: &SmtOp) -> Op {
+    match o {
+        SmtOp::And | SmtOp::Bvand => Op::And,
+        SmtOp::Or | SmtOp::Bvor => Op::Or,
+        SmtOp::Xor | SmtOp::Bvxor => Op::Xor,
+        SmtOp::Bvnand => Op::Nand,
+        SmtOp::Bvnor => Op::Nor,
+        SmtOp::Bvxnor => Op::Xnor,
+        SmtOp::Bvcomp => Op::Comp,
+        SmtOp::Bvadd => Op::Add,
+        SmtOp::Bvsub => Op::Sub,
+        SmtOp::Bvmul => Op::Mul,
+        SmtOp::Bvudiv => Op::Udiv,
+        SmtOp::Bvurem => Op::Urem,
+        SmtOp::Bvsdiv => Op::Sdiv,
+        SmtOp::Bvsrem => Op::Srem,
+        SmtOp::Bvsmod => Op::Smod,
+        SmtOp::Bvshl => Op::Shl,
+        SmtOp::Bvlshr => Op::Lshr,
+        SmtOp::Bvashr => Op::Ashr,
+        SmtOp::Concat => Op::Concat,
+        SmtOp::Eq => Op::Eq,
+        SmtOp::Distinct => Op::Distinct,
+        SmtOp::Bvult => Op::Ult,
+        SmtOp::Bvule => Op::Ule,
+        SmtOp::Bvugt => Op::Ugt,
+        SmtOp::Bvuge => Op::Uge,
+        SmtOp::Bvslt => Op::Slt,
+        SmtOp::Bvsle => Op::Sle,
+        SmtOp::Bvsgt => Op::Sgt,
+        SmtOp::Bvsge => Op::Sge,
+        _ => Op::Eq,
+    }
+}
+
+/// `o` applied to the definitions `ks` from the left: `(o (o k0 k1) k2) ...`.
+fn fold_left(o: &SmtOp, ks: &Vec<usize>) -> Term {
+    let mut acc = tref(ks[0]);
+    let mut i: usize = 1;
+    while i < ks.len() {
+        acc = tbin(tr_op(o), acc, tref(ks[i]));
+        i += 1;
+    }
+    acc
+}
+
+/// The conjunction of `o` on the consecutive definitions of `ks` (chainable `=`).
+fn chain(o: &SmtOp, ks: &Vec<usize>) -> Term {
+    let mut acc = tbin(tr_op(o), tref(ks[0]), tref(ks[1]));
+    let mut i: usize = 2;
+    while i < ks.len() {
+        acc = tbin(Op::And, acc, tbin(tr_op(o), tref(ks[i - 1]), tref(ks[i])));
+        i += 1;
+    }
+    acc
+}
+
+/// The conjunction of `distinct` on every pair of definitions of `ks` (pairwise `distinct`).
+fn pairwise(ks: &Vec<usize>) -> Term {
+    let mut acc = tbin(Op::Distinct, tref(ks[0]), tref(ks[1]));
+    let mut i: usize = 0;
+    while i < ks.len() {
+        let mut j: usize = i + 1;
+        while j < ks.len() {
+            if i != 0 || j != 1 {
+                acc = tbin(Op::And, acc, tbin(Op::Distinct, tref(ks[i]), tref(ks[j])));
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    acc
+}
+
+/// Right-associative `=>` on the definitions `ks`: `(or (not k0) (or (not k1) ... k_last))`.
+fn implies(ks: &Vec<usize>) -> Term {
+    let n = ks.len();
+    let mut acc = tref(ks[n - 1]);
+    let mut i: usize = n - 1;
+    while i > 0 {
+        i -= 1;
+        acc = tbin(Op::Or, Term::Not(Box::new(tref(ks[i]))), acc);
+    }
+    acc
+}
+
+/// The theory function `o` applied to the definitions `ks` of its arguments.
+fn tr_app(o: &SmtOp, ks: &Vec<usize>) -> Term {
+    match o {
+        SmtOp::Not | SmtOp::Bvnot => Term::Not(Box::new(tref(ks[0]))),
+        SmtOp::Bvneg => Term::Neg(Box::new(tref(ks[0]))),
+        SmtOp::And | SmtOp::Or | SmtOp::Xor | SmtOp::Bvand | SmtOp::Bvor | SmtOp::Bvadd | SmtOp::Bvmul => fold_left(o, ks),
+        SmtOp::Implies => implies(ks),
+        SmtOp::Eq => chain(o, ks),
+        SmtOp::Distinct => pairwise(ks),
+        SmtOp::Ite => Term::Ite(Box::new(tref(ks[0])), Box::new(tref(ks[1])), Box::new(tref(ks[2]))),
+        SmtOp::Extract(i, j) => Term::Extract(*i, *j, Box::new(tref(ks[0]))),
+        SmtOp::Repeat(i) => Term::Repeat(*i, Box::new(tref(ks[0]))),
+        SmtOp::ZeroExtend(i) => Term::ZeroExtend(*i, Box::new(tref(ks[0]))),
+        SmtOp::SignExtend(i) => Term::SignExtend(*i, Box::new(tref(ks[0]))),
+        SmtOp::RotateLeft(i) => Term::RotateLeft(*i, Box::new(tref(ks[0]))),
+        SmtOp::RotateRight(i) => Term::RotateRight(*i, Box::new(tref(ks[0]))),
+        _ => tbin(tr_op(o), tref(ks[0]), tref(ks[1])),
+    }
+}
+
+/// The arguments `ts`, each translated and added as a definition; returns their indices.
+fn tr_args(p: &SmtProblem, dm: &Vec<usize>, env: &Vec<usize>, s: Tr, ts: &Vec<SmtTerm>) -> (Tr, Vec<usize>) {
+    let mut s = s;
+    let mut ks = Vec::new();
+    let mut i: usize = 0;
+    while i < ts.len() {
+        let (s1, t) = tr_term(p, dm, env, s, &ts[i]);
+        let (s2, k) = tr_push(s1, t);
+        s = s2;
+        ks.push(k);
+        i += 1;
+    }
+    (s, ks)
+}
+
+/// The term of the extended language for `t`. `env` gives the definition of each parameter of
+/// the enclosing definition, `dm` the definition of each definition without parameters of `p`
+/// translated so far.
+fn tr_term(p: &SmtProblem, dm: &Vec<usize>, env: &Vec<usize>, s: Tr, t: &SmtTerm) -> (Tr, Term) {
+    match t {
+        SmtTerm::BoolConst(b) => (s, Term::Const(vec![*b])),
+        SmtTerm::BvConst(bits) => (s, Term::Const(bits.clone())),
+        SmtTerm::Param(k) => (s, tref(env[*k])),
+        SmtTerm::Fun(i, _) => (s, Term::Var(*i)),
+        SmtTerm::Def(d, args) => {
+            if p.defs[*d].params.is_empty() {
+                (s, tref(dm[*d]))
+            } else {
+                let (s, ks) = tr_args(p, dm, env, s, args);
+                tr_term(p, dm, &ks, s, &p.defs[*d].body)
+            }
+        }
+        SmtTerm::App(o, args) => {
+            let (s, ks) = tr_args(p, dm, env, s, args);
+            (s, tr_app(o, &ks))
+        }
+    }
+}
+
+/// The problem of the extended language for `p`.
+fn tr_problem(p: &SmtProblem) -> Problem {
+    let mut widths = Vec::new();
+    let mut i: usize = 0;
+    while i < p.funs.len() {
+        widths.push(sort_width(&p.funs[i].ret));
+        i += 1;
+    }
+    let mut s = Tr { defs: Vec::new() };
+    let mut dm = Vec::new();
+    let no_params = Vec::new();
+    let mut d: usize = 0;
+    while d < p.defs.len() {
+        if p.defs[d].params.is_empty() {
+            let (s1, t) = tr_term(p, &dm, &no_params, s, &p.defs[d].body);
+            let (s2, k) = tr_push(s1, t);
+            s = s2;
+            dm.push(k);
+        } else {
+            dm.push(0);
+        }
+        d += 1;
+    }
+    let mut asserts = Vec::new();
+    let mut j: usize = 0;
+    while j < p.asserts.len() {
+        let (s1, t) = tr_term(p, &dm, &no_params, s, &p.asserts[j]);
+        s = s1;
+        asserts.push(t);
+        j += 1;
+    }
+    Problem { widths, defs: s.defs, asserts }
+}
+
+/// The model of `p` for the assignment `m` of the variables of its translation.
+fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
+    let mut funs = Vec::new();
+    let mut i: usize = 0;
+    while i < p.funs.len() {
+        let v = match &p.funs[i].ret {
+            SmtSort::Bool => SmtValue::Bool(m[i][0]),
+            _ => SmtValue::Bv(m[i].clone()),
+        };
+        funs.push(SmtInterp { entries: Vec::new(), default: v });
+        i += 1;
+    }
+    SmtModel { domains: Vec::new(), funs }
+}
+
+/// The solver on a general problem: `Unknown` outside the fragment; otherwise the problem is
+/// translated into the extended language and solved.
+pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
+    if !in_fragment(p) {
+        return SmtAnswer::Unknown;
+    }
+    match solve(&tr_problem(p)) {
+        Answer::Sat(m) => SmtAnswer::Sat(tr_model(p, &m)),
+        Answer::Unsat => SmtAnswer::Unsat,
+    }
+}

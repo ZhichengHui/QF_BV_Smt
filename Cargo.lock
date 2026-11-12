@@ -11,4 +11,9 @@ name = "bvsmt-cli"
 version = "0.1.0"
 dependencies = [
  "bvsmt",
+ "smtlib",
 ]
+
+[[package]]
+name = "smtlib"
+version = "0.1.0"

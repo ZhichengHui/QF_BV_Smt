@@ -1345,7 +1345,7 @@ definition "tr_app" :: \<open>SmtOp \<Rightarrow> ((64 word) list) \<Rightarrow>
       SmtOp_Bvneg \<Rightarrow> {
         Term_Neg_mk(tref(ks[0_usize]))
       },
-      SmtOp_And | SmtOp_Or | SmtOp_Xor | SmtOp_Bvand | SmtOp_Bvor | SmtOp_Bvadd | SmtOp_Bvmul \<Rightarrow> {
+      SmtOp_And | SmtOp_Or | SmtOp_Xor | SmtOp_Bvand | SmtOp_Bvor | SmtOp_Bvadd | SmtOp_Bvmul | SmtOp_Bvxor \<Rightarrow> {
         fold_left_fn(o_v, ks)
       },
       SmtOp_Implies \<Rightarrow> {

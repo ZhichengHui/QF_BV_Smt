@@ -1288,7 +1288,7 @@ fn tr_app(o: &SmtOp, ks: &Vec<usize>) -> Term {
     match o {
         SmtOp::Not | SmtOp::Bvnot => Term::Not(Box::new(tref(ks[0]))),
         SmtOp::Bvneg => Term::Neg(Box::new(tref(ks[0]))),
-        SmtOp::And | SmtOp::Or | SmtOp::Xor | SmtOp::Bvand | SmtOp::Bvor | SmtOp::Bvadd | SmtOp::Bvmul => fold_left(o, ks),
+        SmtOp::And | SmtOp::Or | SmtOp::Xor | SmtOp::Bvand | SmtOp::Bvor | SmtOp::Bvadd | SmtOp::Bvmul | SmtOp::Bvxor => fold_left(o, ks),
         SmtOp::Implies => implies(ks),
         SmtOp::Eq => chain(o, ks),
         SmtOp::Distinct => pairwise(ks),

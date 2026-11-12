@@ -12,7 +12,7 @@ import sys
 
 BIN = ["bvand", "bvor", "bvxor", "bvadd", "bvsub", "bvmul", "bvudiv", "bvurem", "bvsdiv",
        "bvsrem", "bvsmod", "bvshl", "bvlshr", "bvashr", "bvnand", "bvnor", "bvxnor"]
-ASSOC = ["bvand", "bvor", "bvadd", "bvmul"]  # the :left-assoc functions of FixedSizeBitVectors
+ASSOC = ["bvand", "bvor", "bvadd", "bvmul", "bvxor"]  # left-associative: :left-assoc in FixedSizeBitVectors, and bvxor in QF_BV
 UN = ["bvnot", "bvneg"]
 CMP = ["=", "distinct", "bvult", "bvule", "bvugt", "bvuge", "bvslt", "bvsle", "bvsgt", "bvsge"]
 

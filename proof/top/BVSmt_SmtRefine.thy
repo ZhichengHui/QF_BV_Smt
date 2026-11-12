@@ -82,6 +82,12 @@ lemma deps_ge: \<open>a \<in> set ts \<Longrightarrow> Suc (dep p n a) \<le> dep
 lemma deps_le: \<open>deps p n ts \<le> k \<Longrightarrow> a \<in> set ts \<Longrightarrow> Suc (dep p n a) \<le> k\<close>
   using deps_ge[of a ts p n] by simp
 
+lemma deps_nth: \<open>deps p n ts \<le> k \<Longrightarrow> i < length ts \<Longrightarrow> Suc (dep p n (ts ! i)) \<le> k\<close>
+  using deps_le[of p n ts k \<open>ts ! i\<close>] by simp
+
+lemma toks_nth: \<open>toks p F dl el n ts \<Longrightarrow> i < length ts \<Longrightarrow> tok p F dl el n (ts ! i)\<close>
+  by (simp add: toks_iff)
+
 text \<open>The bound \<open>n\<close> does not matter once the expanded definitions are below it.\<close>
 lemma tok_n_indep:
   \<open>tok p F dl el n t \<Longrightarrow> n \<le> n' \<Longrightarrow>
@@ -349,6 +355,15 @@ next
   then show ?case by (simp add: Let_def)
 qed simp_all
 
+lemma wn_len_0: \<open>length xs < 2 ^ 64 \<Longrightarrow> (word_of_nat (length xs) = (0 :: 64 word)) = (xs = [])\<close>
+  using unat_of_nat_eq[of \<open>length xs\<close>, where 'a=64] by (auto simp del: unat_of_nat_eq)
+
+lemma tr_term_wr_env: \<open>tr_term_m p dm (map wr env) n S t = tr_term_m p dm env n S t\<close>
+  by (rule tr_term_wr_gen) (simp_all add: wr_wr)
+
+lemma map_wr_comp: \<open>map (unat \<circ> (word_of_nat :: nat \<Rightarrow> 64 word)) xs = map wr xs\<close>
+  by (simp add: wr_def o_def)
+
 lemma tr_term_wr:
   \<open>tr_term_m p (map wr dm) (map wr env) n S t = tr_term_m p dm env n S t\<close>
   by (rule tr_term_wr_gen) (simp_all add: wr_wr)
@@ -482,6 +497,103 @@ proof -
   have l: \<open>length ksw - 1 < length ksw\<close> using a by simp
   show ?thesis using im_acc_last[OF n] nth_map[OF l, of unat] by simp
 qed
+
+subsection \<open>The loops of \<^verbatim>\<open>tr_problem\<close> in closed form\<close>
+
+definition TD :: \<open>SmtProblem \<Rightarrow> nat \<Rightarrow> Term list \<times> nat list\<close> where
+  \<open>TD p j \<equiv> foldl (tr_defs_step p) ([], []) [0..<j]\<close>
+
+lemma TD_0: \<open>TD p 0 = ([], [])\<close>
+  by (simp add: TD_def)
+
+lemma TD_Suc:
+  \<open>TD p (Suc j) =
+     (if SmtDef_params (SmtProblem_defs p ! j) = []
+      then (fst (tr_term_m p (snd (TD p j)) [] j (fst (TD p j)) (SmtDef_body (SmtProblem_defs p ! j))) @
+              [snd (tr_term_m p (snd (TD p j)) [] j (fst (TD p j)) (SmtDef_body (SmtProblem_defs p ! j)))],
+            snd (TD p j) @ [length (fst (tr_term_m p (snd (TD p j)) [] j (fst (TD p j)) (SmtDef_body (SmtProblem_defs p ! j))))])
+      else (fst (TD p j), snd (TD p j) @ [0]))\<close>
+  by (simp add: TD_def tr_defs_step_def split_def Let_def)
+
+lemma TD_len: \<open>length (snd (TD p j)) = j\<close>
+  by (induction j) (simp_all add: TD_0 TD_Suc)
+
+definition TA :: \<open>SmtProblem \<Rightarrow> nat \<Rightarrow> Term list \<times> Term list\<close> where
+  \<open>TA p j \<equiv> foldl (tr_asserts_step p (snd (TD p (length (SmtProblem_defs p)))))
+     (fst (TD p (length (SmtProblem_defs p))), []) (take j (SmtProblem_asserts p))\<close>
+
+lemma TA_0: \<open>TA p 0 = (fst (TD p (length (SmtProblem_defs p))), [])\<close>
+  by (simp add: TA_def)
+
+lemma TA_Suc:
+  \<open>j < length (SmtProblem_asserts p) \<Longrightarrow> TA p (Suc j) =
+     (fst (tr_term_m p (snd (TD p (length (SmtProblem_defs p)))) [] (length (SmtProblem_defs p)) (fst (TA p j)) (SmtProblem_asserts p ! j)),
+      snd (TA p j) @
+        [snd (tr_term_m p (snd (TD p (length (SmtProblem_defs p)))) [] (length (SmtProblem_defs p)) (fst (TA p j)) (SmtProblem_asserts p ! j))])\<close>
+  by (simp add: TA_def take_Suc_conv_app_nth tr_asserts_step_def split_def Let_def)
+
+lemma TA_final: \<open>TA p (length (SmtProblem_asserts p)) = tr_asserts_m p (tr_defs_m p)\<close>
+  by (simp add: TA_def TD_def tr_asserts_m_step tr_defs_m_step)
+
+lemma tr_problem_TA:
+  \<open>tr_problem_m p =
+     make_Problem (map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) (SmtProblem_funs p))
+       (fst (TA p (length (SmtProblem_asserts p)))) (snd (TA p (length (SmtProblem_asserts p))))\<close>
+  by (simp add: tr_problem_m_def TA_final Let_def)
+
+lemma tr_term_wr_dm: \<open>tr_term_m p (map wr dm) env n S t = tr_term_m p dm env n S t\<close>
+  by (rule tr_term_wr_gen) (simp_all add: wr_wr)
+
+text \<open>The facts \<^verbatim>\<open>tr_problem\<close> uses from \<^const>\<open>tr_pre\<close>.\<close>
+lemma tr_pre_facts:
+  assumes P: \<open>tr_pre F p\<close>
+  shows \<open>length (SmtProblem_funs p) < 2 ^ 64\<close> \<open>length (SmtProblem_funs p) \<le> F\<close>
+    \<open>length (SmtProblem_defs p) < 2 ^ 64\<close> \<open>length (SmtProblem_defs p) \<le> F\<close>
+    \<open>length (SmtProblem_asserts p) < 2 ^ 64\<close> \<open>length (SmtProblem_asserts p) \<le> F\<close>
+    \<open>\<And>d. d < length (SmtProblem_defs p) \<Longrightarrow> length (SmtDef_params (SmtProblem_defs p ! d)) < 2 ^ 64\<close>
+    \<open>\<And>d. d < length (SmtProblem_defs p) \<Longrightarrow> SmtDef_params (SmtProblem_defs p ! d) = [] \<Longrightarrow>
+        tok p F d 0 (length (SmtProblem_defs p)) (SmtDef_body (SmtProblem_defs p ! d))\<close>
+    \<open>\<And>d. d < length (SmtProblem_defs p) \<Longrightarrow> SmtDef_params (SmtProblem_defs p ! d) = [] \<Longrightarrow>
+        Suc (dep p (length (SmtProblem_defs p)) (SmtDef_body (SmtProblem_defs p ! d))) \<le> F\<close>
+    \<open>\<And>d dm S. d < length (SmtProblem_defs p) \<Longrightarrow> SmtDef_params (SmtProblem_defs p ! d) = [] \<Longrightarrow>
+        tr_term_m p dm [] (length (SmtProblem_defs p)) S (SmtDef_body (SmtProblem_defs p ! d)) =
+        tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d))\<close>
+    \<open>\<And>j. j < length (SmtProblem_asserts p) \<Longrightarrow>
+        tok p F (length (SmtProblem_defs p)) 0 (length (SmtProblem_defs p)) (SmtProblem_asserts p ! j)\<close>
+    \<open>\<And>j. j < length (SmtProblem_asserts p) \<Longrightarrow> Suc (dep p (length (SmtProblem_defs p)) (SmtProblem_asserts p ! j)) \<le> F\<close>
+proof -
+  note Q = P[unfolded tr_pre_def Let_def]
+  show \<open>length (SmtProblem_funs p) < 2 ^ 64\<close> \<open>length (SmtProblem_funs p) \<le> F\<close>
+    \<open>length (SmtProblem_defs p) < 2 ^ 64\<close> \<open>length (SmtProblem_defs p) \<le> F\<close>
+    \<open>length (SmtProblem_asserts p) < 2 ^ 64\<close> \<open>length (SmtProblem_asserts p) \<le> F\<close>
+    using Q by simp_all
+  show \<open>length (SmtDef_params (SmtProblem_defs p ! d)) < 2 ^ 64\<close> if \<open>d < length (SmtProblem_defs p)\<close> for d
+    using Q that by blast
+  fix d dm S
+  assume d: \<open>d < length (SmtProblem_defs p)\<close> and e: \<open>SmtDef_params (SmtProblem_defs p ! d) = []\<close>
+  have t: \<open>tok p F d 0 d (SmtDef_body (SmtProblem_defs p ! d))\<close> and u: \<open>Suc (dep p d (SmtDef_body (SmtProblem_defs p ! d))) \<le> F\<close>
+    using Q d e by blast+
+  note I = tok_n_indep(1)[OF t, where n'=\<open>length (SmtProblem_defs p)\<close> and dm=dm and env=\<open>[]\<close> and S=S]
+  show \<open>tok p F d 0 (length (SmtProblem_defs p)) (SmtDef_body (SmtProblem_defs p ! d))\<close>
+    \<open>Suc (dep p (length (SmtProblem_defs p)) (SmtDef_body (SmtProblem_defs p ! d))) \<le> F\<close>
+    \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S (SmtDef_body (SmtProblem_defs p ! d)) =
+        tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d))\<close>
+    using I d u by simp_all
+next
+  note Q = P[unfolded tr_pre_def Let_def]
+  fix j assume j: \<open>j < length (SmtProblem_asserts p)\<close>
+  show \<open>tok p F (length (SmtProblem_defs p)) 0 (length (SmtProblem_defs p)) (SmtProblem_asserts p ! j)\<close>
+    \<open>Suc (dep p (length (SmtProblem_defs p)) (SmtProblem_asserts p ! j)) \<le> F\<close>
+    using Q nth_mem[OF j] by blast+
+qed
+
+definition tm_entry :: \<open>SmtProblem \<Rightarrow> bool list list \<Rightarrow> nat \<Rightarrow> SmtInterp\<close> where
+  \<open>tm_entry p m i \<equiv>
+     make_SmtInterp []
+       (case SmtFun_ret (SmtProblem_funs p ! i) of SmtSort_Bool \<Rightarrow> SmtValue_Bool (m ! i ! 0) | _ \<Rightarrow> SmtValue_Bv (m ! i))\<close>
+
+lemma tr_model_tm: \<open>tr_model_m p m = make_SmtModel [] (map (tm_entry p m) [0..<length (SmtProblem_funs p)])\<close>
+  by (simp add: tr_model_m_def tm_entry_def)
 
 context BVSmt_ctx
 begin
@@ -671,7 +783,8 @@ lemma tr_app_spec [crush_specs]:
   shows \<open>\<Gamma>; tr_app op ksw \<Turnstile>\<^sub>F tr_app_contract op ksw\<close>
   apply (crush_boot f: tr_app_def contract: tr_app_contract_def)
   apply (crush_base split: SmtOp.splits)
-  sorry
+  apply ((cases ksw; simp; cases \<open>tl ksw\<close>; simp; cases \<open>tl (tl ksw)\<close>; simp); fail)+
+  done
 
 subsection \<open>\<^verbatim>\<open>tr_args\<close> and \<^verbatim>\<open>tr_term\<close>\<close>
 
@@ -703,12 +816,70 @@ definition tr_term_contract ::
                 snd (tr_term_m p (map unat dmw) (map unat envw) (length (SmtProblem_defs p)) (Tr_defs s) t),
                 TNil)\<rangle>)\<close>
 
+lemma tr_args_step_spec:
+  assumes IH2: \<open>\<And>p dmw envw s t. \<Gamma>; g p dmw envw s t \<Turnstile>\<^sub>F tr_term_contract k p dmw envw s t\<close>
+  shows \<open>\<Gamma>; fst (tr_args_rec_step (f, g)) p dmw envw s ts \<Turnstile>\<^sub>F tr_args_contract (Suc k) p dmw envw s ts\<close>
+  apply (crush_boot f: tr_args_rec_step_def contract: tr_args_contract_def)
+  apply (crush_base inline: len_def vec_push_def specs add: IH2 contracts add: tr_term_contract_def)
+  subgoal for s_ref ks_ref i_ref
+    apply (ucincl_discharge\<open>rule_tac
+      INV=\<open>\<lambda>c. \<Squnion>gs sv gk kv gi i. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>sv \<star> ks_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
+           can_alloc_reference \<star>
+           \<langle>unat i \<le> length ts \<and>
+            sv = make_Tr (fst (tr_args_m p (map unat dmw) (map unat envw) (length (SmtProblem_defs p)) (Tr_defs s) (take (unat i) ts))) \<and>
+            kv = map word_of_nat (snd (tr_args_m p (map unat dmw) (map unat envw) (length (SmtProblem_defs p)) (Tr_defs s) (take (unat i) ts))) \<and>
+            length ts - unat i \<le> c\<rangle>\<close> and
+      INV'=\<open>\<lambda>c. \<Squnion>gs sv gk kv gi i. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>sv \<star> ks_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
+           can_alloc_reference \<star>
+           \<langle>unat i < length ts \<and>
+            sv = make_Tr (fst (tr_args_m p (map unat dmw) (map unat envw) (length (SmtProblem_defs p)) (Tr_defs s) (take (unat i) ts))) \<and>
+            kv = map word_of_nat (snd (tr_args_m p (map unat dmw) (map unat envw) (length (SmtProblem_defs p)) (Tr_defs s) (take (unat i) ts))) \<and>
+            length ts - unat i \<le> Suc c\<rangle>\<close> and
+      \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base inline: vec_push_def specs add: IH2 contracts add: tr_term_contract_def
+        simp add: word_less_nat_alt unat_of_nat_eq unat_plus_one_of_less_bound tr_args_take_Suc deps_nth toks_nth)
+    done
+  done
+
+lemma tr_term_step_spec:
+  assumes IH1: \<open>\<And>p dmw envw s ts. \<Gamma>; f p dmw envw s ts \<Turnstile>\<^sub>F tr_args_contract k p dmw envw s ts\<close>
+      and IH2: \<open>\<And>p dmw envw s t. \<Gamma>; g p dmw envw s t \<Turnstile>\<^sub>F tr_term_contract k p dmw envw s t\<close>
+  shows \<open>\<Gamma>; snd (tr_args_rec_step (f, g)) p dmw envw s t \<Turnstile>\<^sub>F tr_term_contract (Suc k) p dmw envw s t\<close>
+proof (cases t)
+  case (SmtTerm_Def d args)
+  let ?b = \<open>SmtDef_body (SmtProblem_defs p ! unat d)\<close>
+  let ?L = \<open>length (SmtProblem_defs p)\<close>
+  have I: \<open>tok p urust_fuel (length dmw) (length args) ?L ?b \<and> dep p ?L ?b = dep p (unat d) ?b \<and>
+           tr_term_m p (map unat dmw) env ?L S ?b = tr_term_m p (map unat dmw) env (unat d) S ?b\<close>
+    if \<open>tok p urust_fuel (length dmw) (length args) (unat d) ?b\<close> \<open>unat d < ?L\<close> for env S
+    using tok_n_indep(1)[OF that(1), of ?L] that(2) by simp
+  have E: \<open>\<And>env S. tok p urust_fuel (length dmw) (length args) (unat d) ?b \<Longrightarrow> unat d < ?L \<Longrightarrow>
+           tr_term_m p (map unat dmw) env ?L S ?b = tr_term_m p (map unat dmw) env (unat d) S ?b\<close>
+    and Dp: \<open>tok p urust_fuel (length dmw) (length args) (unat d) ?b \<Longrightarrow> unat d < ?L \<Longrightarrow> dep p ?L ?b = dep p (unat d) ?b\<close>
+    and T: \<open>tok p urust_fuel (length dmw) (length args) (unat d) ?b \<Longrightarrow> unat d < ?L \<Longrightarrow>
+           tok p urust_fuel (length dmw) (length args) ?L ?b\<close>
+    using I by blast+
+  show ?thesis unfolding SmtTerm_Def
+    apply (crush_boot f: tr_args_rec_step_def contract: tr_term_contract_def)
+    apply (crush_base specs add: IH1 IH2 contracts add: tr_term_contract_def tr_args_contract_def
+        simp add: E Dp T tr_args_len map_wr_comp tr_term_wr_env wn_len_0)
+    done
+next
+  case (SmtTerm_App op args)
+  show ?thesis unfolding SmtTerm_App
+    apply (crush_boot f: tr_args_rec_step_def contract: tr_term_contract_def)
+    apply (crush_base specs add: IH1 IH2 contracts add: tr_term_contract_def tr_args_contract_def
+        simp add: tr_args_len map_wr_comp tr_app_wr)
+    done
+qed (crush_boot f: tr_args_rec_step_def contract: tr_term_contract_def, crush_base)+
+
 lemma tr_step_spec:
   assumes IH1: \<open>\<And>p dmw envw s ts. \<Gamma>; f p dmw envw s ts \<Turnstile>\<^sub>F tr_args_contract k p dmw envw s ts\<close>
       and IH2: \<open>\<And>p dmw envw s t. \<Gamma>; g p dmw envw s t \<Turnstile>\<^sub>F tr_term_contract k p dmw envw s t\<close>
   shows \<open>\<Gamma>; fst (tr_args_rec_step (f, g)) p dmw envw s ts \<Turnstile>\<^sub>F tr_args_contract (Suc k) p dmw envw s ts\<close>
     and \<open>\<Gamma>; snd (tr_args_rec_step (f, g)) p dmw envw s t \<Turnstile>\<^sub>F tr_term_contract (Suc k) p dmw envw s t\<close>
-  sorry
+  by (rule tr_args_step_spec[OF IH2]) (rule tr_term_step_spec[OF IH1 IH2])
 
 lemma tr_rec_spec:
   shows \<open>(\<forall>p dmw envw s ts. \<Gamma>; fst ((tr_args_rec_step ^^ k) h) p dmw envw s ts \<Turnstile>\<^sub>F tr_args_contract k p dmw envw s ts) \<and>
@@ -746,7 +917,84 @@ definition tr_problem_contract :: \<open>SmtProblem \<Rightarrow> ('s, Problem, 
 
 lemma tr_problem_spec [crush_specs]:
   shows \<open>\<Gamma>; tr_problem p \<Turnstile>\<^sub>F tr_problem_contract p\<close>
-  sorry
+proof (cases \<open>tr_pre urust_fuel p\<close>)
+  case True
+  note P = tr_pre_facts[OF True, simplified]
+  have W: \<open>unat (word_of_nat (length (SmtProblem_funs p)) :: 64 word) = length (SmtProblem_funs p)\<close>
+    \<open>unat (word_of_nat (length (SmtProblem_defs p)) :: 64 word) = length (SmtProblem_defs p)\<close>
+    \<open>unat (word_of_nat (length (SmtProblem_asserts p)) :: 64 word) = length (SmtProblem_asserts p)\<close>
+    using P(1,3,5) by (simp_all add: unat_of_nat_eq)
+  have I: \<open>\<And>r :: 64 word. unat r < length (SmtProblem_funs p) \<Longrightarrow> unat (r + 1) = Suc (unat r)\<close>
+    \<open>\<And>r :: 64 word. unat r < length (SmtProblem_defs p) \<Longrightarrow> unat (r + 1) = Suc (unat r)\<close>
+    \<open>\<And>r :: 64 word. unat r < length (SmtProblem_asserts p) \<Longrightarrow> unat (r + 1) = Suc (unat r)\<close>
+    using P(1) unat_plus_one_of_less_bound[where n=\<open>length (SmtProblem_funs p)\<close> and 'a=64] apply simp
+    using P(3) unat_plus_one_of_less_bound[where n=\<open>length (SmtProblem_defs p)\<close> and 'a=64] apply simp
+    using P(5) unat_plus_one_of_less_bound[where n=\<open>length (SmtProblem_asserts p)\<close> and 'a=64] apply simp
+    done
+  have B: \<open>\<And>r :: 64 word. unat r < length (SmtProblem_funs p) \<Longrightarrow> unat r < 18446744073709551615\<close>
+    \<open>\<And>r :: 64 word. unat r < length (SmtProblem_defs p) \<Longrightarrow> unat r < 18446744073709551615\<close>
+    \<open>\<And>r :: 64 word. unat r < length (SmtProblem_asserts p) \<Longrightarrow> unat r < 18446744073709551615\<close>
+    using P(1,3,5) by simp_all
+  show ?thesis
+    apply (crush_boot f: tr_problem_def contract: tr_problem_contract_def)
+    apply (crush_base inline: len_def vec_push_def simp add: P)
+    subgoal for widths_ref i_ref
+      apply (ucincl_discharge\<open>rule_tac
+        INV=\<open>\<lambda>c. \<Squnion>gw wv gi i. widths_ref \<mapsto>\<langle>\<top>\<rangle> gw\<down>wv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+             \<langle>unat i \<le> length (SmtProblem_funs p) \<and>
+              wv = map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) (take (unat i) (SmtProblem_funs p)) \<and>
+              length (SmtProblem_funs p) - unat i \<le> c\<rangle>\<close> and
+        INV'=\<open>\<lambda>c. \<Squnion>gw wv gi i. widths_ref \<mapsto>\<langle>\<top>\<rangle> gw\<down>wv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+             \<langle>unat i < length (SmtProblem_funs p) \<and>
+              wv = map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) (take (unat i) (SmtProblem_funs p)) \<and>
+              length (SmtProblem_funs p) - unat i \<le> Suc c\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+        in wp_bounded_while_framedI\<close>)
+      apply (crush_base inline: vec_push_def simp add: P W I B word_less_nat_alt take_Suc_conv_app_nth)
+      subgoal for gw gi i s_ref dm_ref d_ref
+        apply (ucincl_discharge\<open>rule_tac
+          INV=\<open>\<lambda>c. \<Squnion>gs sv gm mv gd d. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>sv \<star> dm_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star>
+               can_alloc_reference \<star>
+               \<langle>unat d \<le> length (SmtProblem_defs p) \<and> sv = make_Tr (fst (TD p (unat d))) \<and>
+                mv = map word_of_nat (snd (TD p (unat d))) \<and> length (SmtProblem_defs p) - unat d \<le> c\<rangle>\<close> and
+          INV'=\<open>\<lambda>c. \<Squnion>gs sv gm mv gd d. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>sv \<star> dm_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star>
+               can_alloc_reference \<star>
+               \<langle>unat d < length (SmtProblem_defs p) \<and> sv = make_Tr (fst (TD p (unat d))) \<and>
+                mv = map word_of_nat (snd (TD p (unat d))) \<and> length (SmtProblem_defs p) - unat d \<le> Suc c\<rangle>\<close> and
+          \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+          in wp_bounded_while_framedI\<close>)
+        apply (crush_base inline: vec_push_def simp add: P W I B word_less_nat_alt TD_0 TD_Suc TD_len wn_len_0
+            map_unat_wn map_wr_comp tr_term_wr_dm)
+        subgoal for gs gm gd d as_ref j_ref
+          apply (ucincl_discharge\<open>rule_tac
+            INV=\<open>\<lambda>c. \<Squnion>gs sv gm ga av gj j. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>sv \<star>
+                 dm_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>(map word_of_nat (snd (TD p (length (SmtProblem_defs p))))) \<star>
+                 as_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>av \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> can_alloc_reference \<star>
+                 \<langle>unat j \<le> length (SmtProblem_asserts p) \<and> sv = make_Tr (fst (TA p (unat j))) \<and>
+                  av = snd (TA p (unat j)) \<and> length (SmtProblem_asserts p) - unat j \<le> c\<rangle>\<close> and
+            INV'=\<open>\<lambda>c. \<Squnion>gs sv gm ga av gj j. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>sv \<star>
+                 dm_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>(map word_of_nat (snd (TD p (length (SmtProblem_defs p))))) \<star>
+                 as_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>av \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> can_alloc_reference \<star>
+                 \<langle>unat j < length (SmtProblem_asserts p) \<and> sv = make_Tr (fst (TA p (unat j))) \<and>
+                  av = snd (TA p (unat j)) \<and> length (SmtProblem_asserts p) - unat j \<le> Suc c\<rangle>\<close> and
+            \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+            in wp_bounded_while_framedI\<close>)
+          apply (crush_base inline: vec_push_def simp add: P W I B word_less_nat_alt TA_0 TA_Suc TD_len
+              map_unat_wn map_wr_comp tr_term_wr_dm tr_problem_TA)
+          done
+        done
+      done
+    done
+next
+  case False
+  then have F: \<open>tr_pre urust_fuel p = False\<close> by simp
+  show ?thesis
+    apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
+    apply (subst wp_sstriple_iff)
+    apply (simp only: tr_problem_contract_def F)
+    apply (simp add: Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    done
+qed
 
 definition tr_model_contract :: \<open>SmtProblem \<Rightarrow> bool list list \<Rightarrow> ('s, SmtModel, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>tr_model_contract p m \<equiv>
@@ -759,7 +1007,22 @@ definition tr_model_contract :: \<open>SmtProblem \<Rightarrow> bool list list \
 
 lemma tr_model_spec [crush_specs]:
   shows \<open>\<Gamma>; tr_model p m \<Turnstile>\<^sub>F tr_model_contract p m\<close>
-  sorry
+  apply (crush_boot f: tr_model_def contract: tr_model_contract_def)
+  apply (crush_base inline: len_def vec_push_def)
+  subgoal for funs_ref i_ref
+    apply (ucincl_discharge\<open>rule_tac
+      INV=\<open>\<lambda>c. \<Squnion>gf fv gi i. funs_ref \<mapsto>\<langle>\<top>\<rangle> gf\<down>fv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
+           \<langle>unat i \<le> length (SmtProblem_funs p) \<and> fv = map (tm_entry p m) [0..<unat i] \<and>
+            length (SmtProblem_funs p) - unat i \<le> c\<rangle>\<close> and
+      INV'=\<open>\<lambda>c. \<Squnion>gf fv gi i. funs_ref \<mapsto>\<langle>\<top>\<rangle> gf\<down>fv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
+           \<langle>unat i < length (SmtProblem_funs p) \<and> fv = map (tm_entry p m) [0..<unat i] \<and>
+            length (SmtProblem_funs p) - unat i \<le> Suc c\<rangle>\<close> and
+      \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base inline: vec_push_def simp add: word_less_nat_alt unat_of_nat_eq unat_plus_one_of_less_bound
+        tr_model_tm tm_entry_def split: SmtSort.splits)
+    done
+  done
 
 definition in_fragment_contract :: \<open>SmtProblem \<Rightarrow> ('s, bool, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>in_fragment_contract p \<equiv>
@@ -771,7 +1034,24 @@ definition in_fragment_contract :: \<open>SmtProblem \<Rightarrow> ('s, bool, 'a
 
 lemma in_fragment_spec [crush_specs]:
   shows \<open>\<Gamma>; in_fragment p \<Turnstile>\<^sub>F in_fragment_contract p\<close>
-  sorry
+  apply (crush_boot f: in_fragment_def contract: in_fragment_contract_def)
+  apply (crush_base inline: len_def simp add: smt_fragment_def)
+  subgoal for i_ref
+    apply (ucincl_discharge\<open>rule_tac
+      INV=\<open>\<lambda>c. \<Squnion>gi i. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
+           \<langle>unat i \<le> length (SmtProblem_funs p) \<and> (\<forall>j < unat i. SmtFun_args (SmtProblem_funs p ! j) = []) \<and>
+            length (SmtProblem_funs p) - unat i \<le> c\<rangle>\<close> and
+      INV'=\<open>\<lambda>c. \<Squnion>gi i. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
+           \<langle>unat i < length (SmtProblem_funs p) \<and> (\<forall>j < unat i. SmtFun_args (SmtProblem_funs p ! j) = []) \<and>
+            length (SmtProblem_funs p) - unat i \<le> Suc c\<rangle>\<close> and
+      \<tau>=\<open>\<lambda>r. \<Squnion>gi i. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> \<langle>r = smt_fragment p\<rangle>\<close> and
+      \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq unat_plus_one_of_less_bound smt_fragment_def wn_len_0)
+    apply (auto simp: less_Suc_eq in_set_conv_nth intro: nth_mem)
+    done
+  apply (simp add: unat_gt_0)
+  done
 
 end
 

@@ -78,6 +78,7 @@ fun tr_app_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> w
 | \<open>tr_app_m SmtOp_Bvor ks = fold_left_m SmtOp_Bvor ks\<close>
 | \<open>tr_app_m SmtOp_Bvadd ks = fold_left_m SmtOp_Bvadd ks\<close>
 | \<open>tr_app_m SmtOp_Bvmul ks = fold_left_m SmtOp_Bvmul ks\<close>
+| \<open>tr_app_m SmtOp_Bvxor ks = fold_left_m SmtOp_Bvxor ks\<close>
 | \<open>tr_app_m SmtOp_Implies ks = implies_m ks\<close>
 | \<open>tr_app_m SmtOp_Eq ks = chain_m SmtOp_Eq ks\<close>
 | \<open>tr_app_m SmtOp_Distinct ks = pairwise_m ks\<close>

@@ -216,42 +216,100 @@ proof -
   ultimately show ?thesis by simp
 qed
 
-lemma shift_step_grows:
-  \<open>grows (9 * length b + 5 * length a) (fst x) (fst (shift_step a b left x k)) \<and>
-   length (snd (shift_step a b left x k)) = length a\<close>
-proof -
-  obtain s r where x: \<open>x = (s, r)\<close> by (cases x)
-  obtain s1 e where E: \<open>eq_m s b (of_nat_m k (length a)) = (s1, e)\<close>
-    by (cases \<open>eq_m s b (of_nat_m k (length a))\<close>)
-  have eg: \<open>grows (9 * length b) s s1\<close>
-    using eq_m_grows[where s = s and a = b and b = \<open>of_nat_m k (length a)\<close>] by (simp add: E)
-  have sc: \<open>length (shift_const_m a k left) = length a\<close> by (simp add: shift_const_m_def)
-  have ig: \<open>grows (5 * length a) s1 (fst (ite_vec_m s1 e (shift_const_m a k left) r))\<close>
-    \<open>length (snd (ite_vec_m s1 e (shift_const_m a k left) r)) = length a\<close>
-    using ite_vec_m_grows[where s = s1 and c = e and a = \<open>shift_const_m a k left\<close> and b = r] sc by simp_all
-  have \<open>shift_step a b left x k = ite_vec_m s1 e (shift_const_m a k left) r\<close>
-    by (simp add: x shift_step_def E)
-  then show ?thesis using grows_trans[OF eg ig(1)] ig(2) by (simp add: x)
+text \<open>The number of stages of the barrel shifter on width \<open>n\<close>: the least \<open>i\<close> with \<open>n \<le> 2^i\<close>; stage
+  \<open>i\<close> is taken exactly when \<open>i\<close> is below it.\<close>
+definition nst :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>nst n \<equiv> LEAST i. n \<le> 2 ^ i\<close>
+
+lemma nst_le: \<open>nst n \<le> n\<close>
+  unfolding nst_def by (rule Least_le) (rule less_imp_le[OF less_exp])
+
+lemma nst_ge: \<open>n \<le> 2 ^ nst n\<close>
+  unfolding nst_def by (rule LeastI[where P = \<open>\<lambda>i. n \<le> 2 ^ i\<close> and k = n]) (rule less_imp_le[OF less_exp])
+
+lemma nst_stage: \<open>2 ^ i < n \<longleftrightarrow> i < nst n\<close>
+proof
+  assume i: \<open>2 ^ i < n\<close>
+  show \<open>i < nst n\<close>
+  proof (rule ccontr)
+    assume \<open>\<not> i < nst n\<close>
+    then have \<open>(2::nat) ^ nst n \<le> 2 ^ i\<close> by (intro power_increasing) simp_all
+    then show False using nst_ge[of n] i by linarith
+  qed
+next
+  assume \<open>i < nst n\<close>
+  then show \<open>2 ^ i < n\<close> unfolding nst_def using not_less_Least by fastforce
+qed
+
+lemma nst_mono_le: \<open>n \<le> 2 ^ k \<Longrightarrow> nst n \<le> k\<close>
+  unfolding nst_def by (rule Least_le)
+
+lemma or_m_grows': \<open>grows 4 s (fst (or_m s a b))\<close>
+  using or_grows by simp
+
+lemma shift_fold_grows:
+  \<open>k \<le> length b \<Longrightarrow>
+   (\<lambda>(s1, r1, g1, p1). grows (5 * length a * min k (nst (length a)) + 4 * k) s s1 \<and> length r1 = length a \<and>
+      (2 ^ k < length a \<longrightarrow> p1 = 2 ^ k) \<and> (\<not> 2 ^ k < length a \<longrightarrow> length a \<le> p1))
+   (foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<k])\<close>
+proof (induction k)
+  case 0
+  then show ?case by (simp add: grows_refl shift_const_m_def)
+next
+  case (Suc k)
+  obtain s1 r1 g1 p1 where F: \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<k] = (s1, r1, g1, p1)\<close>
+    by (cases \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<k]\<close>)
+  have I: \<open>grows (5 * length a * min k (nst (length a)) + 4 * k) s s1\<close> \<open>length r1 = length a\<close>
+    \<open>2 ^ k < length a \<longrightarrow> p1 = 2 ^ k\<close> \<open>\<not> 2 ^ k < length a \<longrightarrow> length a \<le> p1\<close>
+    using Suc F by auto
+  show ?case
+  proof (cases \<open>2 ^ k < length a\<close>)
+    case True
+    have km: \<open>k < nst (length a)\<close> using nst_stage True by blast
+    have p1: \<open>p1 = 2 ^ k\<close> using I(3) True by simp
+    obtain s2 x where 2: \<open>ite_vec_m s1 (b ! k) (shift_const_m r1 p1 left) r1 = (s2, x)\<close>
+      by (cases \<open>ite_vec_m s1 (b ! k) (shift_const_m r1 p1 left) r1\<close>)
+    have G: \<open>grows (5 * length a) s1 s2\<close> \<open>length x = length a\<close>
+      using ite_vec_m_grows[of \<open>shift_const_m r1 p1 left\<close> s1 \<open>b ! k\<close> r1] 2 I(2) by (simp_all add: shift_const_m_def)
+    define p' where \<open>p' = (if p1 \<le> length a - p1 then p1 + p1 else length a)\<close>
+    have st: \<open>shift_step a b left (s1, r1, g1, p1) k = (s2, x, g1, p')\<close>
+      using 2 True p1 by (simp add: shift_step_def p'_def)
+    have n: \<open>5 * length a * min k (nst (length a)) + 4 * k + 5 * length a \<le>
+             5 * length a * min (Suc k) (nst (length a)) + 4 * Suc k\<close> using km by simp
+    have pn: \<open>(2 ^ Suc k < length a \<longrightarrow> p' = 2 ^ Suc k) \<and> (\<not> 2 ^ Suc k < length a \<longrightarrow> length a \<le> p')\<close>
+      using p1 by (auto simp: p'_def)
+    show ?thesis using F st grows_mono[OF grows_trans[OF I(1) G(1)] n] G(2) pn by simp
+  next
+    case False
+    have km: \<open>nst (length a) \<le> k\<close> using nst_stage False by (meson not_less)
+    have np: \<open>\<not> p1 < length a\<close> using I(4) False by simp
+    have st: \<open>shift_step a b left (s1, r1, g1, p1) k = (fst (or_m s1 g1 (b ! k)), r1, snd (or_m s1 g1 (b ! k)), p1)\<close>
+      using np by (simp add: shift_step_def split_def Let_def)
+    have n: \<open>5 * length a * min k (nst (length a)) + 4 * k + 4 \<le>
+             5 * length a * min (Suc k) (nst (length a)) + 4 * Suc k\<close> using km by simp
+    have pn: \<open>\<not> 2 ^ Suc k < length a\<close> using nst_stage[of \<open>Suc k\<close>] km by simp
+    show ?thesis using F st grows_mono[OF grows_trans[OF I(1) or_m_grows'] n] I(2) I(4) pn False
+      by (simp add: le_trans[OF _ power_increasing[of k \<open>Suc k\<close> 2]])
+  qed
 qed
 
 lemma shift_m_grows:
   assumes \<open>length b = length a\<close>
-  shows \<open>grows (14 * length a * length a) s (fst (shift_m s a b left)) \<and>
+  shows \<open>grows (5 * length a * nst (length a) + 4 * length a + 5 * length a) s (fst (shift_m s a b left)) \<and>
          length (snd (shift_m s a b left)) = length a\<close>
 proof -
-  have st: \<open>\<And>x i. length (snd x) = length a \<Longrightarrow> length (snd (shift_step a b left x i)) = length a \<and>
-      grows (14 * length a) (fst x) (fst (shift_step a b left x i))\<close>
-    using shift_step_grows[where a = a and b = b and left = left] assms by simp
-  have Q0: \<open>length (snd (s, replicate (length a) (lconst False))) = length a\<close> by simp
-  have \<open>length (snd (shift_m s a b left)) = length a \<and>
-      grows (14 * length a * length [0..<length a]) (fst (s, replicate (length a) (lconst False)))
-        (fst (shift_m s a b left))\<close>
-    unfolding shift_m_def
-    using foldl_grows[where g = fst and Q = \<open>\<lambda>x. length (snd x) = length a\<close> and f = \<open>shift_step a b left\<close>
-        and k = \<open>14 * length a\<close> and xs = \<open>[0..<length a]\<close>
-        and x = \<open>(s, replicate (length a) (lconst False))\<close>, OF st Q0]
-    by simp
-  then show ?thesis by simp
+  obtain s1 r1 g1 p1 where F: \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<length b] = (s1, r1, g1, p1)\<close>
+    by (cases \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<length b]\<close>)
+  have I: \<open>grows (5 * length a * min (length b) (nst (length a)) + 4 * length b) s s1\<close> \<open>length r1 = length a\<close>
+    using shift_fold_grows[of \<open>length b\<close> b a s left] F by auto
+  have G: \<open>grows (5 * length a) s1 (fst (ite_vec_m s1 g1 (replicate (length a) (lconst False)) r1))\<close>
+    \<open>length (snd (ite_vec_m s1 g1 (replicate (length a) (lconst False)) r1)) = length a\<close>
+    using ite_vec_m_grows[of \<open>replicate (length a) (lconst False)\<close> s1 g1 r1] by simp_all
+  have e: \<open>shift_m s a b left = ite_vec_m s1 g1 (replicate (length a) (lconst False)) r1\<close>
+    using F by (simp add: shift_m_def)
+  have n: \<open>5 * length a * min (length b) (nst (length a)) + 4 * length b + 5 * length a \<le>
+           5 * length a * nst (length a) + 4 * length a + 5 * length a\<close> using assms by simp
+  show ?thesis using e grows_mono[OF grows_trans[OF I(1) G(1)] n] G(2) by simp
 qed
 
 lemma length_zext_m: \<open>length (zext_m a w) = w\<close>
@@ -320,6 +378,12 @@ proof -
     \<open>19 * w * w \<le> 100 * (w + 1) ^ 2\<close> \<open>14 * w * w \<le> 100 * (w + 1) ^ 2\<close>
     \<open>76 * w * w + 92 * w + 14 \<le> 100 * (w + 1) ^ 2\<close> \<open>0 \<le> 100 * (w + 1) ^ 2\<close>
     by (simp_all add: power2_eq_square algebra_simps)
+  have p2: \<open>5 * w * nst w + 4 * w + 5 * w \<le> 100 * (w + 1) ^ 2\<close>
+  proof -
+    have a: \<open>5 * w * nst w \<le> 5 * (w * w)\<close> using nst_le[of w] by simp
+    have b: \<open>5 * (w * w) + 9 * w \<le> 100 * (w + 1) ^ 2\<close> by (simp add: power2_eq_square algebra_simps)
+    show ?thesis using a b by linarith
+  qed
   have key: \<open>\<exists>n. n \<le> 100 * (w + 1) ^ 2 \<and> grows n s s' \<and> length r = bin_width op w (length b)\<close>
   proof (cases op)
     case BinOp_And
@@ -370,14 +434,14 @@ proof -
     case BinOp_Shl
     then have H: \<open>shift_m s a b True = (s', r)\<close> using assms(2) by (simp add: blast_bin_m_def)
     show ?thesis
-      using shift_m_grows[where b = b and a = a and s = s and left = True] assms(1) H p1
-      by (intro exI[where x = \<open>14 * w * w\<close>]) (simp add: BinOp_Shl bin_width_def w_def)
+      using shift_m_grows[where b = b and a = a and s = s and left = True] assms(1) H p1 p2
+      by (intro exI[where x = \<open>5 * w * nst w + 4 * w + 5 * w\<close>]) (simp add: BinOp_Shl bin_width_def w_def)
   next
     case BinOp_Lshr
     then have H: \<open>shift_m s a b False = (s', r)\<close> using assms(2) by (simp add: blast_bin_m_def)
     show ?thesis
-      using shift_m_grows[where b = b and a = a and s = s and left = False] assms(1) H p1
-      by (intro exI[where x = \<open>14 * w * w\<close>]) (simp add: BinOp_Lshr bin_width_def w_def)
+      using shift_m_grows[where b = b and a = a and s = s and left = False] assms(1) H p1 p2
+      by (intro exI[where x = \<open>5 * w * nst w + 4 * w + 5 * w\<close>]) (simp add: BinOp_Lshr bin_width_def w_def)
   next
     case BinOp_Concat
     then have E: \<open>s' = s\<close> \<open>r = concat_m a b\<close> using assms(2) by (simp_all add: blast_bin_m_def)

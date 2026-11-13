@@ -339,20 +339,32 @@ definition "bv_shift_const" :: \<open>(Lit list) \<Rightarrow> (64 word) \<Right
 definition "bv_shift" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> bool \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_shift \<equiv> \<lambda>cnf a b left. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut r = { let init_1 = vec_from_elem(lit_const(false), len(a)); \<llangle>init_1 :: Lit list\<rrangle> };
-    let mut s = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* s) < len(a) {
-      let destr_2 = bv_eq(* cnf, b, bv_of_nat(* s, len(a)));
-      let c1 = destr_2.0;
-      let e = destr_2.1;
-      let destr_3 = bv_ite(c1, e, bv_shift_const(a, * s, left), * r);
-      let c2 = destr_3.0;
-      let x = destr_3.1;
-      * cnf = c2;
-      * r = x;
-      * s += 1_usize;
+    let mut r = { let init_1 = bv_shift_const(a, 0_usize, left); \<llangle>init_1 :: Lit list\<rrangle> };
+    let mut big = lit_const(false);
+    let mut p = 1_usize;
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(b) {
+      if (* p) < len(a) {
+        let destr_2 = bv_ite(* cnf, b[* i], bv_shift_const(* r, * p, left), * r);
+        let c1 = destr_2.0;
+        let x = destr_2.1;
+        * cnf = c1;
+        * r = x;
+        if (* p) <= (len(a) - (* p)) {
+          * p = (* p) + (* p);
+        } else {
+          * p = len(a);
+        }
+      } else {
+        let destr_3 = gate_or(* cnf, * big, b[* i]);
+        let c1 = destr_3.0;
+        let o_v = destr_3.1;
+        * cnf = c1;
+        * big = o_v;
+      };
+      * i += 1_usize;
     };
-    (* cnf, * r)
+    bv_ite(* cnf, * big, vec_from_elem(lit_const(false), len(a)), * r)
   \<rbrakk>\<close>
 
 (* Rust: bv_zext *)

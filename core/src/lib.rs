@@ -405,20 +405,35 @@ fn bv_shift_const(a: &Vec<Lit>, s: usize, left: bool) -> Vec<Lit> {
     r
 }
 
-/// `a` shifted by `b`: the result is `a` shifted by `s` if `b = s` for some `s` below the
-/// width, and 0 otherwise.
+/// `a` shifted by `b`, by a barrel shifter. Stage `i` shifts by `p = 2^i` if bit `i` of `b` is
+/// set, for every `i` with `2^i` below the width. The bits of `b` from the first `i` with `2^i`
+/// at least the width on are or-ed into `big`: if `big` holds, the shift is at least the width and
+/// the result is 0. Once `2 p` exceeds the width, `p` is set to the width instead of doubled, so
+/// that it does not overflow.
 fn bv_shift(cnf: Cnf, a: &Vec<Lit>, b: &Vec<Lit>, left: bool) -> (Cnf, Vec<Lit>) {
     let mut cnf = cnf;
-    let mut r = vec![lit_const(false); a.len()];
-    let mut s: usize = 0;
-    while s < a.len() {
-        let (c1, e) = bv_eq(cnf, b, &bv_of_nat(s, a.len()));
-        let (c2, x) = bv_ite(c1, e, &bv_shift_const(a, s, left), &r);
-        cnf = c2;
-        r = x;
-        s += 1;
+    let mut r = bv_shift_const(a, 0, left);
+    let mut big = lit_const(false);
+    let mut p: usize = 1;
+    let mut i: usize = 0;
+    while i < b.len() {
+        if p < a.len() {
+            let (c1, x) = bv_ite(cnf, b[i], &bv_shift_const(&r, p, left), &r);
+            cnf = c1;
+            r = x;
+            if p <= a.len() - p {
+                p = p + p;
+            } else {
+                p = a.len();
+            }
+        } else {
+            let (c1, o) = gate_or(cnf, big, b[i]);
+            cnf = c1;
+            big = o;
+        }
+        i += 1;
     }
-    (cnf, r)
+    bv_ite(cnf, big, &vec![lit_const(false); a.len()], &r)
 }
 
 /// `a` extended with zeros to width `w`.

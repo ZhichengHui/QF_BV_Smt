@@ -1393,7 +1393,7 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
 
 // ---------------------------------------------------------------------------------------------
 // Size checks. The solver of the extended language (`solve`) is verified for problems whose
-// `size_bound` (spec/BVSmt_Spec.thy) is below 2^64, and the translation indexes its definitions
+// `size_bound` (spec/QFBV_Spec.thy) is below 2^64, and the translation indexes its definitions
 // by `usize`. `check_sat` answers `Unknown` when the translation would add 2^63 definitions or
 // more, or when the translated problem is too large for `solve`. The computations below saturate
 // at 2^63: each returns the exact value if it is below 2^63, and 2^63 otherwise.

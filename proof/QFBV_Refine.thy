@@ -1,5 +1,5 @@
-theory BVSmt_Refine
-  imports BVSmt_Defs
+theory QFBV_Refine
+  imports QFBV_Defs
 begin
 
 section \<open>The Rust functions compute their models\<close>
@@ -417,7 +417,7 @@ lemma divrem_m_dr:
   by (simp add: divrem_m_def Let_def split_def dr3_def dr4_def dr5_def dr6_def dr7_def dr8_def dr9_def
       dr10_def dr11_def dr12_def)
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>Literals, clauses, gates\<close>
@@ -1535,7 +1535,7 @@ lemma cnf_of_init: \<open>make_Cnf 1 [] = cnf_of (1, [])\<close>
 lemma cnf_of_init_st: \<open>cnf_of init_st = cnf_of (Suc 0, [[lconst True]])\<close>
   by (simp add: init_st_def)
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>\<^verbatim>\<open>blast_bin\<close>\<close>

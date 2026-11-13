@@ -1,5 +1,5 @@
-theory BVSmt_SmtModel
-  imports "BVSmt_Spec.BVSmt_Spec"
+theory QFBV_SmtModel
+  imports "QFBV_CoreSpec.QFBV_CoreSpec"
 begin
 
 section \<open>The translation of general problems: functional model\<close>

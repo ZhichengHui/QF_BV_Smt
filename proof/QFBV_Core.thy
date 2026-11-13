@@ -1,5 +1,5 @@
-theory BVSmt_Core
-  imports BVSmt_Spec.BVSmt_Spec
+theory QFBV_Core
+  imports "QFBV_CoreSpec.QFBV_CoreSpec"
 begin
 
 section \<open>The core language\<close>
@@ -7,13 +7,13 @@ section \<open>The core language\<close>
 text \<open>
   The core language (\<^typ>\<open>CoreTerm\<close>, \<^typ>\<open>CoreProblem\<close>) is the language the solver bit-blasts: the
   terms of the extended language are rewritten into it by \<^verbatim>\<open>lower_problem\<close>. This theory gives
-  it the same kind of semantics as \<^verbatim>\<open>BVSmt_Spec\<close> gives the extended language, with the names
+  it the same kind of semantics as \<^verbatim>\<open>QFBV_Spec\<close> gives the extended language, with the names
   prefixed by \<open>c\<close>: widths, well-sortedness, evaluation, models and the size bound of a core
   problem. It is part of the proof, not of the specification.
 
   The widths of core terms may be 0 (the rewriting of \<open>repeat\<close> starts from the empty constant).
   The semantics of the twelve binary operators, \<open>bvnot\<close>, \<open>extract\<close> and \<open>ite\<close> are those of
-  \<^verbatim>\<open>BVSmt_Spec\<close> (with \<open>2^0 - 1 = 0\<close> for the empty constant).
+  \<^verbatim>\<open>QFBV_Spec\<close> (with \<open>2^0 - 1 = 0\<close> for the empty constant).
 \<close>
 
 subsection \<open>Sorts\<close>
@@ -153,7 +153,7 @@ definition csize_bound :: \<open>CoreProblem \<Rightarrow> nat\<close> where
      1000 * (1 + sum_list ws + length ws + length (CoreProblem_defs p) + length (CoreProblem_asserts p) +
              sum_list (map (cterm_weight ws ds) (CoreProblem_defs p @ CoreProblem_asserts p)))\<close>
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>The contract\<close>

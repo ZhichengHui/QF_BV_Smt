@@ -1,8 +1,8 @@
-theory BVSmt_Encode
-  imports BVSmt_Circuits
+theory QFBV_Encode
+  imports QFBV_Circuits
 begin
 
-text \<open>The proofs below were written against the statements of \<^verbatim>\<open>BVSmt_Circuits\<close> alone;
+text \<open>The proofs below were written against the statements of \<^verbatim>\<open>QFBV_Circuits\<close> alone;
   its simplification rules change the shape of their goals, so they are not used here.\<close>
 declare lits_lt_Nil lits_lt_Cons lits_lt_append Lit_var_lconst Lit_neg_lconst Lit_var_lneg
    Lit_neg_lneg lit_sem_lneg cnf_sem_Nil cnf_sem_Cons cnf_sem_append unat_won val_Nil

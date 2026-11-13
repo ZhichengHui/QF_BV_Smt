@@ -1,4 +1,4 @@
-session "BVSmt" = "AutoCorrode" +
+session "QFBV" = "AutoCorrode" +
   options [document = false]
   theories
-    BVSmt_Funs
+    QFBV_Funs

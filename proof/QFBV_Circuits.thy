@@ -1,5 +1,5 @@
-theory BVSmt_Circuits
-  imports BVSmt_Defs
+theory QFBV_Circuits
+  imports QFBV_Defs
 begin
 
 section \<open>Basic facts\<close>

@@ -1,5 +1,5 @@
-theory BVSmt_LowerBound
-  imports BVSmt_Lower BVSmt_Bound
+theory QFBV_LowerBound
+  imports QFBV_Lower QFBV_Bound
 begin
 
 section \<open>The size bound of the specification covers the rewriting\<close>
@@ -807,10 +807,10 @@ lemma term_weight_take:
   shows \<open>term_weight ws (def_widths ws [] (take j D)) (D ! j) = term_weight ws (def_widths ws [] D) (D ! j)\<close>
 proof -
   have \<open>def_widths ws [] D = def_widths ws (def_widths ws [] (take j D)) (drop j D)\<close>
-    using BVSmt_Lower.def_widths_append[of ws \<open>[]\<close> \<open>take j D\<close> \<open>drop j D\<close>] by simp
+    using QFBV_Lower.def_widths_append[of ws \<open>[]\<close> \<open>take j D\<close> \<open>drop j D\<close>] by simp
   then obtain e where \<open>def_widths ws [] D = def_widths ws [] (take j D) @ e\<close>
-    using BVSmt_Lower.def_widths_prefix by metis
-  then show ?thesis using term_weight_append[OF BVSmt_Lower.defs_wt_nth[OF assms]] by simp
+    using QFBV_Lower.def_widths_prefix by metis
+  then show ?thesis using term_weight_append[OF QFBV_Lower.defs_wt_nth[OF assms]] by simp
 qed
 
 lemma sum_list_const: \<open>(\<forall>x \<in> set xs. f x = c) \<Longrightarrow> sum_list (map f xs) = length xs * c\<close>
@@ -842,7 +842,7 @@ next
   note IH = Suc.IH[OF f B jle]
   note I = ldefs_loop[OF dwt jle f B, unfolded ldefs_inv_def Let_def, simplified]
   have L: \<open>lok ?ws L\<close> and D: \<open>dm_ok (def_widths ?ws [] (take j ?D)) dm L\<close> using I by simp_all
-  note C = lower_m_cost[OF BVSmt_Lower.defs_wt_nth[OF dwt jl] L D a Suc.prems(2)[unfolded R],
+  note C = lower_m_cost[OF QFBV_Lower.defs_wt_nth[OF dwt jl] L D a Suc.prems(2)[unfolded R],
       unfolded K_def term_weight_take[OF dwt jl]]
   have H: \<open>lcost ?ws L1 \<le> lcost ?ws L + 800 * term_weight ?ws ?ds (?D ! j)\<close> using C by linarith
   have S: \<open>sum_list (map (term_weight ?ws ?ds) (take (Suc j) ?D)) =

@@ -1,5 +1,5 @@
-theory BVSmt_Lower
-  imports BVSmt_Core
+theory QFBV_Lower
+  imports QFBV_Core
 begin
 
 section \<open>The rewriting into the core language\<close>
@@ -8,7 +8,7 @@ text \<open>
   Functional models of the Rust functions that rewrite a problem of the extended language into
   the core language (\<^verbatim>\<open>push_def\<close>, \<^verbatim>\<open>lower_bin\<close>, \<^verbatim>\<open>lower\<close>, \<^verbatim>\<open>lower_problem\<close>), and the proof
   that the rewriting preserves the semantics: the core problem is well-sorted and has the same
-  models as the extended problem. \<^verbatim>\<open>BVSmt_LowerRefine\<close> proves that the Rust functions compute
+  models as the extended problem. \<^verbatim>\<open>QFBV_LowerRefine\<close> proves that the Rust functions compute
   these models.
 
   The state of the rewriting (\<^verbatim>\<open>Lower\<close>) is modelled by \<open>lst\<close>: the core definitions built so far

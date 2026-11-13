@@ -1,5 +1,5 @@
-theory BVSmt_SmtBound
-  imports BVSmt_SmtSize
+theory QFBV_SmtBound
+  imports QFBV_SmtSize
 begin
 
 section \<open>A bound on the size of the translation\<close>

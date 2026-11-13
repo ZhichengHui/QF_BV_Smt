@@ -1,5 +1,5 @@
-theory BVSmt_Proof
-  imports BVSmt_Refine BVSmt_Encode BVSmt_Dpll BVSmt_Bound BVSmt_LowerRefine BVSmt_LowerBound
+theory QFBV_Proof
+  imports QFBV_Refine QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound
 begin
 
 section \<open>Bounds relating the size of a term to its weight\<close>
@@ -680,7 +680,7 @@ proof -
     using encode_sound[OF assms(1-3) assms(6)] by simp
 qed
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>The solver meets its contract\<close>
@@ -977,20 +977,20 @@ end
 
 subsection \<open>The specification over all instances with enough fuel\<close>
 
-context BVSmt_heap
+context QFBV_heap
 begin
 
-text \<open>\<^verbatim>\<open>BVSmt_heap\<close> has the assumptions of \<^locale>\<open>BVSmt_ctx\<close> (it drops only the fuel, which carries
-  no assumption), so its parameters with any fuel form an instance of \<^locale>\<open>BVSmt_ctx\<close> and the
-  contract lemmas of \<^locale>\<open>BVSmt_ctx\<close> apply.\<close>
-lemma BVSmt_ctxI:
-  \<open>BVSmt_ctx update_raw_fun dereference_raw_fun reference_raw_fun points_to_raw' gref_can_store
+text \<open>\<^verbatim>\<open>QFBV_heap\<close> has the assumptions of \<^locale>\<open>QFBV_ctx\<close> (it drops only the fuel, which carries
+  no assumption), so its parameters with any fuel form an instance of \<^locale>\<open>QFBV_ctx\<close> and the
+  contract lemmas of \<^locale>\<open>QFBV_ctx\<close> apply.\<close>
+lemma QFBV_ctxI:
+  \<open>QFBV_ctx update_raw_fun dereference_raw_fun reference_raw_fun points_to_raw' gref_can_store
      new_gref_can_store can_alloc_reference prism_1 prism_2 prism_3 prism_4 prism_5 prism_6
      prism_7 prism_8 prism_9 prism_10 prism_11 prism_12 prism_13 prism_14 prism_15 prism_16 prism_17\<close>
   by intro_locales
 
-text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>BVSmt_Spec\<close>. The bound on
-  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close>, which \<open>BVSmt_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close>
+text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>QFBV_Spec\<close>. The bound on
+  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close>, which \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close>
   supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
 theorem solve_correct:
   shows \<open>solve_correct \<Gamma>\<close>
@@ -999,7 +999,7 @@ proof (unfold solve_correct_def, intro allI impI)
   assume \<open>problem_wt p \<and> sizes_ok p\<close>
   then have ov: \<open>size_bound p < 2 ^ 64\<close> by (simp add: sizes_ok_def)
   have \<open>\<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close> if \<open>size_bound p \<le> fuel\<close> for fuel
-    by (rule BVSmt_ctx.solve_spec[OF BVSmt_ctxI that ov])
+    by (rule QFBV_ctx.solve_spec[OF QFBV_ctxI that ov])
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
     by (intro exI[of _ \<open>size_bound p\<close>]) simp
 qed

@@ -1,5 +1,5 @@
-theory BVSmt_SmtSize
-  imports "BVSmt_Smt.BVSmt_SmtModel"
+theory QFBV_SmtSize
+  imports "QFBV_Smt.QFBV_SmtModel"
 begin
 
 section \<open>The size checks of \<^verbatim>\<open>check_sat\<close>\<close>
@@ -452,7 +452,7 @@ proof -
   show ?thesis using a l by (auto intro: tix_mono)
 qed
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>Saturating arithmetic\<close>
@@ -1138,7 +1138,7 @@ definition fuel_smt :: \<open>SmtProblem \<Rightarrow> nat\<close> where
   \<open>fuel_smt p \<equiv> Suc (length (SmtProblem_defs p) + length (SmtProblem_asserts p) +
      sum_list (map (size \<circ> SmtDef_body) (SmtProblem_defs p)) + sum_list (map size (SmtProblem_asserts p)))\<close>
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 lemma size_pre_of_wt:

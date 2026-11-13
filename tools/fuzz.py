@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Differential test of bvsmt against z3 on random QF_BV problems.
+"""Differential test of qfbv against z3 on random QF_BV problems.
 
-Usage: fuzz.py BVSMT Z3 N [SEED]
+Usage: fuzz.py QFBV Z3 N [SEED]
 
 For each random problem: both solvers must agree on sat/unsat, and for sat the model printed by
-bvsmt, added to the problem as assertions, must be satisfiable for z3.
+qfbv, added to the problem as assertions, must be satisfiable for z3.
 """
 import random
 import subprocess
@@ -105,15 +105,15 @@ def run(cmd, src):
 
 
 def main():
-    bvsmt, z3, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
+    qfbv, z3, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
     random.seed(int(sys.argv[4]) if len(sys.argv) > 4 else 0)
     stats = {"sat": 0, "unsat": 0}
     for k in range(n):
         p = problem()
-        ours = run([bvsmt], p + "(get-model)\n").split("\n")
+        ours = run([qfbv], p + "(get-model)\n").split("\n")
         theirs = run([z3, "-in"], p).strip()
         if ours[0] != theirs:
-            print("MISMATCH (bvsmt %s, z3 %s):\n%s" % (ours[0], theirs, p))
+            print("MISMATCH (qfbv %s, z3 %s):\n%s" % (ours[0], theirs, p))
             sys.exit(1)
         stats[theirs] += 1
         if theirs == "sat":

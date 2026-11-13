@@ -1,5 +1,6 @@
-session "BVSmt_Spec" = "BVSmt" +
+session "QFBV_Spec" = "QFBV" +
   options [document = false]
   theories
+    SMT_Types
     SMT_Semantics
-    BVSmt_Spec
+    QFBV_Spec

@@ -1,11 +1,11 @@
 //! The solver binary: the shared SMT-LIB front end (`frontend/`, not verified) with this
-//! solver's `check_sat` (`core/`, verified). Usage: `bvsmt FILE.smt2`, or the script on standard
+//! solver's `check_sat` (`core/`, verified). Usage: `qfbv FILE.smt2`, or the script on standard
 //! input.
 
-smtlib::bridge!(bvsmt);
+smtlib::bridge!(qfbv);
 
 fn solve(p: &smtlib::SmtProblem) -> smtlib::SmtAnswer {
-    answer_from_core(bvsmt::check_sat(&problem_to_core(p)))
+    answer_from_core(qfbv::check_sat(&problem_to_core(p)))
 }
 
 fn main() {

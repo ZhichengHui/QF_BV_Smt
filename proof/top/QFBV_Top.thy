@@ -1,14 +1,14 @@
-theory BVSmt_Top
-  imports "BVSmt_Proof.BVSmt_Proof" BVSmt_SmtSize BVSmt_SmtBound BVSmt_SmtRefine
+theory QFBV_Top
+  imports "QFBV_Proof.QFBV_Proof" QFBV_SmtSize QFBV_SmtBound QFBV_SmtRefine
 begin
 
 section \<open>The top-level theorem\<close>
 
-text \<open>\<^verbatim>\<open>check_sat\<close> satisfies \<^const>\<open>BVSmt_ctx.check_sat_contract\<close> for every fuel at least
+text \<open>\<^verbatim>\<open>check_sat\<close> satisfies \<^const>\<open>QFBV_ctx.check_sat_contract\<close> for every fuel at least
   \<open>fuel_top\<close> of the problem. The proof composes the contracts of \<^verbatim>\<open>in_fragment\<close>,
   \<^verbatim>\<open>tr_size\<close>, \<^verbatim>\<open>tr_problem\<close>, \<^verbatim>\<open>size_ok\<close>, \<^verbatim>\<open>solve\<close> and \<^verbatim>\<open>tr_model\<close> with the
-  semantic correctness of the translation (\<^verbatim>\<open>BVSmt_SmtModel\<close>) and the size bound
-  (\<^verbatim>\<open>BVSmt_SmtBound\<close>).\<close>
+  semantic correctness of the translation (\<^verbatim>\<open>QFBV_SmtModel\<close>) and the size bound
+  (\<^verbatim>\<open>QFBV_SmtBound\<close>).\<close>
 
 lemma tr_asserts_count:
   \<open>length (snd (foldl (tr_asserts_step p dm) (S, acc) ts)) = length acc + length ts\<close>
@@ -37,7 +37,7 @@ lemma tsz_ge:
   shows \<open>unat x = sat T \<Longrightarrow> unat xa = 9223372036854775808 \<Longrightarrow> xa \<le> x \<Longrightarrow> \<not> T < 2 ^ 63\<close>
   by (simp add: word_le_nat_alt sat_def min_def split: if_splits)
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 text \<open>The contract of \<^verbatim>\<open>solve\<close> with the size condition in the precondition, so that it
@@ -128,10 +128,10 @@ end
 
 subsection \<open>The statement over all instances with enough fuel\<close>
 
-context BVSmt_heap
+context QFBV_heap
 begin
 
-text \<open>The top-level statement \<^const>\<open>check_sat_correct\<close> of \<^verbatim>\<open>BVSmt_Spec\<close>: for every problem
+text \<open>The top-level statement \<^const>\<open>check_sat_correct\<close> of \<^verbatim>\<open>QFBV_Spec\<close>: for every problem
   satisfying the precondition, \<^verbatim>\<open>check_sat\<close> satisfies its contract with any fuel at least
   \<^const>\<open>fuel_top\<close> of the problem.\<close>
 theorem check_sat_correct:
@@ -140,7 +140,7 @@ proof (unfold check_sat_correct_def, intro allI impI)
   fix p :: SmtProblem
   assume \<open>smt_wf p \<and> smt_repr_ok p\<close>
   have \<open>\<Gamma>; check_sat fuel p \<Turnstile>\<^sub>F check_sat_contract p\<close> if \<open>fuel_top p \<le> fuel\<close> for fuel
-    by (rule BVSmt_ctx.check_sat_spec[OF BVSmt_ctxI that])
+    by (rule QFBV_ctx.check_sat_spec[OF QFBV_ctxI that])
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; check_sat fuel p \<Turnstile>\<^sub>F check_sat_contract p\<close>
     by (intro exI[of _ \<open>fuel_top p\<close>]) simp
 qed

@@ -1,5 +1,5 @@
-theory BVSmt_Bound
-  imports BVSmt_Defs
+theory QFBV_Bound
+  imports QFBV_Defs
 begin
 
 section \<open>The size bound of the specification covers the fuel\<close>

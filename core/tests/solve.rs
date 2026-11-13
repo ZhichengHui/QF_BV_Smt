@@ -2,7 +2,7 @@
 //! the front end). Every `Sat` answer's assignment is checked by evaluating the assertions with
 //! the independent evaluator below.
 
-use bvsmt::*;
+use qfbv::*;
 
 fn var(i: usize) -> Term {
     Term::Var(i)

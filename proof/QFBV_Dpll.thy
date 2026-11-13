@@ -1,5 +1,5 @@
-theory BVSmt_Dpll
-  imports BVSmt_Defs
+theory QFBV_Dpll
+  imports QFBV_Defs
 begin
 
 section \<open>DPLL: pure facts\<close>
@@ -436,7 +436,7 @@ lemma read_model_sigma:
 
 section \<open>DPLL: contracts\<close>
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 text \<open>The clauses mention only variables below \<open>n\<close> and are short enough for the fuel.\<close>

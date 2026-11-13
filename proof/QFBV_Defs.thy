@@ -1,11 +1,11 @@
-theory BVSmt_Defs
-  imports BVSmt_Core
+theory QFBV_Defs
+  imports QFBV_Core
 begin
 
 section \<open>Functional models of the Rust functions\<close>
 
 text \<open>
-  Each Rust function of the bit-blaster has a functional model here; \<^verbatim>\<open>BVSmt_Refine\<close> proves
+  Each Rust function of the bit-blaster has a functional model here; \<^verbatim>\<open>QFBV_Refine\<close> proves
   that the Rust function computes its model. A CNF state is modelled by \<open>st\<close>: the number of
   variables as a natural number (so that it cannot wrap around) and the clauses. Loops that run
   over \<open>i = 0, 1, \<dots>, n - 1\<close> are modelled by \<^const>\<open>foldl\<close> over \<open>[0..<n]\<close>.

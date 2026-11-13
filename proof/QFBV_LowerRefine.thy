@@ -1,5 +1,5 @@
-theory BVSmt_LowerRefine
-  imports BVSmt_Lower
+theory QFBV_LowerRefine
+  imports QFBV_Lower
 begin
 
 lemma unat_of_nat_64': \<open>n < 18446744073709551616 \<Longrightarrow> unat (word_of_nat n :: 64 word) = n\<close>
@@ -87,7 +87,7 @@ subsection \<open>The precondition of \<^verbatim>\<open>lower\<close>\<close>
 
 text \<open>What each call of the recursion needs: indices in bounds, the arithmetic on widths without
   overflow, and the loop for \<open>repeat\<close> within the fuel \<open>N\<close>. The facts are stated on the results of
-  the model, as \<open>bok\<close> of \<^verbatim>\<open>BVSmt_Refine\<close> does for \<^verbatim>\<open>blast\<close>.\<close>
+  the model, as \<open>bok\<close> of \<^verbatim>\<open>QFBV_Refine\<close> does for \<^verbatim>\<open>blast\<close>.\<close>
 definition kok :: \<open>lst \<Rightarrow> nat \<Rightarrow> bool\<close> where
   \<open>kok L k \<equiv> k < length (snd L) \<and> k < 2 ^ 64 \<and> snd L ! k < 2 ^ 64 \<and> 1 \<le> snd L ! k\<close>
 
@@ -513,7 +513,7 @@ next
   show ?case using Ic Ia Ib kok_of_env[OF EC] kok_of_env[OF EA] kok_of_env[OF EB] c a b by simp
 qed
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>The builders of core terms\<close>

@@ -1500,25 +1500,46 @@ fn op_width(op: &Op, wa: usize, wb: usize) -> usize {
     }
 }
 
-/// `(w + 1)^3`.
-fn cube1(w: usize) -> usize {
-    let v = sat_add(w, 1);
-    sat_mul(v, sat_mul(v, v))
+/// The least `i` with `n <= 2^i` (at most 64).
+fn stages(n: usize) -> usize {
+    let mut i: usize = 0;
+    let mut p: usize = 1;
+    while p < n && i < 64 {
+        p = sat_mul(p, 2);
+        i += 1;
+    }
+    i
 }
 
-/// The width of `t` and its weight (`width` and `term_weight` of the specification), for the
-/// widths `ws` of the variables and `ds` of the definitions.
+/// A bound on the CNF variables and clauses that blasting the rewriting of the binary operator
+/// `op` on operands of width `w` adds (`ebin` of the specification).
+fn bin_cost(op: &Op, w: usize) -> usize {
+    match op {
+        Op::Mul | Op::Udiv | Op::Urem | Op::Sdiv | Op::Srem | Op::Smod => {
+            sat_add(sat_add(sat_mul(sat_mul(76, w), w), sat_mul(300, w)), 20)
+        }
+        Op::Shl | Op::Lshr | Op::Ashr => sat_add(sat_mul(sat_mul(10, w), stages(w)), sat_mul(30, w)),
+        _ => sat_add(sat_mul(30, w), 20),
+    }
+}
+
+/// The width of `t` and its cost: the sum over its subterms of `4 * (width + 1)` and of the
+/// CNF bound of the node (`width`, `lweight` and `ecount` of the specification), for the widths
+/// `ws` of the variables and `ds` of the definitions.
 fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
     let (w, g) = match t {
         Term::Const(bs) => (bs.len(), 0),
         Term::Var(i) => (ws[*i], 0),
         Term::Ref(i) => (ds[*i], 0),
         Term::Not(a) => term_size(ws, ds, a),
-        Term::Neg(a) => term_size(ws, ds, a),
+        Term::Neg(a) => {
+            let (wa, ga) = term_size(ws, ds, a);
+            (wa, sat_add(sat_mul(15, wa), ga))
+        }
         Term::Bin(op, a, b) => {
             let (wa, ga) = term_size(ws, ds, a);
             let (wb, gb) = term_size(ws, ds, b);
-            (op_width(op, wa, wb), sat_add(ga, gb))
+            (op_width(op, wa, wb), sat_add(bin_cost(op, wa), sat_add(ga, gb)))
         }
         Term::Extract(hi, lo, a) => {
             let (_, ga) = term_size(ws, ds, a);
@@ -1534,7 +1555,7 @@ fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
         }
         Term::SignExtend(i, a) => {
             let (wa, ga) = term_size(ws, ds, a);
-            (sat_add(wa, *i), ga)
+            (sat_add(wa, *i), sat_add(sat_mul(5, *i), ga))
         }
         Term::RotateLeft(_, a) => term_size(ws, ds, a),
         Term::RotateRight(_, a) => term_size(ws, ds, a),
@@ -1542,13 +1563,14 @@ fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
             let (_, gc) = term_size(ws, ds, c);
             let (wa, ga) = term_size(ws, ds, a);
             let (_, gb) = term_size(ws, ds, b);
-            (wa, sat_add(gc, sat_add(ga, gb)))
+            (wa, sat_add(sat_mul(5, wa), sat_add(gc, sat_add(ga, gb))))
         }
     };
-    (w, sat_add(cube1(w), g))
+    (w, sat_add(sat_mul(4, sat_add(w, 1)), g))
 }
 
-/// Whether the `size_bound` of `q` is below 2^63.
+/// Whether the `ovf_bound` of `q` is below 2^63 (`sizes_ok` of the specification): then no
+/// counter of the solver overflows.
 fn size_ok(q: &Problem) -> bool {
     let mut ds = Vec::new();
     let mut d: usize = 0;
@@ -1578,7 +1600,7 @@ fn size_ok(q: &Problem) -> bool {
         n = sat_add(n, g);
         j += 1;
     }
-    sat_mul(1000000, n) < cap()
+    sat_mul(4, n) < cap()
 }
 
 /// The solver on a general problem: `Unknown` outside the fragment, or if the problem is too

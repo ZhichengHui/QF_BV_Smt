@@ -42,17 +42,17 @@ text \<open>The problems on which this solver promises an answer other than \<^v
   being in its fragment). The range is part of the specification and fixed: it is stated with the
   measures of \<^verbatim>\<open>SMT_Semantics\<close>, which describe the problem as written, and does not depend on
   how the solver works. A change of the solver must keep answering every problem of the range.
-  The range of this solver: \<^const>\<open>smt_size\<close> at most \<open>2^28\<close> (about \<open>2.7 \<cdot> 10^8\<close>), every
-  bit-vector width at most \<open>2^20\<close>, and every multiplication, division and remainder of width at
-  most \<open>2^12\<close> (\<^const>\<open>smt_max_mul_width\<close>), and every \<open>distinct\<close> of bit-vectors with at most
-  \<open>2^8\<close> arguments (\<^const>\<open>smt_max_bv_distinct\<close>). The QF\_BV problems of the SMT-LIB 2025 release
-  have size at most about \<open>1.5 \<cdot> 10^8\<close>, widths at most \<open>2^15\<close> and multiplications, divisions and
-  remainders of width at most \<open>2^11\<close>, and \<open>distinct\<close> of bit-vectors with at most 10 arguments; the benchmarks of Kov\'asznai, Fr\"ohlich and Biere
-  (\<^url>\<open>https://fmv.jku.at/smtbench\<close>) have widths at most \<open>29980\<close>.\<close>
+  The range of this solver: \<^const>\<open>smt_size\<close> at most \<open>2^30\<close> (about \<open>1.07 \<cdot> 10^9\<close>), every
+  bit-vector width at most \<open>2^18\<close>, every multiplication, division and remainder of width at most
+  \<open>2^12\<close> (\<^const>\<open>smt_max_mul_width\<close>), and every \<open>distinct\<close> with at most \<open>2^8\<close> arguments
+  (\<^const>\<open>smt_max_distinct\<close>). The QF\_BV problems of the SMT-LIB 2025 release have size at most
+  about \<open>1.5 \<cdot> 10^8\<close>, widths at most \<open>2^15\<close>, multiplications, divisions and remainders of width
+  at most \<open>2^11\<close>, and \<open>distinct\<close> with at most 10 arguments; the benchmarks of Kov\'asznai,
+  Fr\"ohlich and Biere (\<^url>\<open>https://fmv.jku.at/smtbench\<close>) have widths at most \<open>29980\<close>.\<close>
 definition smt_in_range :: \<open>SmtProblem \<Rightarrow> bool\<close> where
   \<open>smt_in_range p \<equiv>
-     smt_size p \<le> 2 ^ 28 \<and> smt_max_width p \<le> 2 ^ 20 \<and> smt_max_mul_width p \<le> 2 ^ 12 \<and>
-     smt_max_bv_distinct p \<le> 2 ^ 8\<close>
+     smt_size p \<le> 2 ^ 30 \<and> smt_max_width p \<le> 2 ^ 18 \<and> smt_max_mul_width p \<le> 2 ^ 12 \<and>
+     smt_max_distinct p \<le> 2 ^ 8\<close>
 
 subsection \<open>The contract\<close>
 

@@ -1636,18 +1636,39 @@ definition "op_width" :: \<open>Op \<Rightarrow> (64 word) \<Rightarrow> (64 wor
     }
   \<rbrakk>\<close>
 
-(* Rust: cube1 *)
-definition "cube1" :: \<open>(64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>cube1 \<equiv> \<lambda>w. FunctionBody \<lbrakk>
-    let v = sat_add(w, 1_usize);
-    sat_mul(v, sat_mul(v, v))
+(* Rust: stages *)
+definition "stages" :: \<open>(64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>stages \<equiv> \<lambda>n. FunctionBody \<lbrakk>
+    let mut i = 0_usize;
+    let mut p = 1_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* p) < n) && ((* i) < 64_usize) {
+      * p = sat_mul(* p, 2_usize);
+      * i += 1_usize;
+    };
+    * i
+  \<rbrakk>\<close>
+
+(* Rust: bin_cost *)
+definition "bin_cost" :: \<open>Op \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>bin_cost \<equiv> \<lambda>op_v w. FunctionBody \<lbrakk>
+    match op_v {
+      Op_Mul | Op_Udiv | Op_Urem | Op_Sdiv | Op_Srem | Op_Smod \<Rightarrow> {
+        sat_add(sat_add(sat_mul(sat_mul(76_usize, w), w), sat_mul(300_usize, w)), 20_usize)
+      },
+      Op_Shl | Op_Lshr | Op_Ashr \<Rightarrow> {
+        sat_add(sat_mul(sat_mul(10_usize, w), stages(w)), sat_mul(30_usize, w))
+      },
+      _ \<Rightarrow> {
+        sat_add(sat_mul(30_usize, w), 20_usize)
+      }
+    }
   \<rbrakk>\<close>
 
 text \<open>Recursive group term_size: defined by iterating term_size_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
 definition "term_size_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>term_size_rec_step \<equiv> \<lambda>rec_term_size. (\<lambda>ws ds t. FunctionBody \<lbrakk>
-    let destr_10 = match t {
+    let destr_11 = match t {
       Term_Const(bs) \<Rightarrow> {
         (len(bs), 0_usize)
       },
@@ -1661,39 +1682,42 @@ definition "term_size_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 
         \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
       },
       Term_Neg(a) \<Rightarrow> {
-        \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
-      },
-      Term_Bin(op_v, a, b) \<Rightarrow> {
         let destr_1 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
         let wa = destr_1.0;
         let ga = destr_1.1;
-        let destr_2 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, b);
-        let wb = destr_2.0;
-        let gb = destr_2.1;
-        (op_width(op_v, wa, wb), sat_add(ga, gb))
+        (wa, sat_add(sat_mul(15_usize, wa), ga))
+      },
+      Term_Bin(op_v, a, b) \<Rightarrow> {
+        let destr_2 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_2.0;
+        let ga = destr_2.1;
+        let destr_3 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, b);
+        let wb = destr_3.0;
+        let gb = destr_3.1;
+        (op_width(op_v, wa, wb), sat_add(bin_cost(op_v, wa), sat_add(ga, gb)))
       },
       Term_Extract(hi, lo, a) \<Rightarrow> {
-        let destr_3 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
-        let ga = destr_3.1;
+        let destr_4 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let ga = destr_4.1;
         (sat_add(hi - lo, 1_usize), ga)
       },
       Term_Repeat(i, a) \<Rightarrow> {
-        let destr_4 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
-        let wa = destr_4.0;
-        let ga = destr_4.1;
-        (sat_mul(i, wa), ga)
-      },
-      Term_ZeroExtend(i, a) \<Rightarrow> {
         let destr_5 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
         let wa = destr_5.0;
         let ga = destr_5.1;
-        (sat_add(wa, i), ga)
+        (sat_mul(i, wa), ga)
       },
-      Term_SignExtend(i, a) \<Rightarrow> {
+      Term_ZeroExtend(i, a) \<Rightarrow> {
         let destr_6 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
         let wa = destr_6.0;
         let ga = destr_6.1;
         (sat_add(wa, i), ga)
+      },
+      Term_SignExtend(i, a) \<Rightarrow> {
+        let destr_7 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_7.0;
+        let ga = destr_7.1;
+        (sat_add(wa, i), sat_add(sat_mul(5_usize, i), ga))
       },
       Term_RotateLeft(_, a) \<Rightarrow> {
         \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
@@ -1702,19 +1726,19 @@ definition "term_size_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 
         \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
       },
       Term_Ite(c, a, b) \<Rightarrow> {
-        let destr_7 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, c);
-        let gc = destr_7.1;
-        let destr_8 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
-        let wa = destr_8.0;
-        let ga = destr_8.1;
-        let destr_9 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, b);
-        let gb = destr_9.1;
-        (wa, sat_add(gc, sat_add(ga, gb)))
+        let destr_8 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, c);
+        let gc = destr_8.1;
+        let destr_9 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, a);
+        let wa = destr_9.0;
+        let ga = destr_9.1;
+        let destr_10 = \<epsilon>\<open>rec_term_size\<close>(ws, ds, b);
+        let gb = destr_10.1;
+        (wa, sat_add(sat_mul(5_usize, wa), sat_add(gc, sat_add(ga, gb))))
       }
     };
-    let w = destr_10.0;
-    let g = destr_10.1;
-    (w, sat_add(cube1(w), g))
+    let w = destr_11.0;
+    let g = destr_11.1;
+    (w, sat_add(sat_mul(4_usize, sat_add(w, 1_usize)), g))
   \<rbrakk>)\<close>
 
 (* Rust: term_size *)
@@ -1755,7 +1779,7 @@ definition "size_ok" :: \<open>Problem \<Rightarrow> ('s, bool, 'abort, 'i promp
       * n = sat_add(* n, g);
       * j += 1_usize;
     };
-    sat_mul(1000000_usize, * n) < cap()
+    sat_mul(4_usize, * n) < cap()
   \<rbrakk>\<close>
 
 (* Rust: check_sat *)

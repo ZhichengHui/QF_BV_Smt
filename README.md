@@ -26,7 +26,8 @@ Isabelle/HOL，并证明它满足以 SMT-LIB 语义写成的顶层规约。另�
 1. 检查 `p` 是否在本求解器的片段内（没有未解释类型，声明的符号都是常量），不在则回答 `Unknown`；
 2. 用饱和到 `2^63` 的算术计算翻译后的定义个数，达到 `2^63` 则回答 `Unknown`；
 3. 把 `p` 翻译成扩展位向量语言的问题 `q`（Bool 为宽度 1，每个参数成为一个定义，带参数的定义在应用处展开）；
-4. 计算 `q` 的 `size_bound`，不小于 `2^63` 则回答 `Unknown`（核心的证明要求这个界）；
+4. 计算 `q` 的溢出界 `ovf_bound`（每个子项的宽度加一的 4 倍，加上位爆破的 CNF 规模估计），`4·(…)` 不小于 `2^63`
+   则回答 `Unknown`（核心的计数器不溢出要求这个界；输入范围内的问题都通过这项检查）；
 5. 调用 `solve q`；`Sat` 时把赋值翻译回通用模型。
 
 核心覆盖 SMT-LIB 2.6 的 FixedSizeBitVectors 理论和 QF_BV 逻辑的全部运算，以及 Core 理论的全部运算。
@@ -48,10 +49,14 @@ SMT-COMP 模型验证的格式；标准错误上不输出任何内容。
 `spec/SMT_Types.thy` 写出从 Rust 代码生成的通用数据类型（`SmtProblem`、`SmtModel`、`SmtAnswer` 等）的每个构造子、
 字段及其类型，并由生成的类型证明，Rust 中这些类型一旦改变，构建就失败。`spec/SMT_Semantics.thy` 定义通用问题的语义：良类型 `smt_wf`、表示条件 `smt_repr_ok`（每个 `Vec` 少于 `2^63`
 个元素，任何 Rust 值都满足）、求值 `smt_eval`、模型 `smt_is_model`、可满足性 `smt_satisfiable`，以及规模度量
-`smt_size_bound`。`spec/QFBV_Spec.thy` 中：
+`smt_size`、`smt_max_width`、`smt_max_mul_width`、`smt_max_distinct`。`spec/QFBV_Spec.thy` 中：
+
+- `smt_in_range p`：本求解器的输入范围，固定不变：`smt_size p ≤ 2^30`、位向量宽度不超过 `2^18`、乘除和取余的宽度
+  不超过 `2^12`、每个 `distinct` 的参数不超过 `2^8` 个。SMT-LIB 2025 的 QF_BV 问题的规模最多约 `1.5·10^8`、宽度
+  最多 `2^15`、乘除宽度最多 `2^11`、`distinct` 最多 10 个参数，都在范围内；
 
 - `check_sat_contract p`：前置条件 `smt_wf p ∧ smt_repr_ok p`；回答 `Sat m` 时 `smt_is_model p m`，回答 `Unsat`
-  时 `p` 不可满足，回答 `Unknown` 时 `p` 不在片段内或 `smt_size_bound p ≥ 2^64`；不 panic；
+  时 `p` 不可满足，回答 `Unknown` 时 `p` 不在片段内或不在 `smt_in_range` 内；不 panic；
 - `check_sat_correct Γ`：对每个满足前置条件的 `p`，存在 `N`，使翻译取任意不小于 `N` 的 fuel 时 `check_sat p`
   满足 `check_sat_contract p`。fuel 是翻译给每个循环和递归设的次数上限，对它取存在量词。
 
@@ -73,8 +78,8 @@ locale `QFBV_heap` 的假设（AutoCorrode 引用模型的假设）；未验证�
 | `proof/core_spec/QFBV_CoreSpec.thy` | 核心 `solve` 的规约：核心问题的语义、`solve_contract`、`solve_correct` |
 | `proof/QFBV_Core.thy` … `proof/QFBV_Proof.thy` | 核心 `solve`：改写、位爆破、DPLL 的模型与精化，`solve_spec`、`solve_correct` |
 | `proof/smt/QFBV_SmtModel.thy` | 翻译的函数式模型 `tr_problem_m`、`tr_model_m`；翻译保持语义（`tr_problem_sem`、`tr_model_correct`、`tr_complete`） |
-| `proof/top/QFBV_SmtSize.thy` | 规模检查 `tr_size`、`size_ok` 的契约（饱和算术），及其前置条件由良类型推出 |
-| `proof/top/QFBV_SmtBound.thy` | `smt_size_bound p < 2^64` 时两项规模检查都通过：`tr_size_bound` |
+| `proof/top/QFBV_SmtSize.thy` | 规模检查 `tr_size`、`size_ok`（计算 `ovf_bound`）的契约（饱和算术），及其前置条件由良类型推出 |
+| `proof/top/QFBV_SmtBound.thy` | 输入范围内（`smt_in_range p`）两项规模检查都通过：`tr_size_bound` |
 | `proof/top/QFBV_SmtRefine.thy` | Rust 翻译函数的行为等于函数式模型：`tr_problem_spec`、`tr_model_spec`、`in_fragment_spec` |
 | `proof/top/QFBV_Top.thy` | `check_sat_spec` 与顶层定理 `check_sat_correct` |
 

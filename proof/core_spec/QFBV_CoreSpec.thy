@@ -388,14 +388,47 @@ end
 
 subsection \<open>The overflow condition\<close>
 
-text \<open>The condition on the size of a problem: its \<^const>\<open>size_bound\<close> fits in a 64-bit word. It is
-  sufficient for the solver's \<^verbatim>\<open>usize\<close> counters to stay within range, but it is not necessary:
-  \<^const>\<open>size_bound\<close> is a generous over-estimate (a factor 1000000 and the cube of every width), so
-  the condition also excludes problems the solver would handle. For example, a single
-  \<open>bvmul\<close> of width 30000 already makes \<^const>\<open>size_bound\<close> exceed \<open>2^64\<close>. The condition is
-  separate from the fuel: the top-level statement quantifies the fuel existentially.\<close>
+text \<open>\<^const>\<open>size_bound\<close> bounds the fuel; it may be large. The counters of the solver (of type
+  \<^verbatim>\<open>usize\<close>) are bounded by the following linear measures instead.\<close>
+
+text \<open>The weight of a term for the counters of the rewriting: one plus the width of each subterm.\<close>
+definition lweight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>lweight ws ds t \<equiv> sum_list (map (\<lambda>u. width ws ds u + 1) (subterms t))\<close>
+
+text \<open>The number of stages of the barrel shifter on width \<open>n\<close>: the least \<open>i\<close> with \<open>n \<le> 2^i\<close>.\<close>
+definition nst :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>nst n \<equiv> LEAST i. n \<le> 2 ^ i\<close>
+
+text \<open>A bound on the variables and clauses that blasting the rewriting of a binary operation on
+  operands of width \<open>w\<close> adds: quadratic for multiplication, division and remainder, \<open>w\<close> times the
+  number of stages for shifts, linear otherwise.\<close>
+definition ebin :: \<open>Op \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>ebin op w \<equiv>
+     if op \<in> {Op_Mul, Op_Udiv, Op_Urem, Op_Sdiv, Op_Srem, Op_Smod} then 76 * w * w + 300 * w + 20
+     else if op \<in> {Op_Shl, Op_Lshr, Op_Ashr} then 10 * w * nst w + 30 * w
+     else 30 * w + 20\<close>
+
+definition enode :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>enode ws ds u \<equiv> (case u of
+     Term_Bin op a b \<Rightarrow> ebin op (width ws ds a)
+   | Term_Neg a \<Rightarrow> 15 * width ws ds a
+   | Term_SignExtend i a \<Rightarrow> 5 * unat i
+   | Term_Ite c a b \<Rightarrow> 5 * width ws ds a
+   | _ \<Rightarrow> 0)\<close>
+
+definition ecount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>ecount ws ds t \<equiv> sum_list (map (enode ws ds) (subterms t))\<close>
+
+definition ovf_bound :: \<open>Problem \<Rightarrow> nat\<close> where
+  \<open>ovf_bound p \<equiv>
+     let ws = var_widths p in
+     let ds = def_widths ws [] (Problem_defs p) in
+     4 * (1 + sum_list ws + length ws + length (Problem_defs p) + length (Problem_asserts p) +
+          sum_list (map (\<lambda>t. 4 * lweight ws ds t + ecount ws ds t) (Problem_defs p @ Problem_asserts p)))\<close>
+
+text \<open>The condition on the size of a problem: \<^const>\<open>ovf_bound\<close> is below \<open>2^63\<close>.\<close>
 definition sizes_ok :: \<open>Problem \<Rightarrow> bool\<close> where
-  \<open>sizes_ok p \<equiv> size_bound p < 2 ^ 64\<close>
+  \<open>sizes_ok p \<equiv> ovf_bound p < 2 ^ 63\<close>
 
 subsection \<open>The statement over all instances with enough fuel\<close>
 

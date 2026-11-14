@@ -1391,7 +1391,7 @@ definition fb_set :: \<open>CoreProblem \<Rightarrow> nat set\<close> where
             (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
 
 lemma fuel_bound_fb_set: \<open>fuel_bound p = Max (fb_set p)\<close>
-  by (simp add: fuel_bound_def fb_set_def Let_def split_def)
+  by (simp only: fuel_bound_def fb_set_def Let_def split_def)
 
 lemma fb_ge: \<open>x \<in> fb_set p \<Longrightarrow> x \<le> fuel_bound p\<close>
   unfolding fuel_bound_fb_set by (rule Max_ge) (simp_all add: fb_set_def)

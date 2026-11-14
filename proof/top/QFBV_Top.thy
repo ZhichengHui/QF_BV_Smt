@@ -40,22 +40,21 @@ lemma tsz_ge:
 context QFBV_ctx
 begin
 
-text \<open>The contract of \<^verbatim>\<open>solve\<close> with the size condition in the precondition, so that it
+text \<open>The contract of \<^verbatim>\<open>solve\<close> with the overflow condition in the precondition, so that it
   holds for every problem given enough fuel.\<close>
 definition solve_contract_b :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>solve_contract_b q \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>problem_wt q \<and> size_bound q < 2 ^ 63\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>problem_wt q \<and> sizes_ok q\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of Answer_Sat m \<Rightarrow> is_model q m | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model q m)\<rangle>)\<close>
 
 lemma solve_spec_b:
   assumes \<open>size_bound q \<le> urust_fuel\<close>
   shows \<open>\<Gamma>; solve q \<Turnstile>\<^sub>F solve_contract_b q\<close>
-proof (cases \<open>size_bound q < 2 ^ 63\<close>)
+proof (cases \<open>sizes_ok q\<close>)
   case True
-  then have b: \<open>size_bound q < 2 ^ 64\<close> by simp
   show ?thesis
-    apply (rule satisfies_function_contract_weaken[OF solve_spec[OF assms b]])
+    apply (rule satisfies_function_contract_weaken[OF solve_spec[OF assms True]])
       apply (simp_all add: solve_contract_b_def solve_contract_def Let_def)
       apply (crush_base)+
     done
@@ -106,7 +105,7 @@ next
   have UC: \<open>\<not> smt_satisfiable p\<close>
     if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 63\<close> \<open>\<forall>m. \<not> is_model ?q m\<close>
     using tr_complete[OF W that(1) L64[OF that(2)]] that(3) by blast
-  have B: \<open>tsize p < 2 ^ 63\<close> \<open>size_bound ?q < 2 ^ 63\<close> if \<open>smt_fragment p\<close> \<open>smt_sizes_ok p\<close>
+  have B: \<open>tsize p < 2 ^ 63\<close> \<open>sizes_ok ?q\<close> if \<open>smt_fragment p\<close> \<open>smt_in_range p\<close>
     using tr_size_bound[OF W that] by simp_all
   show ?thesis
     apply (crush_boot f: check_sat_def contract: check_sat_contract_def)

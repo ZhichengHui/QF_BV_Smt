@@ -1,11 +1,11 @@
-theory BVSmt_Defs
-  imports BVSmt_Core
+theory QFBV_Defs
+  imports QFBV_Core
 begin
 
 section \<open>Functional models of the Rust functions\<close>
 
 text \<open>
-  Each Rust function of the bit-blaster has a functional model here; \<^verbatim>\<open>BVSmt_Refine\<close> proves
+  Each Rust function of the bit-blaster has a functional model here; \<^verbatim>\<open>QFBV_Refine\<close> proves
   that the Rust function computes its model. A CNF state is modelled by \<open>st\<close>: the number of
   variables as a natural number (so that it cannot wrap around) and the clauses. Loops that run
   over \<open>i = 0, 1, \<dots>, n - 1\<close> are modelled by \<^const>\<open>foldl\<close> over \<open>[0..<n]\<close>.
@@ -128,14 +128,20 @@ definition shift_const_m :: \<open>Lit list \<Rightarrow> nat \<Rightarrow> bool
                else (if s < length a - j then a ! (j + s) else lconst False))
        [0..<length a]\<close>
 
-definition shift_step :: \<open>Lit list \<Rightarrow> Lit list \<Rightarrow> bool \<Rightarrow> st \<times> Lit list \<Rightarrow> nat \<Rightarrow> st \<times> Lit list\<close> where
-  \<open>shift_step a b left \<equiv> \<lambda>(s, r) k.
-     let (s1, e) = eq_m s b (of_nat_m k (length a)) in
-     ite_vec_m s1 e (shift_const_m a k left) r\<close>
+text \<open>A stage of the barrel shifter \<^verbatim>\<open>bv_shift\<close>: the state is the CNF state, the bits shifted so
+  far, the literal \<open>g\<close> (some bit of \<open>b\<close> worth at least the width is set) and the shift \<open>p\<close> of
+  the stage.\<close>
+definition shift_step :: \<open>Lit list \<Rightarrow> Lit list \<Rightarrow> bool \<Rightarrow> st \<times> Lit list \<times> Lit \<times> nat \<Rightarrow> nat \<Rightarrow> st \<times> Lit list \<times> Lit \<times> nat\<close> where
+  \<open>shift_step a b left \<equiv> \<lambda>(s, r, g, p) i.
+     if p < length a then
+       (let (s1, x) = ite_vec_m s (b ! i) (shift_const_m r p left) r in
+        (s1, x, g, if p \<le> length a - p then p + p else length a))
+     else (let (s1, h) = or_m s g (b ! i) in (s1, r, h, p))\<close>
 
 definition shift_m :: \<open>st \<Rightarrow> Lit list \<Rightarrow> Lit list \<Rightarrow> bool \<Rightarrow> st \<times> Lit list\<close> where
   \<open>shift_m s a b left \<equiv>
-     foldl (shift_step a b left) (s, replicate (length a) (lconst False)) [0..<length a]\<close>
+     let (s1, r, g, p) = foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<length b] in
+     ite_vec_m s1 g (replicate (length a) (lconst False)) r\<close>
 
 definition zext_m :: \<open>Lit list \<Rightarrow> nat \<Rightarrow> Lit list\<close> where
   \<open>zext_m a w \<equiv> map (\<lambda>i. if i < length a then a ! i else lconst False) [0..<w]\<close>

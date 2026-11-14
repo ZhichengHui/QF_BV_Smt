@@ -1,5 +1,5 @@
-theory BVSmt_Circuits
-  imports BVSmt_Defs
+theory QFBV_Circuits
+  imports QFBV_Defs
 begin
 
 section \<open>Basic facts\<close>
@@ -1004,14 +1004,53 @@ proof (intro conjI allI impI)
   qed
 qed
 
+lemma shv_comp:
+  \<open>x < 2 ^ n \<Longrightarrow> shv left n (shv left n x y1) y2 = shv left n x (y1 + y2)\<close>
+  by (cases left) (simp_all add: shv_def mod_mult_left_eq power_add mult.assoc div_mult2_eq)
+
+lemma shv_big: \<open>x < 2 ^ n \<Longrightarrow> n \<le> y \<Longrightarrow> shv left n x y = 0\<close>
+proof (cases left)
+  case True
+  assume \<open>n \<le> y\<close>
+  then have \<open>(2::nat) ^ n dvd 2 ^ y\<close> by (simp add: le_imp_power_dvd)
+  then have \<open>(2::nat) ^ n dvd x * 2 ^ y\<close> by (rule dvd_mult)
+  then show ?thesis using True by (simp add: shv_def dvd_eq_mod_eq_0)
+next
+  case False
+  assume x: \<open>x < 2 ^ n\<close> and y: \<open>n \<le> y\<close>
+  have \<open>(2::nat) ^ n \<le> 2 ^ y\<close> using y by simp
+  then have \<open>x < 2 ^ y\<close> using x by linarith
+  then show ?thesis using False by (simp add: shv_def div_less)
+qed
+
+lemma shv_lt: \<open>x < 2 ^ n \<Longrightarrow> shv left n x y < 2 ^ n\<close>
+  by (cases left) (auto simp: shv_def intro: le_less_trans[OF div_le_dividend])
+
+lemma val_eq_0_iff: \<open>val \<sigma> xs = 0 \<longleftrightarrow> (\<forall>l \<in> set xs. \<not> lit_sem \<sigma> l)\<close>
+proof (induction xs rule: rev_induct)
+  case (snoc x xs)
+  then show ?case by (auto simp: val_snoc)
+qed simp
+
+lemma val_take_drop: \<open>val \<sigma> b = val \<sigma> (take m b) + 2 ^ min m (length b) * val \<sigma> (drop m b)\<close>
+  using val_append[of \<sigma> \<open>take m b\<close> \<open>drop m b\<close>] by (simp add: min.commute)
+
+lemma val_take_Suc:
+  \<open>k < length b \<Longrightarrow> val \<sigma> (take (Suc k) b) = val \<sigma> (take k b) + 2 ^ k * of_bool (lit_sem \<sigma> (b ! k))\<close>
+  by (simp add: take_Suc_conv_app_nth val_snoc min_def)
+
 lemma shift_step_m_mono: \<open>fst (fst x) \<le> fst (fst (shift_step a b left x k))\<close>
 proof -
-  obtain s r where x: \<open>x = (s, r)\<close> by (cases x)
-  obtain s1 e where 1: \<open>eq_m s b (of_nat_m k (length a)) = (s1, e)\<close> by (cases \<open>eq_m s b (of_nat_m k (length a))\<close>)
-  have \<open>shift_step a b left x k = ite_vec_m s1 e (shift_const_m a k left) r\<close>
-    using x 1 by (simp add: shift_step_def)
-  moreover have \<open>fst s \<le> fst s1\<close> using eq_m_mono[of s b \<open>of_nat_m k (length a)\<close>] 1 by simp
-  ultimately show ?thesis using x ite_vec_m_mono[of s1 e \<open>shift_const_m a k left\<close> r] by simp
+  obtain s r g p where x: \<open>x = (s, r, g, p)\<close> by (cases x)
+  show ?thesis
+  proof (cases \<open>p < length a\<close>)
+    case True
+    then show ?thesis using x ite_vec_m_mono[of s \<open>b ! k\<close> \<open>shift_const_m r p left\<close> r]
+      by (simp add: shift_step_def split_def Let_def)
+  next
+    case False
+    then show ?thesis using x by (simp add: shift_step_def split_def Let_def or_m_def and_m_def fresh_m_def addc_m_def)
+  qed
 qed
 
 lemma shift_ok:
@@ -1023,69 +1062,203 @@ lemma shift_ok:
             val \<sigma> r = (if val \<sigma> b < length a then shv left (length a) (val \<sigma> a) (val \<sigma> b) else 0))\<close>
 proof -
   let ?n = \<open>length a\<close>
-  let ?P = \<open>\<lambda>k (s1, r). fst s1 < 2 ^ 64 \<longrightarrow> wf_st s1 \<and> ext s s1 \<and> lits_lt (fst s1) r \<and> length r = ?n \<and>
+  define m where \<open>m = (LEAST i. ?n \<le> 2 ^ i)\<close>
+  have nn: \<open>?n \<le> 2 ^ ?n\<close> using less_exp[of ?n] by simp
+  have m_le: \<open>m \<le> ?n\<close> unfolding m_def using nn by (rule Least_le)
+  have m_ge: \<open>?n \<le> 2 ^ m\<close> unfolding m_def using nn by (rule LeastI)
+  have stage: \<open>2 ^ i < ?n \<longleftrightarrow> i < m\<close> for i
+  proof
+    assume \<open>2 ^ i < ?n\<close>
+    then show \<open>i < m\<close> using m_ge by (metis le_less_trans not_less power_increasing_iff one_less_numeral_iff semiring_norm(76))
+  next
+    assume \<open>i < m\<close>
+    then show \<open>2 ^ i < ?n\<close> unfolding m_def using not_less_Least by fastforce
+  qed
+  define lo where \<open>lo k = min k m\<close> for k
+  let ?P = \<open>\<lambda>k (s1, r1, g1, p1). fst s1 < 2 ^ 64 \<longrightarrow>
+     wf_st s1 \<and> ext s s1 \<and> lits_lt (fst s1) r1 \<and> length r1 = ?n \<and> lits_lt (fst s1) [g1] \<and>
+     (2 ^ k < ?n \<longrightarrow> p1 = 2 ^ k) \<and> (\<not> 2 ^ k < ?n \<longrightarrow> ?n \<le> p1) \<and>
      (\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow>
-        val \<sigma> r = (if val \<sigma> b < k then shv left ?n (val \<sigma> a) (val \<sigma> b) else 0))\<close>
-  have \<open>?P ?n (foldl (shift_step a b left) (s, replicate ?n (lconst False)) [0..<?n])\<close>
+        val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo k) b)) \<and>
+        lit_sem \<sigma> g1 = (\<exists>i. lo k \<le> i \<and> i < k \<and> lit_sem \<sigma> (b ! i)))\<close>
+  have F: \<open>?P ?n (foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<?n])\<close>
   proof (rule foldl_upt_inv[where P = ?P])
-    have \<open>val \<sigma> (replicate ?n (lconst False)) = 0\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> for \<sigma>
-      using lit_sem_lconst[OF wf that] by (simp add: val_def)
-    then show \<open>?P 0 (s, replicate ?n (lconst False))\<close>
-      using wf wf_st_pos[OF wf] by (simp add: ext_refl lits_lt_def)
+    have C0: \<open>lits_lt (fst s) (shift_const_m a 0 left)\<close> \<open>length (shift_const_m a 0 left) = ?n\<close>
+      \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> val \<sigma> (shift_const_m a 0 left) = shv left ?n (val \<sigma> a) 0\<close>
+      using shift_const_ok[OF wf la] by auto
+    have g0: \<open>lits_lt (fst s) [lconst False]\<close> using wf_st_pos[OF wf] by (simp add: lits_lt_def)
+    have \<open>lit_sem \<sigma> (lconst False) = False\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> for \<sigma> using lit_sem_lconst[OF wf that] .
+    then show \<open>?P 0 (s, shift_const_m a 0 left, lconst False, 1)\<close>
+      using wf C0 g0 by (auto simp: ext_refl lo_def)
   next
     fix k x assume k: \<open>k < ?n\<close> and P: \<open>?P k x\<close>
-    obtain s1 r1 where x: \<open>x = (s1, r1)\<close> by (cases x)
-    obtain s2 e where 1: \<open>eq_m s1 b (of_nat_m k ?n) = (s2, e)\<close> by (cases \<open>eq_m s1 b (of_nat_m k ?n)\<close>)
-    obtain s3 r' where 2: \<open>ite_vec_m s2 e (shift_const_m a k left) r1 = (s3, r')\<close>
-      by (cases \<open>ite_vec_m s2 e (shift_const_m a k left) r1\<close>)
-    have st: \<open>shift_step a b left x k = (s3, r')\<close> using x 1 2 by (simp add: shift_step_def)
-    have m1: \<open>fst s1 \<le> fst s2\<close> using eq_m_mono[of s1 b \<open>of_nat_m k ?n\<close>] 1 by simp
-    have m2: \<open>fst s2 \<le> fst s3\<close> using ite_vec_m_mono[of s2 e \<open>shift_const_m a k left\<close> r1] 2 by simp
-    have B: \<open>wf_st s3 \<and> ext s s3 \<and> lits_lt (fst s3) r' \<and> length r' = ?n \<and>
-     (\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow>
-        val \<sigma> r' = (if val \<sigma> b < Suc k then shv left ?n (val \<sigma> a) (val \<sigma> b) else 0))\<close>
-      if lt3: \<open>fst s3 < 2 ^ 64\<close>
-    proof -
-      have I: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>lits_lt (fst s1) r1\<close> \<open>length r1 = ?n\<close>
-        \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow>
-          val \<sigma> r1 = (if val \<sigma> b < k then shv left ?n (val \<sigma> a) (val \<sigma> b) else 0)\<close>
-        using P x m1 m2 lt3 by auto
-      have le: \<open>fst s \<le> fst s1\<close> using ext_fst[OF I(2)] .
-      have O: \<open>lits_lt (fst s1) (of_nat_m k ?n)\<close> \<open>length (of_nat_m k ?n) = ?n\<close>
-        \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow> val \<sigma> (of_nat_m k ?n) = k mod 2 ^ ?n\<close>
-        using of_nat_m_ok[OF I(1)] by auto
-      have G1: \<open>wf_st s2\<close> \<open>ext s1 s2\<close> \<open>unat (Lit_var e) < fst s2\<close>
-        \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> lit_sem \<sigma> e = (val \<sigma> b = val \<sigma> (of_nat_m k ?n))\<close>
-        using eq_ok[OF I(1) lits_lt_mono[OF lb le] O(1) _ 1] O(2) len m2 lt3 by auto
-      have C: \<open>lits_lt (fst s2) (shift_const_m a k left)\<close> \<open>length (shift_const_m a k left) = ?n\<close>
-        \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> val \<sigma> (shift_const_m a k left) = shv left ?n (val \<sigma> a) k\<close>
-        using shift_const_ok[OF G1(1) lits_lt_mono[OF la]] le m1 by auto
-      have G2: \<open>wf_st s3\<close> \<open>ext s2 s3\<close> \<open>lits_lt (fst s3) r'\<close> \<open>length r' = ?n\<close>
-        \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow>
-          val \<sigma> r' = (if lit_sem \<sigma> e then val \<sigma> (shift_const_m a k left) else val \<sigma> r1)\<close>
-        using ite_vec_correct[OF G1(1) _ C(1) lits_lt_mono[OF I(3) m1] _ 2 lt3] G1(3) C(2) I(4) by auto
-      have kn: \<open>k mod 2 ^ ?n = k\<close>
-      proof -
-        have \<open>?n < 2 ^ ?n\<close> by (rule less_exp)
-        then show ?thesis using less_trans[OF k] by simp
+    obtain s1 r1 g1 p1 where x: \<open>x = (s1, r1, g1, p1)\<close> by (cases x)
+    show \<open>?P (Suc k) (shift_step a b left x k)\<close>
+    proof (cases \<open>2 ^ k < ?n\<close>)
+      case True
+      have km: \<open>k < m\<close> using stage True by blast
+      show ?thesis
+      proof (cases \<open>fst s1 < 2 ^ 64\<close>)
+        case False
+        have \<open>fst s1 \<le> fst (fst (shift_step a b left x k))\<close> using shift_step_m_mono[of x a b left k] x by simp
+        then show ?thesis using False by (cases \<open>shift_step a b left x k\<close>) auto
+      next
+        case lt1: True
+        have p1: \<open>p1 = 2 ^ k\<close> using P x True lt1 by simp
+      obtain s3 r' where 2: \<open>ite_vec_m s1 (b ! k) (shift_const_m r1 p1 left) r1 = (s3, r')\<close>
+        by (cases \<open>ite_vec_m s1 (b ! k) (shift_const_m r1 p1 left) r1\<close>)
+      have m2: \<open>fst s1 \<le> fst s3\<close> using ite_vec_m_mono[of s1 \<open>b ! k\<close> \<open>shift_const_m r1 p1 left\<close> r1] 2 by simp
+      define p' where \<open>p' = (if p1 \<le> ?n - p1 then p1 + p1 else ?n)\<close>
+      have st: \<open>shift_step a b left x k = (s3, r', g1, p')\<close>
+        using x 2 True p1 by (simp add: shift_step_def p'_def)
+      show ?thesis unfolding st prod.case
+      proof
+        assume lt3: \<open>fst s3 < 2 ^ 64\<close>
+        have I: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>lits_lt (fst s1) r1\<close> \<open>length r1 = ?n\<close> \<open>lits_lt (fst s1) [g1]\<close>
+          \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow>
+             val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo k) b)) \<and>
+             lit_sem \<sigma> g1 = (\<exists>i. lo k \<le> i \<and> i < k \<and> lit_sem \<sigma> (b ! i))\<close>
+          using P x lt1 by auto
+        have le: \<open>fst s \<le> fst s1\<close> using ext_fst[OF I(2)] .
+        have bk: \<open>lits_lt (fst s1) [b ! k]\<close> using lits_lt_mono[OF lb le] k len by (auto simp: lits_lt_def)
+        have C: \<open>lits_lt (fst s1) (shift_const_m r1 p1 left)\<close> \<open>length (shift_const_m r1 p1 left) = ?n\<close>
+          \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow> val \<sigma> (shift_const_m r1 p1 left) = shv left ?n (val \<sigma> r1) p1\<close>
+          using shift_const_ok[OF I(1) I(3)] I(4) by auto
+        have G: \<open>wf_st s3\<close> \<open>ext s1 s3\<close> \<open>lits_lt (fst s3) r'\<close> \<open>length r' = ?n\<close>
+          \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow>
+             val \<sigma> r' = (if lit_sem \<sigma> (b ! k) then val \<sigma> (shift_const_m r1 p1 left) else val \<sigma> r1)\<close>
+          using ite_vec_correct[OF I(1) bk C(1) I(3) _ 2 lt3] C(2) I(4) by auto
+        have lok: \<open>lo k = k\<close> \<open>lo (Suc k) = Suc k\<close> using km by (simp_all add: lo_def)
+        have S: \<open>val \<sigma> r' = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo (Suc k)) b)) \<and>
+                 lit_sem \<sigma> g1 = (\<exists>i. lo (Suc k) \<le> i \<and> i < Suc k \<and> lit_sem \<sigma> (b ! i))\<close>
+          if \<sigma>: \<open>cnf_sem \<sigma> (snd s3)\<close> for \<sigma>
+        proof -
+          have \<sigma>1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF G(2) \<sigma>] .
+          have r1: \<open>val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take k b))\<close>
+            and g: \<open>lit_sem \<sigma> g1 = (\<exists>i. k \<le> i \<and> i < k \<and> lit_sem \<sigma> (b ! i))\<close> using I(6) \<sigma>1 lok by auto
+          have tk: \<open>val \<sigma> (take (Suc k) b) = val \<sigma> (take k b) + 2 ^ k * of_bool (lit_sem \<sigma> (b ! k))\<close>
+            using val_take_Suc[of k b \<sigma>] k len by simp
+          have va: \<open>val \<sigma> a < 2 ^ ?n\<close> by (rule val_lt)
+          have \<open>val \<sigma> r' = (if lit_sem \<sigma> (b ! k) then shv left ?n (val \<sigma> r1) (2 ^ k) else val \<sigma> r1)\<close>
+            using G(5) C(3) \<sigma> \<sigma>1 p1 by simp
+          then have \<open>val \<sigma> r' = shv left ?n (val \<sigma> a) (val \<sigma> (take (Suc k) b))\<close>
+            using r1 tk shv_comp[OF va] by auto
+          then show ?thesis using g lok by auto
+        qed
+        have pn: \<open>(2 ^ Suc k < ?n \<longrightarrow> p' = 2 ^ Suc k) \<and> (\<not> 2 ^ Suc k < ?n \<longrightarrow> ?n \<le> p')\<close>
+          using p1 by (auto simp: p'_def)
+        show \<open>wf_st s3 \<and> ext s s3 \<and> lits_lt (fst s3) r' \<and> length r' = ?n \<and> lits_lt (fst s3) [g1] \<and>
+          (2 ^ Suc k < ?n \<longrightarrow> p' = 2 ^ Suc k) \<and> (\<not> 2 ^ Suc k < ?n \<longrightarrow> ?n \<le> p') \<and>
+          (\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow>
+             val \<sigma> r' = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo (Suc k)) b)) \<and>
+             lit_sem \<sigma> g1 = (\<exists>i. lo (Suc k) \<le> i \<and> i < Suc k \<and> lit_sem \<sigma> (b ! i)))\<close>
+          using G S pn ext_trans[OF I(2) G(2)] lits_lt_mono[OF I(5) m2] by auto
       qed
-      have S: \<open>val \<sigma> r' = (if val \<sigma> b < Suc k then shv left ?n (val \<sigma> a) (val \<sigma> b) else 0)\<close>
-        if \<sigma>: \<open>cnf_sem \<sigma> (snd s3)\<close> for \<sigma>
-      proof -
-        have \<sigma>2: \<open>cnf_sem \<sigma> (snd s2)\<close> using ext_cnf_sem[OF G2(2) \<sigma>] .
-        have \<sigma>1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF G1(2) \<sigma>2] .
-        have e: \<open>lit_sem \<sigma> e = (val \<sigma> b = k)\<close> using G1(4) O(3) \<sigma>1 \<sigma>2 kn by simp
-        have r1: \<open>val \<sigma> r1 = (if val \<sigma> b < k then shv left ?n (val \<sigma> a) (val \<sigma> b) else 0)\<close>
-          using I(5) \<sigma>1 by blast
-        have \<open>val \<sigma> r' = (if lit_sem \<sigma> e then val \<sigma> (shift_const_m a k left) else val \<sigma> r1)\<close>
-          using G2(5) \<sigma> by blast
-        then show ?thesis using e r1 C(3) \<sigma>2 by (auto simp: less_Suc_eq)
       qed
-      show ?thesis using G2 S ext_trans[OF I(2) ext_trans[OF G1(2) G2(2)]] by auto
+    next
+      case False
+      have km: \<open>m \<le> k\<close> using stage False by (meson not_less)
+      have np: \<open>?n \<le> p1\<close> if \<open>fst s1 < 2 ^ 64\<close> using P x False that by simp
+      obtain s3 h where 2: \<open>or_m s1 g1 (b ! k) = (s3, h)\<close> by (cases \<open>or_m s1 g1 (b ! k)\<close>)
+      have m2: \<open>fst s1 \<le> fst s3\<close> using 2 by (auto simp: or_m_def and_m_def fresh_m_def addc_m_def split_def Let_def)
+      have st: \<open>shift_step a b left x k = (s3, r1, h, p1)\<close> if \<open>fst s1 < 2 ^ 64\<close>
+        using x 2 np[OF that] by (simp add: shift_step_def)
+      have st': \<open>\<not> p1 < ?n\<close> if \<open>fst s1 < 2 ^ 64\<close> using np[OF that] by simp
+      show ?thesis
+      proof (cases \<open>fst s1 < 2 ^ 64\<close>)
+        case False
+        have \<open>fst s1 \<le> fst (fst (shift_step a b left x k))\<close> using shift_step_m_mono[of x a b left k] x by simp
+        then show ?thesis using False by (cases \<open>shift_step a b left x k\<close>) auto
+      next
+        case lt1: True
+        show ?thesis unfolding st[OF lt1] prod.case
+        proof
+          assume lt3: \<open>fst s3 < 2 ^ 64\<close>
+          have I: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>lits_lt (fst s1) r1\<close> \<open>length r1 = ?n\<close> \<open>lits_lt (fst s1) [g1]\<close>
+            \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow>
+               val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo k) b)) \<and>
+               lit_sem \<sigma> g1 = (\<exists>i. lo k \<le> i \<and> i < k \<and> lit_sem \<sigma> (b ! i))\<close>
+            using P x lt1 by auto
+          have le: \<open>fst s \<le> fst s1\<close> using ext_fst[OF I(2)] .
+          have bk: \<open>unat (Lit_var (b ! k)) < fst s1\<close> using lits_lt_mono[OF lb le] k len by (auto simp: lits_lt_def)
+          have gk: \<open>unat (Lit_var g1) < fst s1\<close> using I(5) by (simp add: lits_lt_def)
+          have O: \<open>wf_st s3\<close> \<open>ext s1 s3\<close> \<open>unat (Lit_var h) < fst s3\<close>
+            \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow> lit_sem \<sigma> h = (lit_sem \<sigma> g1 \<or> lit_sem \<sigma> (b ! k))\<close>
+            using or_ok[OF I(1) gk bk 2 lt3] by auto
+          have lok: \<open>lo (Suc k) = lo k\<close> \<open>lo k = m\<close> using km by (simp_all add: lo_def)
+          have S: \<open>lit_sem \<sigma> h = (\<exists>i. lo (Suc k) \<le> i \<and> i < Suc k \<and> lit_sem \<sigma> (b ! i))\<close>
+            if \<sigma>: \<open>cnf_sem \<sigma> (snd s3)\<close> for \<sigma>
+          proof -
+            have \<sigma>1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF O(2) \<sigma>] .
+            have \<open>lit_sem \<sigma> g1 = (\<exists>i. m \<le> i \<and> i < k \<and> lit_sem \<sigma> (b ! i))\<close> using I(6) \<sigma>1 lok by auto
+            then show ?thesis using O(4) \<sigma> lok km by (auto simp: less_Suc_eq)
+          qed
+          have pn: \<open>\<not> 2 ^ Suc k < ?n\<close> using stage[of \<open>Suc k\<close>] km by simp
+          show \<open>wf_st s3 \<and> ext s s3 \<and> lits_lt (fst s3) r1 \<and> length r1 = ?n \<and> lits_lt (fst s3) [h] \<and>
+            (2 ^ Suc k < ?n \<longrightarrow> p1 = 2 ^ Suc k) \<and> (\<not> 2 ^ Suc k < ?n \<longrightarrow> ?n \<le> p1) \<and>
+            (\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow>
+               val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo (Suc k)) b)) \<and>
+               lit_sem \<sigma> h = (\<exists>i. lo (Suc k) \<le> i \<and> i < Suc k \<and> lit_sem \<sigma> (b ! i)))\<close>
+            using O S pn np[OF lt1] I ext_trans[OF I(2) O(2)] lits_lt_mono[OF I(3) m2] lok
+              ext_cnf_sem[OF O(2)] by (auto simp: lits_lt_def)
+        qed
+      qed
     qed
-    show \<open>?P (Suc k) (shift_step a b left x k)\<close> using B st by simp
   qed
-  then show ?thesis using d lt by (simp add: shift_m_def)
+  obtain s1 r1 g1 p1 where f: \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<?n] = (s1, r1, g1, p1)\<close>
+    by (cases \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<?n]\<close>)
+  have d2: \<open>ite_vec_m s1 g1 (replicate ?n (lconst False)) r1 = (s', r)\<close>
+    using d f len by (simp add: shift_m_def)
+  have m3: \<open>fst s1 \<le> fst s'\<close> using ite_vec_m_mono[of s1 g1 \<open>replicate ?n (lconst False)\<close> r1] d2 by simp
+  have lt1: \<open>fst s1 < 2 ^ 64\<close> using m3 lt by simp
+  have I: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>lits_lt (fst s1) r1\<close> \<open>length r1 = ?n\<close> \<open>lits_lt (fst s1) [g1]\<close>
+    \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow>
+       val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take (lo ?n) b)) \<and>
+       lit_sem \<sigma> g1 = (\<exists>i. lo ?n \<le> i \<and> i < ?n \<and> lit_sem \<sigma> (b ! i))\<close>
+    using F f lt1 by auto
+  have z: \<open>lits_lt (fst s1) (replicate ?n (lconst False))\<close> using wf_st_pos[OF I(1)] by (simp add: lits_lt_def)
+  have G: \<open>wf_st s'\<close> \<open>ext s1 s'\<close> \<open>lits_lt (fst s') r\<close> \<open>length r = ?n\<close>
+    \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow>
+       val \<sigma> r = (if lit_sem \<sigma> g1 then val \<sigma> (replicate ?n (lconst False)) else val \<sigma> r1)\<close>
+    using ite_vec_correct[OF I(1) I(5) z I(3) _ d2 lt] I(4) by auto
+  have lon: \<open>lo ?n = m\<close> using m_le by (simp add: lo_def)
+  have S: \<open>val \<sigma> r = (if val \<sigma> b < ?n then shv left ?n (val \<sigma> a) (val \<sigma> b) else 0)\<close>
+    if \<sigma>: \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
+  proof -
+    have \<sigma>1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF G(2) \<sigma>] .
+    have va: \<open>val \<sigma> a < 2 ^ ?n\<close> by (rule val_lt)
+    have r1: \<open>val \<sigma> r1 = shv left ?n (val \<sigma> a) (val \<sigma> (take m b))\<close>
+      and g: \<open>lit_sem \<sigma> g1 = (\<exists>i. m \<le> i \<and> i < ?n \<and> lit_sem \<sigma> (b ! i))\<close> using I(6) \<sigma>1 lon by auto
+    have z0: \<open>val \<sigma> (replicate ?n (lconst False)) = 0\<close>
+      using lit_sem_lconst[OF I(1) \<sigma>1] by (simp add: val_eq_0_iff)
+    have vb: \<open>val \<sigma> b = val \<sigma> (take m b) + 2 ^ m * val \<sigma> (drop m b)\<close>
+      using val_take_drop[of \<sigma> b m] m_le len by simp
+    have A: \<open>b ! i \<in> set (drop m b)\<close> if \<open>m \<le> i\<close> \<open>i < ?n\<close> for i
+    proof -
+      have \<open>drop m b ! (i - m) = b ! i\<close> \<open>i - m < length (drop m b)\<close> using that len by simp_all
+      then show ?thesis by (metis nth_mem)
+    qed
+    have B: \<open>\<exists>i. m \<le> i \<and> i < ?n \<and> b ! i = l\<close> if l: \<open>l \<in> set (drop m b)\<close> for l
+    proof -
+      obtain j where \<open>j < length (drop m b)\<close> \<open>drop m b ! j = l\<close> using l unfolding in_set_conv_nth by blast
+      then show ?thesis using len by (intro exI[of _ \<open>m + j\<close>]) simp
+    qed
+    have hi: \<open>val \<sigma> (drop m b) = 0 \<longleftrightarrow> \<not> lit_sem \<sigma> g1\<close>
+      unfolding val_eq_0_iff g using A B by blast
+    show ?thesis
+    proof (cases \<open>lit_sem \<sigma> g1\<close>)
+      case True
+      then have \<open>1 \<le> val \<sigma> (drop m b)\<close> using hi by simp
+      then have \<open>2 ^ m \<le> val \<sigma> b\<close> using vb by (metis le_add2 mult.right_neutral mult_le_mono2 order_trans)
+      then have \<open>\<not> val \<sigma> b < ?n\<close> using m_ge by simp
+      then show ?thesis using G(5) \<sigma> True z0 by simp
+    next
+      case False
+      then have vb': \<open>val \<sigma> b = val \<sigma> (take m b)\<close> using hi vb by simp
+      show ?thesis using G(5) \<sigma> False r1 vb' shv_big[OF va] by auto
+    qed
+  qed
+  show ?thesis using G S ext_trans[OF I(2) G(2)] by auto
 qed
 
 lemma shift_sem_shl:

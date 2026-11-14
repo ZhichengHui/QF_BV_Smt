@@ -1,5 +1,5 @@
-theory BVSmt_Bound
-  imports BVSmt_Defs
+theory QFBV_Bound
+  imports QFBV_Defs
 begin
 
 section \<open>The size bound of the specification covers the fuel\<close>
@@ -216,42 +216,98 @@ proof -
   ultimately show ?thesis by simp
 qed
 
-lemma shift_step_grows:
-  \<open>grows (9 * length b + 5 * length a) (fst x) (fst (shift_step a b left x k)) \<and>
-   length (snd (shift_step a b left x k)) = length a\<close>
-proof -
-  obtain s r where x: \<open>x = (s, r)\<close> by (cases x)
-  obtain s1 e where E: \<open>eq_m s b (of_nat_m k (length a)) = (s1, e)\<close>
-    by (cases \<open>eq_m s b (of_nat_m k (length a))\<close>)
-  have eg: \<open>grows (9 * length b) s s1\<close>
-    using eq_m_grows[where s = s and a = b and b = \<open>of_nat_m k (length a)\<close>] by (simp add: E)
-  have sc: \<open>length (shift_const_m a k left) = length a\<close> by (simp add: shift_const_m_def)
-  have ig: \<open>grows (5 * length a) s1 (fst (ite_vec_m s1 e (shift_const_m a k left) r))\<close>
-    \<open>length (snd (ite_vec_m s1 e (shift_const_m a k left) r)) = length a\<close>
-    using ite_vec_m_grows[where s = s1 and c = e and a = \<open>shift_const_m a k left\<close> and b = r] sc by simp_all
-  have \<open>shift_step a b left x k = ite_vec_m s1 e (shift_const_m a k left) r\<close>
-    by (simp add: x shift_step_def E)
-  then show ?thesis using grows_trans[OF eg ig(1)] ig(2) by (simp add: x)
+text \<open>The number of stages of the barrel shifter on width \<open>n\<close>: the least \<open>i\<close> with \<open>n \<le> 2^i\<close>; stage
+  \<open>i\<close> is taken exactly when \<open>i\<close> is below it.\<close>
+
+lemma nst_le: \<open>nst n \<le> n\<close>
+  unfolding nst_def by (rule Least_le) (rule less_imp_le[OF less_exp])
+
+lemma nst_ge: \<open>n \<le> 2 ^ nst n\<close>
+  unfolding nst_def by (rule LeastI[where P = \<open>\<lambda>i. n \<le> 2 ^ i\<close> and k = n]) (rule less_imp_le[OF less_exp])
+
+lemma nst_stage: \<open>2 ^ i < n \<longleftrightarrow> i < nst n\<close>
+proof
+  assume i: \<open>2 ^ i < n\<close>
+  show \<open>i < nst n\<close>
+  proof (rule ccontr)
+    assume \<open>\<not> i < nst n\<close>
+    then have \<open>(2::nat) ^ nst n \<le> 2 ^ i\<close> by (intro power_increasing) simp_all
+    then show False using nst_ge[of n] i by linarith
+  qed
+next
+  assume \<open>i < nst n\<close>
+  then show \<open>2 ^ i < n\<close> unfolding nst_def using not_less_Least by fastforce
+qed
+
+lemma nst_mono_le: \<open>n \<le> 2 ^ k \<Longrightarrow> nst n \<le> k\<close>
+  unfolding nst_def by (rule Least_le)
+
+lemma or_m_grows': \<open>grows 4 s (fst (or_m s a b))\<close>
+  using or_grows by simp
+
+lemma shift_fold_grows:
+  \<open>k \<le> length b \<Longrightarrow>
+   (\<lambda>(s1, r1, g1, p1). grows (5 * length a * min k (nst (length a)) + 4 * k) s s1 \<and> length r1 = length a \<and>
+      (2 ^ k < length a \<longrightarrow> p1 = 2 ^ k) \<and> (\<not> 2 ^ k < length a \<longrightarrow> length a \<le> p1))
+   (foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<k])\<close>
+proof (induction k)
+  case 0
+  then show ?case by (simp add: grows_refl shift_const_m_def)
+next
+  case (Suc k)
+  obtain s1 r1 g1 p1 where F: \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<k] = (s1, r1, g1, p1)\<close>
+    by (cases \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<k]\<close>)
+  have I: \<open>grows (5 * length a * min k (nst (length a)) + 4 * k) s s1\<close> \<open>length r1 = length a\<close>
+    \<open>2 ^ k < length a \<longrightarrow> p1 = 2 ^ k\<close> \<open>\<not> 2 ^ k < length a \<longrightarrow> length a \<le> p1\<close>
+    using Suc F by auto
+  show ?case
+  proof (cases \<open>2 ^ k < length a\<close>)
+    case True
+    have km: \<open>k < nst (length a)\<close> using nst_stage True by blast
+    have p1: \<open>p1 = 2 ^ k\<close> using I(3) True by simp
+    obtain s2 x where 2: \<open>ite_vec_m s1 (b ! k) (shift_const_m r1 p1 left) r1 = (s2, x)\<close>
+      by (cases \<open>ite_vec_m s1 (b ! k) (shift_const_m r1 p1 left) r1\<close>)
+    have G: \<open>grows (5 * length a) s1 s2\<close> \<open>length x = length a\<close>
+      using ite_vec_m_grows[of \<open>shift_const_m r1 p1 left\<close> s1 \<open>b ! k\<close> r1] 2 I(2) by (simp_all add: shift_const_m_def)
+    define p' where \<open>p' = (if p1 \<le> length a - p1 then p1 + p1 else length a)\<close>
+    have st: \<open>shift_step a b left (s1, r1, g1, p1) k = (s2, x, g1, p')\<close>
+      using 2 True p1 by (simp add: shift_step_def p'_def)
+    have n: \<open>5 * length a * min k (nst (length a)) + 4 * k + 5 * length a \<le>
+             5 * length a * min (Suc k) (nst (length a)) + 4 * Suc k\<close> using km by simp
+    have pn: \<open>(2 ^ Suc k < length a \<longrightarrow> p' = 2 ^ Suc k) \<and> (\<not> 2 ^ Suc k < length a \<longrightarrow> length a \<le> p')\<close>
+      using p1 by (auto simp: p'_def)
+    show ?thesis using F st grows_mono[OF grows_trans[OF I(1) G(1)] n] G(2) pn by simp
+  next
+    case False
+    have km: \<open>nst (length a) \<le> k\<close> using nst_stage False by (meson not_less)
+    have np: \<open>\<not> p1 < length a\<close> using I(4) False by simp
+    have st: \<open>shift_step a b left (s1, r1, g1, p1) k = (fst (or_m s1 g1 (b ! k)), r1, snd (or_m s1 g1 (b ! k)), p1)\<close>
+      using np by (simp add: shift_step_def split_def Let_def)
+    have n: \<open>5 * length a * min k (nst (length a)) + 4 * k + 4 \<le>
+             5 * length a * min (Suc k) (nst (length a)) + 4 * Suc k\<close> using km by simp
+    have pn: \<open>\<not> 2 ^ Suc k < length a\<close> using nst_stage[of \<open>Suc k\<close>] km by simp
+    show ?thesis using F st grows_mono[OF grows_trans[OF I(1) or_m_grows'] n] I(2) I(4) pn False
+      by (simp add: le_trans[OF _ power_increasing[of k \<open>Suc k\<close> 2]])
+  qed
 qed
 
 lemma shift_m_grows:
   assumes \<open>length b = length a\<close>
-  shows \<open>grows (14 * length a * length a) s (fst (shift_m s a b left)) \<and>
+  shows \<open>grows (5 * length a * nst (length a) + 4 * length a + 5 * length a) s (fst (shift_m s a b left)) \<and>
          length (snd (shift_m s a b left)) = length a\<close>
 proof -
-  have st: \<open>\<And>x i. length (snd x) = length a \<Longrightarrow> length (snd (shift_step a b left x i)) = length a \<and>
-      grows (14 * length a) (fst x) (fst (shift_step a b left x i))\<close>
-    using shift_step_grows[where a = a and b = b and left = left] assms by simp
-  have Q0: \<open>length (snd (s, replicate (length a) (lconst False))) = length a\<close> by simp
-  have \<open>length (snd (shift_m s a b left)) = length a \<and>
-      grows (14 * length a * length [0..<length a]) (fst (s, replicate (length a) (lconst False)))
-        (fst (shift_m s a b left))\<close>
-    unfolding shift_m_def
-    using foldl_grows[where g = fst and Q = \<open>\<lambda>x. length (snd x) = length a\<close> and f = \<open>shift_step a b left\<close>
-        and k = \<open>14 * length a\<close> and xs = \<open>[0..<length a]\<close>
-        and x = \<open>(s, replicate (length a) (lconst False))\<close>, OF st Q0]
-    by simp
-  then show ?thesis by simp
+  obtain s1 r1 g1 p1 where F: \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<length b] = (s1, r1, g1, p1)\<close>
+    by (cases \<open>foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<length b]\<close>)
+  have I: \<open>grows (5 * length a * min (length b) (nst (length a)) + 4 * length b) s s1\<close> \<open>length r1 = length a\<close>
+    using shift_fold_grows[of \<open>length b\<close> b a s left] F by auto
+  have G: \<open>grows (5 * length a) s1 (fst (ite_vec_m s1 g1 (replicate (length a) (lconst False)) r1))\<close>
+    \<open>length (snd (ite_vec_m s1 g1 (replicate (length a) (lconst False)) r1)) = length a\<close>
+    using ite_vec_m_grows[of \<open>replicate (length a) (lconst False)\<close> s1 g1 r1] by simp_all
+  have e: \<open>shift_m s a b left = ite_vec_m s1 g1 (replicate (length a) (lconst False)) r1\<close>
+    using F by (simp add: shift_m_def)
+  have n: \<open>5 * length a * min (length b) (nst (length a)) + 4 * length b + 5 * length a \<le>
+           5 * length a * nst (length a) + 4 * length a + 5 * length a\<close> using assms by simp
+  show ?thesis using e grows_mono[OF grows_trans[OF I(1) G(1)] n] G(2) by simp
 qed
 
 lemma length_zext_m: \<open>length (zext_m a w) = w\<close>
@@ -320,6 +376,12 @@ proof -
     \<open>19 * w * w \<le> 100 * (w + 1) ^ 2\<close> \<open>14 * w * w \<le> 100 * (w + 1) ^ 2\<close>
     \<open>76 * w * w + 92 * w + 14 \<le> 100 * (w + 1) ^ 2\<close> \<open>0 \<le> 100 * (w + 1) ^ 2\<close>
     by (simp_all add: power2_eq_square algebra_simps)
+  have p2: \<open>5 * w * nst w + 4 * w + 5 * w \<le> 100 * (w + 1) ^ 2\<close>
+  proof -
+    have a: \<open>5 * w * nst w \<le> 5 * (w * w)\<close> using nst_le[of w] by simp
+    have b: \<open>5 * (w * w) + 9 * w \<le> 100 * (w + 1) ^ 2\<close> by (simp add: power2_eq_square algebra_simps)
+    show ?thesis using a b by linarith
+  qed
   have key: \<open>\<exists>n. n \<le> 100 * (w + 1) ^ 2 \<and> grows n s s' \<and> length r = bin_width op w (length b)\<close>
   proof (cases op)
     case BinOp_And
@@ -370,14 +432,14 @@ proof -
     case BinOp_Shl
     then have H: \<open>shift_m s a b True = (s', r)\<close> using assms(2) by (simp add: blast_bin_m_def)
     show ?thesis
-      using shift_m_grows[where b = b and a = a and s = s and left = True] assms(1) H p1
-      by (intro exI[where x = \<open>14 * w * w\<close>]) (simp add: BinOp_Shl bin_width_def w_def)
+      using shift_m_grows[where b = b and a = a and s = s and left = True] assms(1) H p1 p2
+      by (intro exI[where x = \<open>5 * w * nst w + 4 * w + 5 * w\<close>]) (simp add: BinOp_Shl bin_width_def w_def)
   next
     case BinOp_Lshr
     then have H: \<open>shift_m s a b False = (s', r)\<close> using assms(2) by (simp add: blast_bin_m_def)
     show ?thesis
-      using shift_m_grows[where b = b and a = a and s = s and left = False] assms(1) H p1
-      by (intro exI[where x = \<open>14 * w * w\<close>]) (simp add: BinOp_Lshr bin_width_def w_def)
+      using shift_m_grows[where b = b and a = a and s = s and left = False] assms(1) H p1 p2
+      by (intro exI[where x = \<open>5 * w * nst w + 4 * w + 5 * w\<close>]) (simp add: BinOp_Lshr bin_width_def w_def)
   next
     case BinOp_Concat
     then have E: \<open>s' = s\<close> \<open>r = concat_m a b\<close> using assms(2) by (simp_all add: blast_bin_m_def)
@@ -695,6 +757,315 @@ proof -
   have ci: \<open>cl4 init_st\<close> by (simp add: cl4_def init_st_def)
   show ?thesis
     using g ci D2(3) D3(2) by (simp add: grows_def init_st_def algebra_simps)
+qed
+
+subsection \<open>Exact counts\<close>
+
+text \<open>The growth of the CNF state for one operator on operands of width \<open>w\<close>: the bounds of the
+  circuits above. Concatenation builds no gate.\<close>
+definition bcost :: \<open>BinOp \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>bcost op w = (case op of
+     BinOp_And \<Rightarrow> 5 * w | BinOp_Or \<Rightarrow> 5 * w | BinOp_Xor \<Rightarrow> 5 * w | BinOp_Add \<Rightarrow> 15 * w
+   | BinOp_Mul \<Rightarrow> 19 * w * w | BinOp_Udiv \<Rightarrow> 76 * w * w + 92 * w + 14 | BinOp_Urem \<Rightarrow> 76 * w * w + 92 * w + 14
+   | BinOp_Shl \<Rightarrow> 5 * w * nst w + 9 * w | BinOp_Lshr \<Rightarrow> 5 * w * nst w + 9 * w
+   | BinOp_Concat \<Rightarrow> 0 | BinOp_Eq \<Rightarrow> 9 * w | BinOp_Ult \<Rightarrow> 15 * w)\<close>
+
+lemma blast_bin_cost:
+  assumes \<open>op \<noteq> BinOp_Concat \<longrightarrow> length b = length a\<close> \<open>blast_bin_m s op a b = (s', r)\<close>
+  shows \<open>grows (bcost op (length a)) s s'\<close>
+proof (cases op)
+  case BinOp_And
+  then show ?thesis using bitwise_m_grows[where op = op and s = s and a = a and b = b] assms(2)
+    by (simp add: blast_bin_m_def bcost_def)
+next
+  case BinOp_Or
+  then show ?thesis using bitwise_m_grows[where op = op and s = s and a = a and b = b] assms(2)
+    by (simp add: blast_bin_m_def bcost_def)
+next
+  case BinOp_Xor
+  then show ?thesis using bitwise_m_grows[where op = op and s = s and a = a and b = b] assms(2)
+    by (simp add: blast_bin_m_def bcost_def)
+next
+  case BinOp_Add
+  then show ?thesis using add_m_grows[where s = s and a = a and b = b and c = \<open>lconst False\<close>] assms(2)
+    by (simp add: blast_bin_m_def bcost_def split_def Let_def)
+next
+  case BinOp_Mul
+  then show ?thesis using mul_m_grows[where s = s and a = a and b = b] assms(2)
+    by (simp add: blast_bin_m_def bcost_def)
+next
+  case BinOp_Udiv
+  obtain s1 q1 r1 where E: \<open>divrem_m s a b = (s1, q1, r1)\<close> by (cases \<open>divrem_m s a b\<close>)
+  then show ?thesis using divrem_m_grows[OF _ E] assms BinOp_Udiv
+    by (simp add: blast_bin_m_def bcost_def)
+next
+  case BinOp_Urem
+  obtain s1 q1 r1 where E: \<open>divrem_m s a b = (s1, q1, r1)\<close> by (cases \<open>divrem_m s a b\<close>)
+  then show ?thesis using divrem_m_grows[OF _ E] assms BinOp_Urem
+    by (simp add: blast_bin_m_def bcost_def)
+next
+  case BinOp_Shl
+  then show ?thesis using shift_m_grows[where b = b and a = a and s = s and left = True] assms
+    by (simp add: blast_bin_m_def bcost_def algebra_simps)
+next
+  case BinOp_Lshr
+  then show ?thesis using shift_m_grows[where b = b and a = a and s = s and left = False] assms
+    by (simp add: blast_bin_m_def bcost_def algebra_simps)
+next
+  case BinOp_Concat
+  then show ?thesis using assms(2) by (simp add: blast_bin_m_def bcost_def grows_refl)
+next
+  case BinOp_Eq
+  then show ?thesis using eq_m_grows[where s = s and a = a and b = b] assms(2)
+    by (simp add: blast_bin_m_def bcost_def split_def Let_def)
+next
+  case BinOp_Ult
+  then show ?thesis using ult_m_grows[where s = s and a = a and b = b] assms(2)
+    by (simp add: blast_bin_m_def bcost_def split_def Let_def)
+qed
+
+text \<open>The cost of a node: its operator on the width of its first operand; \<open>ite\<close> builds one gate
+  per bit; the other nodes build none.\<close>
+definition ncost :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat\<close> where
+  \<open>ncost ws ds u = (case u of
+     CoreTerm_Bin op a b \<Rightarrow> bcost op (cwidth ws ds a)
+   | CoreTerm_Ite c a b \<Rightarrow> 5 * cwidth ws ds a
+   | _ \<Rightarrow> 0)\<close>
+
+definition ccount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat\<close> where
+  \<open>ccount ws ds t = sum_list (map (ncost ws ds) (csubterms t))\<close>
+
+lemma ccount_app: \<open>cwt ws ds t \<Longrightarrow> ccount ws (ds @ e) t = ccount ws ds t\<close>
+proof -
+  assume w: \<open>cwt ws ds t\<close>
+  have \<open>ncost ws (ds @ e) u = ncost ws ds u\<close> if \<open>u \<in> set (csubterms t)\<close> for u
+  proof -
+    have wu: \<open>cwt ws ds u\<close> using wt_sub[OF w that] .
+    show ?thesis using wu by (cases u) (auto simp: ncost_def wt_width_app)
+  qed
+  then show ?thesis unfolding ccount_def by (auto intro!: arg_cong[where f = sum_list] map_cong)
+qed
+
+lemma blast_cnt:
+  \<open>cwt ws ds t \<Longrightarrow> lenv ws vs \<Longrightarrow> lenv ds dl \<Longrightarrow> blast_m vs dl s t = (s', ls) \<Longrightarrow>
+   length ls = cwidth ws ds t \<and> grows (ccount ws ds t) s s'\<close>
+proof (induction t arbitrary: s s' ls)
+  case (CoreTerm_Const bs)
+  then show ?case by (auto simp: const_m_def ccount_def ncost_def grows_refl)
+next
+  case (CoreTerm_Var i)
+  then show ?case by (auto simp: lenv_def ccount_def ncost_def grows_refl)
+next
+  case (CoreTerm_Ref i)
+  then show ?case by (auto simp: lenv_def ccount_def ncost_def grows_refl)
+next
+  case (CoreTerm_Not a)
+  obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
+  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTerm_Not.prems(4) A by auto
+  have wa: \<open>cwt ws ds a\<close> using CoreTerm_Not.prems(1) by simp
+  note IA = CoreTerm_Not.IH[OF wa CoreTerm_Not.prems(2,3) A]
+  show ?case using IA by (auto simp: E not_m_def ccount_def ncost_def)
+next
+  case (CoreTerm_Bin op a b)
+  obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
+  obtain s2 lb where B: \<open>blast_m vs dl s1 b = (s2, lb)\<close> by (cases \<open>blast_m vs dl s1 b\<close>)
+  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTerm_Bin.prems(4) A B by simp
+  have wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
+    and weq: \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ws ds a = cwidth ws ds b\<close>
+    using CoreTerm_Bin.prems(1) by simp_all
+  note IA = CoreTerm_Bin.IH(1)[OF wa CoreTerm_Bin.prems(2,3) A]
+  note IB = CoreTerm_Bin.IH(2)[OF wb CoreTerm_Bin.prems(2,3) B]
+  have len: \<open>op \<noteq> BinOp_Concat \<longrightarrow> length lb = length la\<close> using IA IB weq by simp
+  have G: \<open>grows (bcost op (length la)) s2 s'\<close> using blast_bin_cost[OF len C] .
+  have L: \<open>length ls = bin_width op (length la) (length lb)\<close> using blast_bin_grows[OF len C] by simp
+  have g: \<open>grows (ccount ws ds a + ccount ws ds b + bcost op (length la)) s s'\<close>
+    using grows_trans[OF grows_trans[OF IA[THEN conjunct2] IB[THEN conjunct2]] G] .
+  show ?case using g L IA IB by (auto simp: width_Bin ccount_def ncost_def bin_width_def algebra_simps)
+next
+  case (CoreTerm_Extract hi lo a)
+  obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
+  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTerm_Extract.prems(4) A by auto
+  have wa: \<open>cwt ws ds a\<close> and lh: \<open>unat lo \<le> unat hi\<close> using CoreTerm_Extract.prems(1) by simp_all
+  note IA = CoreTerm_Extract.IH[OF wa CoreTerm_Extract.prems(2,3) A]
+  show ?case using IA lh by (auto simp: E extract_m_def ccount_def ncost_def)
+next
+  case (CoreTerm_Ite c a b)
+  obtain s1 lc where C: \<open>blast_m vs dl s c = (s1, lc)\<close> by (cases \<open>blast_m vs dl s c\<close>)
+  obtain s2 la where A: \<open>blast_m vs dl s1 a = (s2, la)\<close> by (cases \<open>blast_m vs dl s1 a\<close>)
+  obtain s3 lb where B: \<open>blast_m vs dl s2 b = (s3, lb)\<close> by (cases \<open>blast_m vs dl s2 b\<close>)
+  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTerm_Ite.prems(4) C A B by simp
+  have wc: \<open>cwt ws ds c\<close> and wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
+    using CoreTerm_Ite.prems(1) by simp_all
+  note IC = CoreTerm_Ite.IH(1)[OF wc CoreTerm_Ite.prems(2,3) C]
+  note IA = CoreTerm_Ite.IH(2)[OF wa CoreTerm_Ite.prems(2,3) A]
+  note IB = CoreTerm_Ite.IH(3)[OF wb CoreTerm_Ite.prems(2,3) B]
+  have V: \<open>grows (5 * length la) s3 s'\<close> \<open>length ls = length la\<close>
+    using ite_vec_m_grows[where s = s3 and c = \<open>lc ! 0\<close> and a = la and b = lb] D by simp_all
+  have g: \<open>grows (ccount ws ds c + ccount ws ds a + ccount ws ds b + 5 * length la) s s'\<close>
+    using grows_trans[OF grows_trans[OF grows_trans[OF IC[THEN conjunct2] IA[THEN conjunct2]] IB[THEN conjunct2]] V(1)] .
+  show ?case using g V IA by (auto simp: ccount_def ncost_def algebra_simps)
+qed
+
+lemma defs_cnt:
+  assumes \<open>cdefs_wt ws [] D\<close> \<open>lenv ws vs\<close>
+  shows \<open>k \<le> length D \<Longrightarrow> foldl (defs_step vs D) (s0, []) [0..<k] = (s, dl) \<Longrightarrow>
+   grows (sum_list (map (ccount ws (cdef_widths ws [] D)) (take k D))) s0 s \<and> lenv (cdef_widths ws [] (take k D)) dl\<close>
+proof (induction k arbitrary: s dl)
+  case 0
+  then show ?case by (simp add: grows_refl lenv_def)
+next
+  case (Suc k)
+  obtain sp dp where A: \<open>foldl (defs_step vs D) (s0, []) [0..<k] = (sp, dp)\<close>
+    by (cases \<open>foldl (defs_step vs D) (s0, []) [0..<k]\<close>)
+  obtain s1 ls where B: \<open>blast_m vs dp sp (D ! k) = (s1, ls)\<close>
+    by (cases \<open>blast_m vs dp sp (D ! k)\<close>)
+  have E: \<open>s = s1\<close> \<open>dl = dp @ [ls]\<close> using Suc.prems(2) A B by (simp_all add: defs_step_def)
+  have kl: \<open>k < length D\<close> using Suc.prems(1) by simp
+  have I: \<open>grows (sum_list (map (ccount ws (cdef_widths ws [] D)) (take k D))) s0 sp\<close>
+    \<open>lenv (cdef_widths ws [] (take k D)) dp\<close> using Suc.IH[OF _ A] kl by auto
+  have wtk: \<open>cwt ws (cdef_widths ws [] (take k D)) (D ! k)\<close> using defs_wt_nth_b[OF assms(1) kl] .
+  note BG = blast_cnt[OF wtk assms(2) I(2) B]
+  obtain e where e: \<open>cdef_widths ws [] D = cdef_widths ws [] (take k D) @ e\<close>
+  proof -
+    have \<open>cdef_widths ws [] D = cdef_widths ws [] (take k D @ drop k D)\<close> by simp
+    also have \<open>\<dots> = cdef_widths ws (cdef_widths ws [] (take k D)) (drop k D)\<close>
+      by (rule def_widths_append)
+    finally show ?thesis using def_widths_prefix that by metis
+  qed
+  have cc: \<open>ccount ws (cdef_widths ws [] D) (D ! k) = ccount ws (cdef_widths ws [] (take k D)) (D ! k)\<close>
+    unfolding e using ccount_app[OF wtk] .
+  have tk: \<open>take (Suc k) D = take k D @ [D ! k]\<close> using take_Suc_conv_app_nth[OF kl] .
+  have g: \<open>grows (sum_list (map (ccount ws (cdef_widths ws [] D)) (take k D)) +
+                  ccount ws (cdef_widths ws [] D) (D ! k)) s0 s1\<close>
+    using grows_trans[OF I(1) BG[THEN conjunct2]] cc by simp
+  show ?case
+    using g I(2) BG by (auto simp: E tk def_widths_snoc_b lenv_def nth_append less_Suc_eq)
+qed
+
+lemma asserts_cnt:
+  assumes \<open>lenv ws vs\<close> \<open>lenv ds dl\<close> \<open>\<forall>t \<in> set A. cwt ws ds t\<close>
+  shows \<open>k \<le> length A \<Longrightarrow> foldl (asserts_step vs dl A) s0 [0..<k] = s \<Longrightarrow>
+   grows (sum_list (map (ccount ws ds) (take k A)) + k) s0 s\<close>
+proof (induction k arbitrary: s)
+  case 0
+  then show ?case by (simp add: grows_refl)
+next
+  case (Suc k)
+  obtain sp where A: \<open>foldl (asserts_step vs dl A) s0 [0..<k] = sp\<close> by blast
+  obtain s1 ls where B: \<open>blast_m vs dl sp (A ! k) = (s1, ls)\<close> by (cases \<open>blast_m vs dl sp (A ! k)\<close>)
+  have E: \<open>s = addc_m s1 [ls ! 0]\<close> using Suc.prems(2) A B by (simp add: asserts_step_def)
+  have kl: \<open>k < length A\<close> using Suc.prems(1) by simp
+  have I: \<open>grows (sum_list (map (ccount ws ds) (take k A)) + k) s0 sp\<close> using Suc.IH[OF _ A] kl by auto
+  have wtk: \<open>cwt ws ds (A ! k)\<close> using assms(3) kl by simp
+  have g1: \<open>grows (ccount ws ds (A ! k)) sp s1\<close> using blast_cnt[OF wtk assms(1,2) B] by simp
+  have g2: \<open>grows 1 s1 s\<close> using addc_grows[where c = \<open>[ls ! 0]\<close> and s = s1] E by simp
+  have tk: \<open>take (Suc k) A = take k A @ [A ! k]\<close> using take_Suc_conv_app_nth[OF kl] .
+  show ?case using grows_trans[OF grows_trans[OF I g1] g2] by (simp add: tk algebra_simps)
+qed
+
+lemma encode_cnt:
+  assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close>
+  shows \<open>fst s + length (snd s) \<le>
+           2 + sum_list (cvar_widths p) + length (CoreProblem_asserts p) +
+           sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)))
+                              (CoreProblem_defs p @ CoreProblem_asserts p)) \<and>
+         cl4 s\<close>
+proof -
+  let ?W = \<open>CoreProblem_widths p\<close>
+  let ?D = \<open>CoreProblem_defs p\<close>
+  let ?A = \<open>CoreProblem_asserts p\<close>
+  let ?ws = \<open>cvar_widths p\<close>
+  let ?ds = \<open>cdef_widths ?ws [] ?D\<close>
+  obtain s1 vs1 where V: \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W] = (s1, vs1)\<close>
+    by (cases \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W]\<close>)
+  obtain s2 dl where Dl: \<open>foldl (defs_step vs1 ?D) (s1, []) [0..<length ?D] = (s2, dl)\<close>
+    by (cases \<open>foldl (defs_step vs1 ?D) (s1, []) [0..<length ?D]\<close>)
+  have X: \<open>encode_m p = (foldl (asserts_step vs1 dl ?A) s2 [0..<length ?A], vs1)\<close>
+    by (simp add: encode_m_def V Dl)
+  have S: \<open>foldl (asserts_step vs1 dl ?A) s2 [0..<length ?A] = s\<close>
+    using X assms(2) by (metis prod.inject)
+  have dwt: \<open>cdefs_wt ?ws [] ?D\<close> and awt: \<open>\<forall>t \<in> set ?A. cwt ?ws ?ds t\<close>
+    using assms(1) by (simp_all add: cproblem_wt_def Let_def)
+  have VL: \<open>grows (sum_list ?ws) init_st s1\<close> \<open>lenv ?ws vs1\<close>
+    using vars_loop[of \<open>length ?W\<close> ?W s1 vs1] V by (simp_all add: cvar_widths_def)
+  have D2: \<open>grows (sum_list (map (ccount ?ws ?ds) ?D)) s1 s2\<close> \<open>lenv ?ds dl\<close>
+    using defs_cnt[OF dwt VL(2) order_refl Dl] by auto
+  have D3: \<open>grows (sum_list (map (ccount ?ws ?ds) ?A) + length ?A) s2 s\<close>
+    using asserts_cnt[OF VL(2) D2(2) awt order_refl S] by simp
+  have g: \<open>grows (sum_list ?ws + sum_list (map (ccount ?ws ?ds) ?D) + (sum_list (map (ccount ?ws ?ds) ?A) + length ?A)) init_st s\<close>
+    using grows_trans[OF grows_trans[OF VL(1) D2(1)] D3] .
+  have ci: \<open>cl4 init_st\<close> by (simp add: cl4_def init_st_def)
+  show ?thesis
+    using g ci by (simp add: grows_def init_st_def algebra_simps)
+qed
+
+text \<open>\<^const>\<open>fuel_bound\<close> fits in a 64-bit word when the counts, the numbers of variables,
+  definitions and assertions, the widths of the variables and the terms are small.\<close>
+theorem fuel_bound_lt:
+  assumes \<open>cproblem_wt p\<close>
+    \<open>2 + sum_list (cvar_widths p) + length (CoreProblem_asserts p) +
+     sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)))
+                   (CoreProblem_defs p @ CoreProblem_asserts p)) < 2 ^ 63\<close>
+    \<open>length (cvar_widths p) < 2 ^ 63\<close> \<open>length (CoreProblem_defs p) < 2 ^ 63\<close>
+    \<open>length (CoreProblem_asserts p) < 2 ^ 63\<close>
+    \<open>\<forall>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p).
+       tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)) t < 2 ^ 63\<close>
+  shows \<open>fuel_bound p < 2 ^ 64\<close>
+proof -
+  obtain s vs where e: \<open>encode_m p = (s, vs)\<close> by (cases \<open>encode_m p\<close>)
+  note EC = encode_cnt[OF assms(1) e]
+  define ws where \<open>ws = cvar_widths p\<close>
+  define ds where \<open>ds = cdef_widths ws [] (CoreProblem_defs p)\<close>
+  have c: \<open>fst s + length (snd s) < 2 ^ 63\<close> using EC assms(2) by (simp add: ws_def ds_def)
+  have w: \<open>\<forall>w \<in> set ws. w + 2 < 2 ^ 64\<close>
+  proof
+    fix w assume \<open>w \<in> set ws\<close>
+    then have \<open>w \<le> sum_list ws\<close> by (rule member_le_sum_list; simp)
+    then show \<open>w + 2 < 2 ^ 64\<close> using assms(2) by (simp add: ws_def)
+  qed
+  have cl: \<open>\<forall>c \<in> set (snd s). length c + 2 < 2 ^ 64\<close> using EC by (auto simp: cl4_def)
+  have tb: \<open>\<forall>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p). tbound ws ds t < 2 ^ 64\<close>
+  proof
+    fix t assume \<open>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p)\<close>
+    then have \<open>tbound ws ds t < 2 ^ 63\<close> using assms(6) by (simp add: ws_def ds_def)
+    then show \<open>tbound ws ds t < 2 ^ 64\<close> by simp
+  qed
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, length ws + 2, length (CoreProblem_defs p) + 2,
+           length (CoreProblem_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
+          set (map (\<lambda>c. length c + 2) (snd s)) \<union>
+          set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
+  have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
+  have all: \<open>\<forall>x \<in> X. x < 2 ^ 64\<close>
+  proof
+    fix x assume \<open>x \<in> X\<close>
+    then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close> | \<open>x = length ws + 2\<close>
+      | \<open>x = length (CoreProblem_defs p) + 2\<close> | \<open>x = length (CoreProblem_asserts p) + 2\<close>
+      | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
+      | \<open>x \<in> set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
+      unfolding X_def by blast
+    then show \<open>x < 2 ^ 64\<close>
+    proof cases
+      case 1 then show ?thesis using c by simp
+    next
+      case 2 then show ?thesis using c by simp
+    next
+      case 3 then show ?thesis using assms(3) by (simp add: ws_def)
+    next
+      case 4 then show ?thesis using assms(4) by simp
+    next
+      case 5 then show ?thesis using assms(5) by simp
+    next
+      case 6 then show ?thesis using w by auto
+    next
+      case 7 then show ?thesis using cl by auto
+    next
+      case 8 then show ?thesis using tb by auto
+    qed
+  qed
+  have M: \<open>Max X < 2 ^ 64\<close> using all by (simp add: Max_less_iff[OF fin ne])
+  have F: \<open>fuel_bound p = Max X\<close>
+    unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
+  show ?thesis using M F by simp
 qed
 
 subsection \<open>The fuel is bounded by the size bound\<close>

@@ -4,13 +4,13 @@
 
 use smtlib::{SmtAnswer, SmtProblem};
 
-smtlib::bridge!(bvsmt);
+smtlib::bridge!(qfbv);
 
 /// Runs `src` and returns the answers of its `check-sat` commands ("sat", "unsat", "unknown").
 fn answers(src: &str) -> Vec<&'static str> {
     let mut got = Vec::new();
     let mut solve = |p: &SmtProblem| -> SmtAnswer {
-        let a = answer_from_core(bvsmt::check_sat(&problem_to_core(p)));
+        let a = answer_from_core(qfbv::check_sat(&problem_to_core(p)));
         match &a {
             SmtAnswer::Sat(m) => {
                 assert_eq!(smtlib::semantics::check_model(p, m), Ok(true), "bad model for {src}");

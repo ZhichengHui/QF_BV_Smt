@@ -1,19 +1,24 @@
-session "BVSmt_Proof" = "BVSmt_Spec" +
+session "QFBV_CoreSpec" in "core_spec" = "QFBV_Spec" +
   options [document = false]
   theories
-    BVSmt_Proof
+    QFBV_CoreSpec
 
-session "BVSmt_Smt" in "smt" = "BVSmt_Spec" +
+session "QFBV_Proof" = "QFBV_CoreSpec" +
   options [document = false]
   theories
-    BVSmt_SmtModel
+    QFBV_Proof
 
-session "BVSmt_Top" in "top" = "BVSmt_Proof" +
+session "QFBV_Smt" in "smt" = "QFBV_CoreSpec" +
+  options [document = false]
+  theories
+    QFBV_SmtModel
+
+session "QFBV_Top" in "top" = "QFBV_Proof" +
   options [document = false]
   sessions
-    "BVSmt_Smt"
+    "QFBV_Smt"
   theories
-    BVSmt_SmtSize
-    BVSmt_SmtBound
-    BVSmt_SmtRefine
-    BVSmt_Top
+    QFBV_SmtSize
+    QFBV_SmtBound
+    QFBV_SmtRefine
+    QFBV_Top

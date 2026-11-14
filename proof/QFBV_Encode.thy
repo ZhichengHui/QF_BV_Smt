@@ -1,8 +1,8 @@
-theory BVSmt_Encode
-  imports BVSmt_Circuits
+theory QFBV_Encode
+  imports QFBV_Circuits
 begin
 
-text \<open>The proofs below were written against the statements of \<^verbatim>\<open>BVSmt_Circuits\<close> alone;
+text \<open>The proofs below were written against the statements of \<^verbatim>\<open>QFBV_Circuits\<close> alone;
   its simplification rules change the shape of their goals, so they are not used here.\<close>
 declare lits_lt_Nil lits_lt_Cons lits_lt_append Lit_var_lconst Lit_neg_lconst Lit_var_lneg
    Lit_neg_lneg lit_sem_lneg cnf_sem_Nil cnf_sem_Cons cnf_sem_append unat_won val_Nil
@@ -87,11 +87,15 @@ lemma ite_vec_m_mono_le: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst
   by (rule foldl_le) (simp_all add: split_def Let_def ite_m_mono)
 
 lemma shift_step_mono: \<open>n \<le> fst (fst x) \<Longrightarrow> n \<le> fst (fst (shift_step a b left x k))\<close>
-  by (simp add: shift_step_def split_def Let_def eq_m_mono_le ite_vec_m_mono_le)
+  by (cases x) (simp add: shift_step_def split_def Let_def or_m_mono ite_vec_m_mono_le)
 
 lemma shift_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (shift_m s a b left))\<close>
-  unfolding shift_m_def
-  by (rule foldl_le) (simp_all add: shift_step_mono)
+proof -
+  assume n: \<open>n \<le> fst s\<close>
+  have \<open>n \<le> fst (fst (foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<length b]))\<close>
+    by (rule foldl_le_gen[where g = \<open>\<lambda>x. fst (fst x)\<close>]) (use n shift_step_mono in auto)
+  then show ?thesis by (simp add: shift_m_def split_def Let_def ite_vec_m_mono_le)
+qed
 
 lemma divrem_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (divrem_m s a b))\<close>
 proof -

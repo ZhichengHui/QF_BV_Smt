@@ -1,12 +1,12 @@
 [package]
-name = "bvsmt-cli"
+name = "qfbv-cli"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "bvsmt"
+name = "qfbv"
 path = "src/main.rs"
 
 [dependencies]
-bvsmt = { path = "../core" }
+qfbv = { path = "../core" }
 smtlib = { path = "../frontend" }

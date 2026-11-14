@@ -1,5 +1,5 @@
-theory BVSmt_Refine
-  imports BVSmt_Defs
+theory QFBV_Refine
+  imports QFBV_Defs
 begin
 
 section \<open>The Rust functions compute their models\<close>
@@ -320,40 +320,106 @@ lemma ite_vec_m_count [simp]:
   \<open>length (snd (ite_vec_m s c a b)) = length a\<close>
   by (simp_all add: ite_vec_m_foldl ite_fold_count)
 
-text \<open>\<^const>\<open>shift_m\<close>. \<open>remc n i c\<close>: the variables of the remaining steps.\<close>
+text \<open>\<^const>\<open>shift_m\<close>. \<open>shF s i\<close>: the state after the first \<open>i\<close> stages.\<close>
 
-lemma shift_step_eq:
-  \<open>shift_step a b left X k =
-     ite_vec_m (fst (eq_m (fst X) b (of_nat_m k (length a)))) (snd (eq_m (fst X) b (of_nat_m k (length a))))
-       (shift_const_m a k left) (snd X)\<close>
-  by (simp add: shift_step_def split_def Let_def)
+definition shF :: \<open>Lit list \<Rightarrow> Lit list \<Rightarrow> bool \<Rightarrow> st \<Rightarrow> nat \<Rightarrow> st \<times> Lit list \<times> Lit \<times> nat\<close> where
+  \<open>shF a b left s i \<equiv> foldl (shift_step a b left) (s, shift_const_m a 0 left, lconst False, 1) [0..<i]\<close>
 
-lemma shift_fold_count:
-  \<open>fst (fst (foldl (shift_step a b left) X [0..<m])) = fst (fst X) + m * (2 * length b + length a)\<close>
-  by (induction m) (simp_all add: shift_step_eq)
+lemma shF_0 [simp]: \<open>shF a b left s 0 = (s, shift_const_m a 0 left, lconst False, 1)\<close>
+  by (simp add: shF_def)
 
-lemma shift_fold_length:
-  \<open>length (snd X) = length a \<Longrightarrow> length (snd (foldl (shift_step a b left) X [0..<m])) = length a\<close>
-  by (induction m) (simp_all add: shift_step_eq)
+lemma shF_Suc: \<open>shF a b left s (Suc i) = shift_step a b left (shF a b left s i) i\<close>
+  by (simp add: shF_def)
 
-lemma shift_m_count [simp]:
-  \<open>fst (fst (shift_m s a b left)) = fst s + length a * (2 * length b + length a)\<close>
-  \<open>length (snd (shift_m s a b left)) = length a\<close>
-  by (simp_all add: shift_m_def shift_fold_count shift_fold_length)
+lemma shift_step_count_mono: \<open>fst (fst X) \<le> fst (fst (shift_step a b left X k))\<close>
+  by (cases X) (auto simp: shift_step_def split_def Let_def)
 
-definition remc :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
-  \<open>remc n i c \<equiv> (n - i) * c\<close>
+lemma shF_mono: \<open>i \<le> j \<Longrightarrow> fst (fst (shF a b left s i)) \<le> fst (fst (shF a b left s j))\<close>
+proof (induction j)
+  case (Suc j)
+  then show ?case
+    using shift_step_count_mono[of \<open>shF a b left s j\<close> a b left j]
+    by (auto simp: shF_Suc le_Suc_eq)
+qed simp
 
-lemma remc_0 [simp]: \<open>remc n 0 c = n * c\<close>
-  by (simp add: remc_def)
+lemma shift_m_shF: \<open>shift_m s a b left =
+  ite_vec_m (fst (shF a b left s (length b))) (fst (snd (snd (shF a b left s (length b)))))
+    (replicate (length a) (lconst False)) (fst (snd (shF a b left s (length b))))\<close>
+  by (simp add: shift_m_def shF_def split_def Let_def)
 
-lemma remc_less [simp]:
-  assumes \<open>i < n\<close>
-  shows \<open>remc n i c = c + remc n (Suc i) c\<close>
-proof -
-  have \<open>n - i = Suc (n - Suc i)\<close> using assms by arith
-  then show ?thesis by (simp add: remc_def)
-qed
+lemma shF_le_final: \<open>i \<le> length b \<Longrightarrow> fst (fst (shF a b left s i)) \<le> fst (fst (shift_m s a b left))\<close>
+  using shF_mono[of i \<open>length b\<close> a b left s] by (simp add: shift_m_shF)
+
+lemma shF_step_le_final:
+  \<open>i < length b \<Longrightarrow> fst (fst (shift_step a b left (shF a b left s i) i)) \<le> fst (fst (shift_m s a b left))\<close>
+  using shF_le_final[of \<open>Suc i\<close> b a left s] by (simp add: shF_Suc)
+
+lemma shF_len: \<open>length (fst (snd (shF a b left s i))) = length a\<close>
+proof (induction i)
+  case (Suc i)
+  then show ?case by (cases \<open>shF a b left s i\<close>) (simp add: shF_Suc shift_step_def split_def Let_def shift_const_m_def)
+qed (simp add: shift_const_m_def)
+
+lemma shF_p: \<open>snd (snd (snd (shF a b left s i))) \<le> max 1 (length a)\<close>
+proof (induction i)
+  case (Suc i)
+  then show ?case by (cases \<open>shF a b left s i\<close>) (auto simp: shF_Suc shift_step_def split_def Let_def)
+qed simp
+
+lemma shF_Suc_stage:
+  \<open>snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow> shF a b left s (Suc i) =
+    (fst (ite_vec_m (fst (shF a b left s i)) (b ! i)
+            (shift_const_m (fst (snd (shF a b left s i))) (snd (snd (snd (shF a b left s i)))) left)
+            (fst (snd (shF a b left s i)))),
+     snd (ite_vec_m (fst (shF a b left s i)) (b ! i)
+            (shift_const_m (fst (snd (shF a b left s i))) (snd (snd (snd (shF a b left s i)))) left)
+            (fst (snd (shF a b left s i)))),
+     fst (snd (snd (shF a b left s i))),
+     if snd (snd (snd (shF a b left s i))) \<le> length a - snd (snd (snd (shF a b left s i)))
+     then snd (snd (snd (shF a b left s i))) + snd (snd (snd (shF a b left s i))) else length a)\<close>
+  by (cases \<open>shF a b left s i\<close>) (simp add: shF_Suc shift_step_def split_def Let_def)
+
+lemma shF_Suc_or:
+  \<open>\<not> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow> shF a b left s (Suc i) =
+    (fst (or_m (fst (shF a b left s i)) (fst (snd (snd (shF a b left s i)))) (b ! i)),
+     fst (snd (shF a b left s i)),
+     snd (or_m (fst (shF a b left s i)) (fst (snd (snd (shF a b left s i)))) (b ! i)),
+     snd (snd (snd (shF a b left s i))))\<close>
+  by (cases \<open>shF a b left s i\<close>) (simp add: shF_Suc shift_step_def split_def Let_def)
+
+lemma shF_count_stage:
+  \<open>i < length b \<Longrightarrow> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
+   fst (fst (ite_vec_m (fst (shF a b left s i)) (b ! i)
+            (shift_const_m (fst (snd (shF a b left s i))) (snd (snd (snd (shF a b left s i)))) left)
+            (fst (snd (shF a b left s i))))) \<le> fst (fst (shift_m s a b left))\<close>
+  using shF_le_final[of \<open>Suc i\<close> b a left s] by (simp add: shF_Suc_stage)
+
+lemma shF_count_or:
+  \<open>i < length b \<Longrightarrow> \<not> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
+   Suc (fst (fst (shF a b left s i))) \<le> fst (fst (shift_m s a b left))\<close>
+  using shF_le_final[of \<open>Suc i\<close> b a left s] by (simp add: shF_Suc_or)
+
+lemma unat_len_sub: \<open>unat p < n \<Longrightarrow> n < 2 ^ 64 \<Longrightarrow> unat (word_of_nat n - (p :: 64 word)) = n - unat p\<close>
+  by (simp add: unat_sub word_le_nat_alt unat_of_nat_eq)
+
+lemma unat_double_p: \<open>unat p \<le> n - unat p \<Longrightarrow> n < 2 ^ 64 \<Longrightarrow> unat (2 * (p :: 64 word)) = unat p + unat p\<close>
+  by (subst unat_mult_lem[THEN iffD1]) simp_all
+
+lemma shF_or_lt:
+  \<open>i < length b \<Longrightarrow> \<not> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
+   fst (fst (shift_m s a b left)) < 2 ^ 64 \<Longrightarrow> fst (fst (shF a b left s i)) < 18446744073709551615\<close>
+  using shF_count_or[of i b a left s] by simp
+
+lemma shF_stage_lt:
+  \<open>i < length b \<Longrightarrow> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
+   fst (fst (shift_m s a b left)) < 2 ^ 64 \<Longrightarrow> fst (fst (shF a b left s i)) + length a < 2 ^ 64\<close>
+  using shF_count_stage[of i b a left s] by (simp add: shF_len)
+
+lemma shift_m_ge [simp]: \<open>fst s \<le> fst (fst (shift_m s a b left))\<close>
+  using shF_le_final[of 0 b a left s] by simp
+
+lemma shift_m_len [simp]: \<open>length (snd (shift_m s a b left)) = length a\<close>
+  by (simp add: shift_m_shF)
 
 text \<open>\<^const>\<open>divrem_m\<close>\<close>
 
@@ -417,7 +483,7 @@ lemma divrem_m_dr:
   by (simp add: divrem_m_def Let_def split_def dr3_def dr4_def dr5_def dr6_def dr7_def dr8_def dr9_def
       dr10_def dr11_def dr12_def)
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>Literals, clauses, gates\<close>
@@ -1001,31 +1067,28 @@ lemma bv_shift_spec [crush_specs]:
   shows \<open>\<Gamma>; bv_shift (cnf_of s) a b left \<Turnstile>\<^sub>F bv_shift_contract s a b left\<close>
   apply (crush_boot f: bv_shift_def contract: bv_shift_contract_def)
   apply (crush_base inline: len_def vec_from_elem_def simp add: unat_of_nat_eq unat_of_nat_64)
-  subgoal for cnf_ref r_ref k_ref
+  subgoal for cnf_ref r_ref g_ref p_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
-        INV=\<open>\<lambda>k. \<Squnion>gc c gr r gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
-               can_alloc_reference \<star>
-               \<langle>unat i \<le> length a \<and>
-                c = cnf_of (fst (foldl (shift_step a b left) (s, replicate (length a) (lconst False)) [0..<unat i])) \<and>
-                r = snd (foldl (shift_step a b left) (s, replicate (length a) (lconst False)) [0..<unat i]) \<and>
-                fst s + unat i * (2 * length b + length a) + remc (length a) (unat i) (2 * length b + length a)
-                  < 2 ^ 64 \<and>
-                length a - unat i \<le> k\<rangle>\<close> and
-        INV'=\<open>\<lambda>k. \<Squnion>gc c gr r gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
-               can_alloc_reference \<star>
-               \<langle>unat i < length a \<and>
-                c = cnf_of (fst (foldl (shift_step a b left) (s, replicate (length a) (lconst False)) [0..<unat i])) \<and>
-                r = snd (foldl (shift_step a b left) (s, replicate (length a) (lconst False)) [0..<unat i]) \<and>
-                fst s + unat i * (2 * length b + length a) + remc (length a) (unat i) (2 * length b + length a)
-                  < 2 ^ 64 \<and>
-                length a - unat i \<le> Suc k\<rangle>\<close> and
+        INV=\<open>\<lambda>k. \<Squnion>gc c gr r gg g gp p gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star>
+               g_ref \<mapsto>\<langle>\<top>\<rangle> gg\<down>g \<star> p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i \<le> length b \<and> c = cnf_of (fst (shF a b left s (unat i))) \<and>
+                r = fst (snd (shF a b left s (unat i))) \<and> g = fst (snd (snd (shF a b left s (unat i)))) \<and>
+                unat p = snd (snd (snd (shF a b left s (unat i)))) \<and> length b - unat i \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gc c gr r gg g gp p gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star>
+               g_ref \<mapsto>\<langle>\<top>\<rangle> gg\<down>g \<star> p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i < length b \<and> c = cnf_of (fst (shF a b left s (unat i))) \<and>
+                r = fst (snd (shF a b left s (unat i))) \<and> g = fst (snd (snd (shF a b left s (unat i)))) \<and>
+                unat p = snd (snd (snd (shF a b left s (unat i)))) \<and> length b - unat i \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
                \<langle>r = (cnf_of (fst (shift_m s a b left)), snd (shift_m s a b left), TNil)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv shift_m_def shift_fold_count shift_fold_length shift_step_eq)
+    apply (crush_base inline: len_def vec_from_elem_def simp add: word_less_nat_alt word_le_nat_alt unat_of_nat_eq
+        unat_of_nat_64 unat_word_Suc_simp shF_len shF_Suc_stage shF_Suc_or unat_len_sub)
+    apply (auto intro: shF_or_lt shF_stage_lt simp: unat_double_p)
+    apply (simp_all add: shift_m_shF)
+    apply (rule le_less_trans[rotated], assumption, simp add: shF_mono)
     done
   done
 
@@ -1328,7 +1391,7 @@ definition fb_set :: \<open>CoreProblem \<Rightarrow> nat set\<close> where
             (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
 
 lemma fuel_bound_fb_set: \<open>fuel_bound p = Max (fb_set p)\<close>
-  by (simp add: fuel_bound_def fb_set_def Let_def split_def)
+  by (simp only: fuel_bound_def fb_set_def Let_def split_def)
 
 lemma fb_ge: \<open>x \<in> fb_set p \<Longrightarrow> x \<le> fuel_bound p\<close>
   unfolding fuel_bound_fb_set by (rule Max_ge) (simp_all add: fb_set_def)
@@ -1535,7 +1598,7 @@ lemma cnf_of_init: \<open>make_Cnf 1 [] = cnf_of (1, [])\<close>
 lemma cnf_of_init_st: \<open>cnf_of init_st = cnf_of (Suc 0, [[lconst True]])\<close>
   by (simp add: init_st_def)
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>\<^verbatim>\<open>blast_bin\<close>\<close>

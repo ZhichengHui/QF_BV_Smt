@@ -405,20 +405,35 @@ fn bv_shift_const(a: &Vec<Lit>, s: usize, left: bool) -> Vec<Lit> {
     r
 }
 
-/// `a` shifted by `b`: the result is `a` shifted by `s` if `b = s` for some `s` below the
-/// width, and 0 otherwise.
+/// `a` shifted by `b`, by a barrel shifter. Stage `i` shifts by `p = 2^i` if bit `i` of `b` is
+/// set, for every `i` with `2^i` below the width. The bits of `b` from the first `i` with `2^i`
+/// at least the width on are or-ed into `big`: if `big` holds, the shift is at least the width and
+/// the result is 0. Once `2 p` exceeds the width, `p` is set to the width instead of doubled, so
+/// that it does not overflow.
 fn bv_shift(cnf: Cnf, a: &Vec<Lit>, b: &Vec<Lit>, left: bool) -> (Cnf, Vec<Lit>) {
     let mut cnf = cnf;
-    let mut r = vec![lit_const(false); a.len()];
-    let mut s: usize = 0;
-    while s < a.len() {
-        let (c1, e) = bv_eq(cnf, b, &bv_of_nat(s, a.len()));
-        let (c2, x) = bv_ite(c1, e, &bv_shift_const(a, s, left), &r);
-        cnf = c2;
-        r = x;
-        s += 1;
+    let mut r = bv_shift_const(a, 0, left);
+    let mut big = lit_const(false);
+    let mut p: usize = 1;
+    let mut i: usize = 0;
+    while i < b.len() {
+        if p < a.len() {
+            let (c1, x) = bv_ite(cnf, b[i], &bv_shift_const(&r, p, left), &r);
+            cnf = c1;
+            r = x;
+            if p <= a.len() - p {
+                p = p + p;
+            } else {
+                p = a.len();
+            }
+        } else {
+            let (c1, o) = gate_or(cnf, big, b[i]);
+            cnf = c1;
+            big = o;
+        }
+        i += 1;
     }
-    (cnf, r)
+    bv_ite(cnf, big, &vec![lit_const(false); a.len()], &r)
 }
 
 /// `a` extended with zeros to width `w`.
@@ -1393,7 +1408,7 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
 
 // ---------------------------------------------------------------------------------------------
 // Size checks. The solver of the extended language (`solve`) is verified for problems whose
-// `size_bound` (spec/BVSmt_Spec.thy) is below 2^64, and the translation indexes its definitions
+// `size_bound` (spec/QFBV_Spec.thy) is below 2^64, and the translation indexes its definitions
 // by `usize`. `check_sat` answers `Unknown` when the translation would add 2^63 definitions or
 // more, or when the translated problem is too large for `solve`. The computations below saturate
 // at 2^63: each returns the exact value if it is below 2^63, and 2^63 otherwise.
@@ -1485,25 +1500,46 @@ fn op_width(op: &Op, wa: usize, wb: usize) -> usize {
     }
 }
 
-/// `(w + 1)^3`.
-fn cube1(w: usize) -> usize {
-    let v = sat_add(w, 1);
-    sat_mul(v, sat_mul(v, v))
+/// The least `i` with `n <= 2^i` (at most 64).
+fn stages(n: usize) -> usize {
+    let mut i: usize = 0;
+    let mut p: usize = 1;
+    while p < n && i < 64 {
+        p = sat_mul(p, 2);
+        i += 1;
+    }
+    i
 }
 
-/// The width of `t` and its weight (`width` and `term_weight` of the specification), for the
-/// widths `ws` of the variables and `ds` of the definitions.
+/// A bound on the CNF variables and clauses that blasting the rewriting of the binary operator
+/// `op` on operands of width `w` adds (`ebin` of the specification).
+fn bin_cost(op: &Op, w: usize) -> usize {
+    match op {
+        Op::Mul | Op::Udiv | Op::Urem | Op::Sdiv | Op::Srem | Op::Smod => {
+            sat_add(sat_add(sat_mul(sat_mul(76, w), w), sat_mul(300, w)), 20)
+        }
+        Op::Shl | Op::Lshr | Op::Ashr => sat_add(sat_mul(sat_mul(10, w), stages(w)), sat_mul(30, w)),
+        _ => sat_add(sat_mul(30, w), 20),
+    }
+}
+
+/// The width of `t` and its cost: the sum over its subterms of `4 * (width + 1)` and of the
+/// CNF bound of the node (`width`, `lweight` and `ecount` of the specification), for the widths
+/// `ws` of the variables and `ds` of the definitions.
 fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
     let (w, g) = match t {
         Term::Const(bs) => (bs.len(), 0),
         Term::Var(i) => (ws[*i], 0),
         Term::Ref(i) => (ds[*i], 0),
         Term::Not(a) => term_size(ws, ds, a),
-        Term::Neg(a) => term_size(ws, ds, a),
+        Term::Neg(a) => {
+            let (wa, ga) = term_size(ws, ds, a);
+            (wa, sat_add(sat_mul(15, wa), ga))
+        }
         Term::Bin(op, a, b) => {
             let (wa, ga) = term_size(ws, ds, a);
             let (wb, gb) = term_size(ws, ds, b);
-            (op_width(op, wa, wb), sat_add(ga, gb))
+            (op_width(op, wa, wb), sat_add(bin_cost(op, wa), sat_add(ga, gb)))
         }
         Term::Extract(hi, lo, a) => {
             let (_, ga) = term_size(ws, ds, a);
@@ -1519,7 +1555,7 @@ fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
         }
         Term::SignExtend(i, a) => {
             let (wa, ga) = term_size(ws, ds, a);
-            (sat_add(wa, *i), ga)
+            (sat_add(wa, *i), sat_add(sat_mul(5, *i), ga))
         }
         Term::RotateLeft(_, a) => term_size(ws, ds, a),
         Term::RotateRight(_, a) => term_size(ws, ds, a),
@@ -1527,13 +1563,14 @@ fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
             let (_, gc) = term_size(ws, ds, c);
             let (wa, ga) = term_size(ws, ds, a);
             let (_, gb) = term_size(ws, ds, b);
-            (wa, sat_add(gc, sat_add(ga, gb)))
+            (wa, sat_add(sat_mul(5, wa), sat_add(gc, sat_add(ga, gb))))
         }
     };
-    (w, sat_add(cube1(w), g))
+    (w, sat_add(sat_mul(4, sat_add(w, 1)), g))
 }
 
-/// Whether the `size_bound` of `q` is below 2^63.
+/// Whether the `ovf_bound` of `q` is below 2^63 (`sizes_ok` of the specification): then no
+/// counter of the solver overflows.
 fn size_ok(q: &Problem) -> bool {
     let mut ds = Vec::new();
     let mut d: usize = 0;
@@ -1563,7 +1600,7 @@ fn size_ok(q: &Problem) -> bool {
         n = sat_add(n, g);
         j += 1;
     }
-    sat_mul(1000000, n) < cap()
+    sat_mul(4, n) < cap()
 }
 
 /// The solver on a general problem: `Unknown` outside the fragment, or if the problem is too

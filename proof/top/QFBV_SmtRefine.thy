@@ -1,5 +1,5 @@
-theory BVSmt_SmtRefine
-  imports "BVSmt_Smt.BVSmt_SmtModel"
+theory QFBV_SmtRefine
+  imports "QFBV_Smt.QFBV_SmtModel"
 begin
 
 section \<open>The Rust functions of the translation compute their models\<close>
@@ -595,7 +595,7 @@ definition tm_entry :: \<open>SmtProblem \<Rightarrow> bool list list \<Rightarr
 lemma tr_model_tm: \<open>tr_model_m p m = make_SmtModel [] (map (tm_entry p m) [0..<length (SmtProblem_funs p)])\<close>
   by (simp add: tr_model_m_def tm_entry_def)
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>Small functions\<close>
@@ -623,12 +623,12 @@ lemma tr_push_spec [crush_specs]:
 
 definition tref_contract :: \<open>64 word \<Rightarrow> ('s, Term, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>tref_contract k \<equiv>
-     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>r = BVSmt_SmtModel.tref (unat k)\<rangle>)\<close>
+     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>r = QFBV_SmtModel.tref (unat k)\<rangle>)\<close>
 
 lemma tref_spec [crush_specs]:
   shows \<open>\<Gamma>; tref k \<Turnstile>\<^sub>F tref_contract k\<close>
   apply (crush_boot f: tref_def contract: tref_contract_def)
-  apply (crush_base simp add: BVSmt_SmtModel.tref_def)
+  apply (crush_base simp add: QFBV_SmtModel.tref_def)
   done
 
 definition tbin_contract :: \<open>Op \<Rightarrow> Term \<Rightarrow> Term \<Rightarrow> ('s, Term, 'abort) function_contract\<close> where
@@ -653,7 +653,7 @@ lemma sort_width_spec [crush_specs]:
 
 definition tr_op_contract :: \<open>SmtOp \<Rightarrow> ('s, Op, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>tr_op_contract op \<equiv>
-     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>r = BVSmt_SmtModel.tr_op op\<rangle>)\<close>
+     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>r = QFBV_SmtModel.tr_op op\<rangle>)\<close>
 
 lemma tr_op_spec [crush_specs]:
   shows \<open>\<Gamma>; tr_op op \<Turnstile>\<^sub>F tr_op_contract op\<close>

@@ -1,5 +1,5 @@
-theory BVSmt_SmtSize
-  imports "BVSmt_Smt.BVSmt_SmtModel"
+theory QFBV_SmtSize
+  imports "QFBV_Smt.QFBV_SmtModel"
 begin
 
 section \<open>The size checks of \<^verbatim>\<open>check_sat\<close>\<close>
@@ -276,18 +276,6 @@ fun tix :: \<open>nat \<Rightarrow> nat \<Rightarrow> Term \<Rightarrow> bool\<c
 | \<open>tix nw nd (Term_RotateRight i a) = tix nw nd a\<close>
 | \<open>tix nw nd (Term_Ite c a b) = (tix nw nd c \<and> tix nw nd a \<and> tix nw nd b)\<close>
 
-lemma term_weight_simps:
-  \<open>term_weight ws ds t =
-     (width ws ds t + 1) ^ 3 +
-     (case t of Term_Not a \<Rightarrow> term_weight ws ds a | Term_Neg a \<Rightarrow> term_weight ws ds a
-      | Term_Bin op a b \<Rightarrow> term_weight ws ds a + term_weight ws ds b
-      | Term_Extract hi lo a \<Rightarrow> term_weight ws ds a | Term_Repeat i a \<Rightarrow> term_weight ws ds a
-      | Term_ZeroExtend i a \<Rightarrow> term_weight ws ds a | Term_SignExtend i a \<Rightarrow> term_weight ws ds a
-      | Term_RotateLeft i a \<Rightarrow> term_weight ws ds a | Term_RotateRight i a \<Rightarrow> term_weight ws ds a
-      | Term_Ite c a b \<Rightarrow> term_weight ws ds c + term_weight ws ds a + term_weight ws ds b
-      | _ \<Rightarrow> 0)\<close>
-  by (cases t) (simp_all add: term_weight_def)
-
 text \<open>The saturated width and weight of a term depend only on the saturated widths of the
   definitions.\<close>
 definition sat_eq :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> bool\<close> where
@@ -317,36 +305,91 @@ lemma width_Bin_opw: \<open>width ws ds (Term_Bin op a b) = opw op (width ws ds 
 lemma sat_opw_cong: \<open>sat x = sat x' \<Longrightarrow> sat y = sat y' \<Longrightarrow> sat (opw op x y) = sat (opw op x' y')\<close>
   by (cases op) (auto simp: opw_def intro: sat_add_cong)
 
-lemma term_weight_eqs:
-  \<open>term_weight ws ds (Term_Const bs) = (length bs + 1) ^ 3\<close>
-  \<open>term_weight ws ds (Term_Var i) = (width ws ds (Term_Var i) + 1) ^ 3\<close>
-  \<open>term_weight ws ds (Term_Ref i) = (width ws ds (Term_Ref i) + 1) ^ 3\<close>
-  \<open>term_weight ws ds (Term_Not a) = (width ws ds a + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_Neg a) = (width ws ds a + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_Bin op a b) =
-     (opw op (width ws ds a) (width ws ds b) + 1) ^ 3 + (term_weight ws ds a + term_weight ws ds b)\<close>
-  \<open>term_weight ws ds (Term_Extract hi lo a) = (unat hi - unat lo + 1 + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_Repeat i a) = (unat i * width ws ds a + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_ZeroExtend i a) = (width ws ds a + unat i + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_SignExtend i a) = (width ws ds a + unat i + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_RotateLeft i a) = (width ws ds a + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_RotateRight i a) = (width ws ds a + 1) ^ 3 + term_weight ws ds a\<close>
-  \<open>term_weight ws ds (Term_Ite c a b) =
-     (width ws ds a + 1) ^ 3 + (term_weight ws ds c + (term_weight ws ds a + term_weight ws ds b))\<close>
-  by (simp_all add: term_weight_def opw_def)
+text \<open>The cost of a term in \<^const>\<open>ovf_bound\<close>: \<open>4\<close> times its linear weight plus its CNF count.\<close>
+definition ow :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>ow ws ds t \<equiv> 4 * lweight ws ds t + ecount ws ds t\<close>
 
-text \<open>The last step of every case of \<^verbatim>\<open>term_size\<close>: the weight is the cube of the width plus one,
-  plus the weights of the operands.\<close>
-lemma final_step:
-  \<open>sat (unat w) = sat W \<Longrightarrow> unat c = sat ((unat w + 1) ^ 3) \<Longrightarrow> unat g = sat G \<Longrightarrow>
-   sat (unat c + unat g) = sat ((W + 1) ^ 3 + G)\<close>
-  by (metis sat_add_sat sat_cube_cong)
+text \<open>The cost of one node of width \<open>x\<close> in the linear weight, kept folded in proofs.\<close>
+definition fw :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>fw x \<equiv> 4 * (x + 1)\<close>
 
-lemma final_eq: \<open>sat x = sat X \<Longrightarrow> sat (sat (Suc x ^ 3) + sat G) = sat ((X + 1) ^ 3 + G)\<close>
-  by (metis Suc_eq_plus1 sat_add_sat sat_cube_cong)
+lemma ow_eqs:
+  \<open>ow ws ds (Term_Const bs) = fw (length bs)\<close>
+  \<open>ow ws ds (Term_Var i) = fw (width ws ds (Term_Var i))\<close>
+  \<open>ow ws ds (Term_Ref i) = fw (width ws ds (Term_Ref i))\<close>
+  \<open>ow ws ds (Term_Not a) = fw (width ws ds a) + ow ws ds a\<close>
+  \<open>ow ws ds (Term_Neg a) = fw (width ws ds a) + (15 * width ws ds a + ow ws ds a)\<close>
+  \<open>ow ws ds (Term_Bin op a b) =
+     fw (opw op (width ws ds a) (width ws ds b)) + (ebin op (width ws ds a) + (ow ws ds a + ow ws ds b))\<close>
+  \<open>ow ws ds (Term_Extract hi lo a) = fw (unat hi - unat lo + 1) + ow ws ds a\<close>
+  \<open>ow ws ds (Term_Repeat i a) = fw (unat i * width ws ds a) + ow ws ds a\<close>
+  \<open>ow ws ds (Term_ZeroExtend i a) = fw (width ws ds a + unat i) + ow ws ds a\<close>
+  \<open>ow ws ds (Term_SignExtend i a) = fw (width ws ds a + unat i) + (5 * unat i + ow ws ds a)\<close>
+  \<open>ow ws ds (Term_RotateLeft i a) = fw (width ws ds a) + ow ws ds a\<close>
+  \<open>ow ws ds (Term_RotateRight i a) = fw (width ws ds a) + ow ws ds a\<close>
+  \<open>ow ws ds (Term_Ite c a b) =
+     fw (width ws ds a) + (5 * width ws ds a + (ow ws ds c + (ow ws ds a + ow ws ds b)))\<close>
+  by (simp_all add: ow_def fw_def lweight_def ecount_def enode_def opw_def algebra_simps)
 
-lemma cube_plus: \<open>sat x = sat X \<Longrightarrow> sat (Suc x ^ 3 + G) = sat (Suc X ^ 3 + G)\<close>
-  by (metis Suc_eq_plus1 sat_add_cong sat_cube_cong)
+text \<open>A function at least the identity keeps saturated equality.\<close>
+lemma sat_cong_ge: \<open>sat x = sat y \<Longrightarrow> (\<And>z. z \<le> f z) \<Longrightarrow> sat (f x) = sat (f y)\<close>
+proof -
+  assume e: \<open>sat x = sat y\<close> and g: \<open>\<And>z. z \<le> f z\<close>
+  show ?thesis
+  proof (cases \<open>x < 2 ^ 63\<close>)
+    case True
+    then have \<open>y = x\<close> using e by (simp add: sat_def min_def split: if_splits)
+    then show ?thesis by simp
+  next
+    case False
+    then have \<open>\<not> y < 2 ^ 63\<close> using e by (simp add: sat_def min_def split: if_splits)
+    then have \<open>2 ^ 63 \<le> f y\<close> \<open>2 ^ 63 \<le> f x\<close> using False g[of x] g[of y] by linarith+
+    then show ?thesis by (simp add: sat_def)
+  qed
+qed
+
+lemma ebin_ge: \<open>z \<le> ebin op z\<close>
+  by (auto simp: ebin_def)
+
+lemma sat_mul_sat_l: \<open>sat (sat x * y) = sat (x * y)\<close>
+proof (cases \<open>x < 2 ^ 63 \<or> y = 0\<close>)
+  case True
+  then show ?thesis by (auto simp: sat_def)
+next
+  case False
+  then have x: \<open>2 ^ 63 \<le> x\<close> and y: \<open>1 \<le> y\<close> by auto
+  have xy: \<open>x * 1 \<le> x * y\<close> using y by (rule mult_le_mono2)
+  have a: \<open>2 ^ 63 \<le> x * y\<close> using order_trans[OF x] xy by simp
+  have \<open>sat x = 2 ^ 63\<close> using x by (simp add: sat_def)
+  moreover have \<open>(2 ^ 63) * 1 \<le> (2 ^ 63 :: nat) * y\<close> using y by (rule mult_le_mono2)
+  ultimately show ?thesis using a by (simp add: sat_def)
+qed
+
+lemma sat_four: \<open>sat x = sat X \<Longrightarrow> sat (4 * sat (x + 1)) = sat (4 * (X + 1))\<close>
+proof -
+  assume e: \<open>sat x = sat X\<close>
+  have \<open>sat (x + 1) = sat (X + 1)\<close> using e by (rule sat_add_cong) simp
+  moreover have \<open>sat (4 * sat (x + 1)) = sat (4 * (x + 1))\<close>
+    using sat_mul_sat[of 4 \<open>x + 1\<close>] by (simp add: sat_def)
+  moreover have \<open>sat (4 * sat (X + 1)) = sat (4 * (X + 1))\<close>
+    using sat_mul_sat[of 4 \<open>X + 1\<close>] by (simp add: sat_def)
+  ultimately show ?thesis by (metis sat_sat)
+qed
+
+lemma fw_one: \<open>sat x = sat X \<Longrightarrow> sat (4 * sat (Suc x)) = sat (fw X)\<close>
+  using sat_four by (simp add: fw_def)
+
+lemma fw_plus: \<open>sat x = sat X \<Longrightarrow> sat G = sat G' \<Longrightarrow> sat (4 * sat (Suc x) + G) = sat (fw X + G')\<close>
+proof -
+  assume e: \<open>sat x = sat X\<close> and g: \<open>sat G = sat G'\<close>
+  have \<open>sat (4 * sat (Suc x)) = sat (fw X)\<close> using sat_four[OF e] by (simp add: fw_def)
+  then show ?thesis by (metis g sat_add_cong sat_add_sat sat_sat)
+qed
+
+text \<open>The last step of every case of \<^verbatim>\<open>term_size\<close>: the cost is \<open>4\<close> times the width plus one,
+  plus the cost of the operands.\<close>
+lemma final4: \<open>sat x = sat X \<Longrightarrow> g = sat G \<Longrightarrow> sat (sat (4 * sat (x + 1)) + g) = sat (4 * (X + 1) + G)\<close>
+  by (metis sat_add_sat sat_four sat_sat)
 
 lemma opw_chain: \<open>sat y = sat (opw op x1 x2) \<Longrightarrow> sat x1 = sat X1 \<Longrightarrow> sat x2 = sat X2 \<Longrightarrow> sat y = sat (opw op X1 X2)\<close>
   by (metis sat_opw_cong)
@@ -383,7 +426,7 @@ lemma sat_eq_len_take:
   \<open>sat_eq (map unat rb) (def_widths ws [] (take r xs)) \<Longrightarrow> r \<le> length xs \<Longrightarrow> length rb = r\<close>
   by (drule sat_eq_length) (simp add: def_widths_length')
 
-text \<open>The parts of \<^const>\<open>size_bound\<close>.\<close>
+text \<open>The parts of \<^const>\<open>ovf_bound\<close>.\<close>
 definition base :: \<open>Problem \<Rightarrow> nat\<close> where
   \<open>base q \<equiv> Suc (sum_list (map unat (Problem_widths q)) + length (Problem_widths q) + length (Problem_defs q) +
                  length (Problem_asserts q))\<close>
@@ -391,42 +434,49 @@ definition base :: \<open>Problem \<Rightarrow> nat\<close> where
 definition DSq :: \<open>Problem \<Rightarrow> nat list\<close> where
   \<open>DSq q \<equiv> def_widths (map unat (Problem_widths q)) [] (Problem_defs q)\<close>
 
-lemma size_bound_eq:
-  \<open>size_bound q = 1000000 * (base q + sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q)) (Problem_defs q)) +
-     sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q)) (Problem_asserts q)))\<close>
-  by (simp add: size_bound_def var_widths_def base_def DSq_def Let_def)
+lemma ow_fun: \<open>ow ws ds = (\<lambda>t. 4 * lweight ws ds t + ecount ws ds t)\<close>
+  by (rule ext) (simp add: ow_def)
+
+lemma ovf_bound_eq:
+  \<open>ovf_bound q = 4 * (base q + sum_list (map (ow (map unat (Problem_widths q)) (DSq q)) (Problem_defs q)) +
+     sum_list (map (ow (map unat (Problem_widths q)) (DSq q)) (Problem_asserts q)))\<close>
+  by (simp add: ovf_bound_def var_widths_def base_def DSq_def ow_fun Let_def)
 
 lemma tix_subterms: \<open>tix nw nd t \<Longrightarrow> u \<in> set (subterms t) \<Longrightarrow> tix nw nd u\<close>
   by (induction t) auto
 
-lemma sat_weight_cong: \<open>sat_eq A B \<Longrightarrow> tix nw (length A) t \<Longrightarrow> sat (term_weight ws A t) = sat (term_weight ws B t)\<close>
-proof -
-  assume E: \<open>sat_eq A B\<close> and T: \<open>tix nw (length A) t\<close>
-  show ?thesis unfolding term_weight_def
-  proof (rule sat_sum_cong, intro ballI)
-    fix u assume \<open>u \<in> set (subterms t)\<close>
-    then have \<open>tix nw (length A) u\<close> using T tix_subterms by blast
-    then show \<open>sat ((width ws A u + 1) ^ 3) = sat ((width ws B u + 1) ^ 3)\<close>
-      using sat_width_cong[OF E] by (blast intro: sat_cube_cong)
-  qed
-qed
+lemma sat_ow_cong: \<open>sat_eq A B \<Longrightarrow> tix nw (length A) t \<Longrightarrow> sat (ow ws A t) = sat (ow ws B t)\<close>
+proof (induction t)
+  case (Term_Bin op a b)
+  have wa: \<open>sat (width ws A a) = sat (width ws B a)\<close> and wb: \<open>sat (width ws A b) = sat (width ws B b)\<close>
+    using sat_width_cong[OF Term_Bin.prems(1)] Term_Bin.prems(2) by auto
+  have e: \<open>sat (ebin op (width ws A a)) = sat (ebin op (width ws B a))\<close> by (rule sat_cong_ge[OF wa ebin_ge])
+  have o: \<open>sat (opw op (width ws A a) (width ws A b) + 1) = sat (opw op (width ws B a) (width ws B b) + 1)\<close>
+    by (rule sat_add_cong, rule sat_opw_cong[OF wa wb]) simp
+  have f: \<open>sat (fw (opw op (width ws A a) (width ws A b))) = sat (fw (opw op (width ws B a) (width ws B b)))\<close>
+    unfolding fw_def by (rule sat_mul_cong[OF refl o])
+  show ?case unfolding ow_eqs
+    using Term_Bin f e by (auto intro!: sat_add_cong)
+next
+  case (Term_Ite c a b)
+  have wa: \<open>sat (width ws A a) = sat (width ws B a)\<close> using sat_width_cong[OF Term_Ite.prems(1)] Term_Ite.prems(2) by auto
+  have f: \<open>sat (fw (width ws A a)) = sat (fw (width ws B a))\<close> unfolding fw_def by (rule sat_mul_cong[OF refl sat_add_cong[OF wa refl]])
+  have g: \<open>sat (5 * width ws A a) = sat (5 * width ws B a)\<close> by (rule sat_mul_cong[OF refl wa])
+  have h: \<open>sat (9 * width ws A a) = sat (9 * width ws B a)\<close> by (rule sat_mul_cong[OF refl wa])
+  show ?case unfolding ow_eqs using Term_Ite f g h by (auto intro!: sat_add_cong)
+qed (auto simp: ow_eqs fw_def sat_eq_def intro!: sat_add_cong sat_mul_cong sat_width_cong)
 
-lemma weight_add:
-  \<open>sat_eq (map unat ds) D \<Longrightarrow> tix nw (length ds) t \<Longrightarrow> unat g = sat (term_weight ws (map unat ds) t) \<Longrightarrow>
-   sat (sat X + unat g) = sat (X + term_weight ws D t)\<close>
-  by (metis sat_add_sat sat_weight_cong length_map)
+lemma ow_add:
+  \<open>sat_eq (map unat ds) D \<Longrightarrow> tix nw (length ds) t \<Longrightarrow>
+   sat (sat X + sat (ow ws (map unat ds) t)) = sat (X + ow ws D t)\<close>
+  by (metis sat_add_sat sat_ow_cong length_map)
 
-lemma final_cmp: \<open>(sat (1000000 * sat X) < 9223372036854775808) = (1000000 * X < 9223372036854775808)\<close>
+lemma final_cmp4: \<open>(sat (4 * sat X) < 9223372036854775808) = (4 * X < 9223372036854775808)\<close>
 proof -
-  have \<open>sat (1000000 :: nat) = 1000000\<close> by (simp add: sat_def)
-  then have \<open>sat (1000000 * sat X) = sat (1000000 * X)\<close> by (metis sat_mul_sat)
+  have \<open>sat (4 :: nat) = 4\<close> by (simp add: sat_def)
+  then have \<open>sat (4 * sat X) = sat (4 * X)\<close> by (metis sat_mul_sat)
   then show ?thesis by (simp add: sat_def min_less_iff_disj)
 qed
-
-lemma weight_add':
-  \<open>sat_eq (map unat ds) D \<Longrightarrow> tix nw (length ds) t \<Longrightarrow>
-   sat (sat X + sat (term_weight ws (map unat ds) t)) = sat (X + term_weight ws D t)\<close>
-  by (metis sat_add_sat sat_weight_cong length_map)
 
 lemma tix_full_asserts:
   \<open>sat_eq (map unat ds) (def_widths ws [] xs) \<Longrightarrow> (\<forall>t \<in> set ts. tix nw (length xs) t \<and> P t) \<Longrightarrow>
@@ -452,7 +502,57 @@ proof -
   show ?thesis using a l by (auto intro: tix_mono)
 qed
 
-context BVSmt_ctx
+lemma nst_le_iff: \<open>(nst n \<le> i) = (n \<le> 2 ^ i)\<close>
+proof
+  assume \<open>nst n \<le> i\<close>
+  moreover have \<open>n \<le> 2 ^ nst n\<close> unfolding nst_def by (rule LeastI[of _ n]) (simp add: less_imp_le)
+  ultimately show \<open>n \<le> 2 ^ i\<close> by (meson order_trans power_increasing one_le_numeral)
+next
+  assume \<open>n \<le> 2 ^ i\<close>
+  then show \<open>nst n \<le> i\<close> unfolding nst_def by (rule Least_le)
+qed
+
+lemma nst_le64: \<open>unat (n :: 64 word) \<le> 2 ^ 64\<close>
+  using unat_lt2p[of n] by simp
+
+text \<open>The loop of \<^verbatim>\<open>stages\<close>: \<open>p\<close> is \<open>2^i\<close> saturated, and \<open>i\<close> stays at most \<^const>\<open>nst\<close>.\<close>
+lemma stages_step:
+  \<open>p = sat (2 ^ i) \<Longrightarrow> p < n \<Longrightarrow> i < 64 \<Longrightarrow> Suc i \<le> nst n \<and> sat (p * 2) = sat (2 ^ Suc i)\<close>
+proof -
+  assume a: \<open>p = sat (2 ^ i)\<close> \<open>p < n\<close> \<open>i < 64\<close>
+  have \<open>(2::nat) ^ i \<le> 2 ^ 63\<close> using a(3) by (intro power_increasing) simp_all
+  then have \<open>p = 2 ^ i\<close> using a(1) by (simp add: sat_def)
+  then have \<open>\<not> n \<le> 2 ^ i\<close> using a(2) by simp
+  then have \<open>Suc i \<le> nst n\<close> using nst_le_iff[of n i] by simp
+  moreover have \<open>sat (p * 2) = sat (2 ^ Suc i)\<close>
+    using sat_mul_sat[of \<open>2 ^ i\<close> 2] a(1) by (simp add: sat_def mult.commute)
+  ultimately show ?thesis by simp
+qed
+
+lemma sat2a: \<open>sat (sat x * 2) = sat (2 * x)\<close>
+  using sat_mul_sat_l[of x 2] by (simp add: mult.commute)
+
+lemma sat2b: \<open>sat (2 * sat x) = sat (2 * x)\<close>
+  using sat_mul_sat_l[of x 2] by (simp add: mult.commute)
+
+lemma stages_exit:
+  \<open>p = sat (2 ^ i) \<Longrightarrow> i \<le> 64 \<Longrightarrow> i \<le> nst n \<Longrightarrow> n \<le> 2 ^ 64 \<Longrightarrow> \<not> (p < n \<and> i < 64) \<Longrightarrow> i = nst n\<close>
+proof -
+  assume a: \<open>p = sat (2 ^ i)\<close> \<open>i \<le> 64\<close> \<open>i \<le> nst n\<close> \<open>n \<le> 2 ^ 64\<close> \<open>\<not> (p < n \<and> i < 64)\<close>
+  have \<open>nst n \<le> i\<close>
+  proof (cases \<open>i < 64\<close>)
+    case True
+    then have \<open>n \<le> p\<close> using a(5) by simp
+    moreover have \<open>p \<le> 2 ^ i\<close> using a(1) by (simp add: sat_def)
+    ultimately show ?thesis using nst_le_iff by (meson order_trans)
+  next
+    case False
+    then show ?thesis using a(2,4) nst_le_iff[of n 64] by simp
+  qed
+  then show ?thesis using a(3) by simp
+qed
+
+context QFBV_ctx
 begin
 
 subsection \<open>Saturating arithmetic\<close>
@@ -671,16 +771,44 @@ lemma tr_size_spec [crush_specs]:
 
 subsection \<open>\<^verbatim>\<open>term_size\<close>\<close>
 
-definition cube1_contract :: \<open>64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
-  [crush_contracts]: \<open>cube1_contract w \<equiv>
-     make_function_contract can_alloc_reference
-       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = sat ((unat w + 1) ^ 3)\<rangle>)\<close>
+definition stages_contract :: \<open>64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>stages_contract n \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>64 \<le> urust_fuel\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = nst (unat n)\<rangle>)\<close>
 
-lemma cube1_spec [crush_specs]:
-  shows \<open>\<Gamma>; cube1 w \<Turnstile>\<^sub>F cube1_contract w\<close>
-  apply (crush_boot f: cube1_def contract: cube1_contract_def)
+lemma stages_spec [crush_specs]:
+  shows \<open>\<Gamma>; stages n \<Turnstile>\<^sub>F stages_contract n\<close>
+  apply (crush_boot f: stages_def contract: stages_contract_def)
   apply (crush_base)
-  apply (simp only: sat_mul_sat power3_eq_cube mult.assoc)
+  subgoal for i_ref p_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>j. \<Squnion>gi i gp p. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> can_alloc_reference \<star>
+               \<langle>unat p = sat (2 ^ unat i) \<and> unat i \<le> 64 \<and> unat i \<le> nst (unat n) \<and>
+                (if unat p < unat n \<and> unat i < 64 then 64 - unat i else 0) \<le> j\<rangle>\<close> and
+        INV'=\<open>\<lambda>j. \<Squnion>gi i gp p. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> can_alloc_reference \<star>
+               \<langle>unat p = sat (2 ^ unat i) \<and> unat i < 64 \<and> unat p < unat n \<and> unat i \<le> nst (unat n) \<and>
+                64 - unat i \<le> Suc j\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base simp add: word_less_nat_alt unat_inc)
+    apply (all \<open>(simp only: sat2a sat2b sat_1; fail)?\<close>)
+    apply (all \<open>(rule stages_step[OF refl, THEN conjunct1]; (assumption | simp))?\<close>)
+    apply (rule stages_exit[OF _ _ _ nst_le64]; auto split: if_splits)
+    done
+  done
+
+definition bin_cost_contract :: \<open>Op \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>bin_cost_contract op w \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>64 \<le> urust_fuel\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = sat (ebin op (unat w))\<rangle>)\<close>
+
+lemma bin_cost_spec [crush_specs]:
+  shows \<open>\<Gamma>; bin_cost op w \<Turnstile>\<^sub>F bin_cost_contract op w\<close>
+  apply (crush_boot f: bin_cost_def contract: bin_cost_contract_def)
+  apply (cases op; simp only: Op.case)
+  apply (crush_base simp add: ebin_def sat_mul_sat_l sat_add_sat_l sat_add_sat_r)+
   done
 
 definition op_width_contract :: \<open>Op \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
@@ -696,15 +824,15 @@ lemma op_width_spec [crush_specs]:
   done
 
 text \<open>The \<open>k\<close>-th unfolding of \<^verbatim>\<open>term_size\<close>. The width it returns is exact up to saturation
-  (for a variable it is the declared width itself), the weight is saturated.\<close>
+  (for a variable it is the declared width itself), the cost is saturated.\<close>
 definition term_size_contract ::
   \<open>nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> Term \<Rightarrow> ('s, 64 word \<times> 64 word \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>term_size_contract k ws ds t \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>Suc (size t) \<le> k \<and> tix (length ws) (length ds) t\<rangle>)
+       (can_alloc_reference \<star> \<langle>Suc (size t) \<le> k \<and> tix (length ws) (length ds) t \<and> 64 \<le> urust_fuel\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>sat (unat (fst r)) = sat (width (map unat ws) (map unat ds) t) \<and>
-           unat (fst (snd r)) = sat (term_weight (map unat ws) (map unat ds) t)\<rangle>)\<close>
+           unat (fst (snd r)) = sat (ow (map unat ws) (map unat ds) t)\<rangle>)\<close>
 
 lemma term_size_step_spec:
   assumes IH: \<open>\<And>ws ds t. \<Gamma>; R ws ds t \<Turnstile>\<^sub>F term_size_contract k ws ds t\<close>
@@ -713,41 +841,44 @@ proof (cases t)
   case (Term_Const bs)
   show ?thesis unfolding Term_Const
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto simp: unat_of_nat_eq)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_Var i)
   show ?thesis unfolding Term_Var
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_Ref i)
   show ?thesis unfolding Term_Ref
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_Not a)
   show ?thesis unfolding Term_Not
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto intro!: cube_plus)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_Neg a)
   show ?thesis unfolding Term_Neg
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto intro!: cube_plus)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_Bin op a b)
   show ?thesis unfolding Term_Bin
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat width_Bin_opw simp del: width.simps)
-     apply (rule cube_plus, rule opw_chain, assumption+)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat width_Bin_opw simp del: width.simps)
+     apply (rule fw_plus, rule opw_chain, assumption+)
+     apply (auto intro!: sat_add_cong sat_cong_ge[OF _ ebin_ge])[1]
     apply (unfold opw_def[symmetric])
     apply (rule sat_opw_cong; assumption)
     done
@@ -755,50 +886,50 @@ next
   case (Term_Extract hi lo a)
   show ?thesis unfolding Term_Extract
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat word_le_nat_alt)
-    apply (auto simp: sat_sat unat_sub_le intro!: cube_plus)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat word_le_nat_alt)
+    apply (auto simp: unat_sub_le sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong)
     done
 next
   case (Term_Repeat i a)
   show ?thesis unfolding Term_Repeat
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto simp: sat_sat intro!: cube_plus sat_mul_cong)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_ZeroExtend i a)
   show ?thesis unfolding Term_ZeroExtend
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto simp: sat_sat intro!: cube_plus sat_add_cong)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_SignExtend i a)
   show ?thesis unfolding Term_SignExtend
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto simp: sat_sat intro!: cube_plus sat_add_cong)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_RotateLeft i a)
   show ?thesis unfolding Term_RotateLeft
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto intro!: cube_plus)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_RotateRight i a)
   show ?thesis unfolding Term_RotateRight
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto intro!: cube_plus)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
   case (Term_Ite c a b)
   show ?thesis unfolding Term_Ite
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
-    apply (crush_base specs add: IH simp add: term_weight_eqs sat_add_sat sat_sat)
-    apply (auto intro!: cube_plus)
+    apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
+    apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 qed
 
@@ -828,7 +959,7 @@ text \<open>What \<^verbatim>\<open>size_ok\<close> needs: indices in bounds (as
 definition size_pre :: \<open>nat \<Rightarrow> Problem \<Rightarrow> bool\<close> where
   \<open>size_pre F q \<equiv>
      let ws = Problem_widths q; ds = Problem_defs q; ts = Problem_asserts q in
-     length ws < 2 ^ 63 \<and> length ws \<le> F \<and> length ds < 2 ^ 63 \<and> length ds \<le> F \<and>
+     64 \<le> F \<and> length ws < 2 ^ 63 \<and> length ws \<le> F \<and> length ds < 2 ^ 63 \<and> length ds \<le> F \<and>
      length ts < 2 ^ 63 \<and> length ts \<le> F \<and>
      (\<forall>d < length ds. tix (length ws) d (ds ! d) \<and> Suc (size (ds ! d)) \<le> F) \<and>
      (\<forall>t \<in> set ts. tix (length ws) (length ds) t \<and> Suc (size t) \<le> F)\<close>
@@ -836,7 +967,7 @@ definition size_pre :: \<open>nat \<Rightarrow> Problem \<Rightarrow> bool\<clos
 definition size_ok_contract :: \<open>Problem \<Rightarrow> ('s, bool, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>size_ok_contract q \<equiv>
      make_function_contract (can_alloc_reference \<star> \<langle>size_pre urust_fuel q\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (size_bound q < 2 ^ 63)\<rangle>)\<close>
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = sizes_ok q\<rangle>)\<close>
 
 lemma size_ok_spec [crush_specs]:
   shows \<open>\<Gamma>; size_ok q \<Turnstile>\<^sub>F size_ok_contract q\<close>
@@ -882,14 +1013,14 @@ lemma size_ok_spec [crush_specs]:
                    can_alloc_reference \<star>
                    \<langle>unat k \<le> length (Problem_defs q) \<and> sat_eq (map unat ds) (DSq q) \<and>
                     (\<forall>k' < length (Problem_defs q). tix (length (Problem_widths q)) (length ds) (Problem_defs q ! k')) \<and>
-                    unat n = sat (base q + sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q))
+                    unat n = sat (base q + sum_list (map (ow (map unat (Problem_widths q)) (DSq q))
                                                       (take (unat k) (Problem_defs q)))) \<and>
                     length (Problem_defs q) - unat k \<le> j\<rangle>\<close> and
             INV'=\<open>\<lambda>j. \<Squnion>gs' gn n gk k. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs'\<down>ds \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star>
                    can_alloc_reference \<star>
                    \<langle>unat k < length (Problem_defs q) \<and> sat_eq (map unat ds) (DSq q) \<and>
                     (\<forall>k' < length (Problem_defs q). tix (length (Problem_widths q)) (length ds) (Problem_defs q ! k')) \<and>
-                    unat n = sat (base q + sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q))
+                    unat n = sat (base q + sum_list (map (ow (map unat (Problem_widths q)) (DSq q))
                                                       (take (unat k) (Problem_defs q)))) \<and>
                     length (Problem_defs q) - unat k \<le> Suc j\<rangle>\<close> and
             BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
@@ -897,7 +1028,7 @@ lemma size_ok_spec [crush_specs]:
             \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
           in wp_bounded_while_framedI\<close>)
         apply (crush_base contracts add: term_size_contract_def
-            simp add: word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def weight_add' add.assoc)
+            simp add: word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def ow_add add.assoc)
         prefer 2
         subgoal for gs' gna n gk k j_ref
           apply (ucincl_discharge\<open>
@@ -907,8 +1038,8 @@ lemma size_ok_spec [crush_specs]:
                      \<langle>unat jj \<le> length (Problem_asserts q) \<and> sat_eq (map unat ds) (DSq q) \<and>
                       (\<forall>t \<in> set (Problem_asserts q). tix (length (Problem_widths q)) (length ds) t) \<and>
                       unat n = sat (base q +
-                        sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q)) (Problem_defs q)) +
-                        sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q))
+                        sum_list (map (ow (map unat (Problem_widths q)) (DSq q)) (Problem_defs q)) +
+                        sum_list (map (ow (map unat (Problem_widths q)) (DSq q))
                                    (take (unat jj) (Problem_asserts q)))) \<and>
                       length (Problem_asserts q) - unat jj \<le> j\<rangle>\<close> and
               INV'=\<open>\<lambda>j. \<Squnion>gs' gn n gj jj. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs'\<down>ds \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star>
@@ -916,8 +1047,8 @@ lemma size_ok_spec [crush_specs]:
                      \<langle>unat jj < length (Problem_asserts q) \<and> sat_eq (map unat ds) (DSq q) \<and>
                       (\<forall>t \<in> set (Problem_asserts q). tix (length (Problem_widths q)) (length ds) t) \<and>
                       unat n = sat (base q +
-                        sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q)) (Problem_defs q)) +
-                        sum_list (map (term_weight (map unat (Problem_widths q)) (DSq q))
+                        sum_list (map (ow (map unat (Problem_widths q)) (DSq q)) (Problem_defs q)) +
+                        sum_list (map (ow (map unat (Problem_widths q)) (DSq q))
                                    (take (unat jj) (Problem_asserts q)))) \<and>
                       length (Problem_asserts q) - unat jj \<le> Suc j\<rangle>\<close> and
               BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
@@ -925,12 +1056,12 @@ lemma size_ok_spec [crush_specs]:
               \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
             in wp_bounded_while_framedI\<close>)
           apply (crush_base contracts add: term_size_contract_def
-              simp add: word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def weight_add' add.assoc)
-          subgoal by (subst weight_add'[where D=\<open>DSq q\<close>]) (auto simp: add.assoc)
-          subgoal by (simp add: final_cmp size_bound_eq base_def add.assoc)
+              simp add: word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def ow_add add.assoc)
+          subgoal by (subst ow_add[where D=\<open>DSq q\<close>]) (auto simp: add.assoc)
+          subgoal by (simp add: final_cmp4 sizes_ok_def ovf_bound_eq base_def add.assoc)
           subgoal by (blast intro: tix_assert_q)
           done
-        subgoal by (subst weight_add'[where D=\<open>DSq q\<close>]) (auto simp: add.assoc)
+        subgoal by (subst ow_add[where D=\<open>DSq q\<close>]) (auto simp: add.assoc)
         subgoal using tix_full by blast
         subgoal by (simp add: DSq_def)
         done
@@ -1130,7 +1261,7 @@ qed
 
 text \<open>A fuel sufficient for \<^verbatim>\<open>size_ok\<close>.\<close>
 definition fuel_q :: \<open>Problem \<Rightarrow> nat\<close> where
-  \<open>fuel_q q \<equiv> Suc (length (Problem_widths q) + length (Problem_defs q) + length (Problem_asserts q) +
+  \<open>fuel_q q \<equiv> 64 + Suc (length (Problem_widths q) + length (Problem_defs q) + length (Problem_asserts q) +
      sum_list (map size (Problem_defs q)) + sum_list (map size (Problem_asserts q)))\<close>
 
 text \<open>A fuel sufficient for \<^verbatim>\<open>tr_size\<close>.\<close>
@@ -1138,7 +1269,7 @@ definition fuel_smt :: \<open>SmtProblem \<Rightarrow> nat\<close> where
   \<open>fuel_smt p \<equiv> Suc (length (SmtProblem_defs p) + length (SmtProblem_asserts p) +
      sum_list (map (size \<circ> SmtDef_body) (SmtProblem_defs p)) + sum_list (map size (SmtProblem_asserts p)))\<close>
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 lemma size_pre_of_wt:

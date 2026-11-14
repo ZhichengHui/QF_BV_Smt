@@ -3,14 +3,14 @@
 version = 4
 
 [[package]]
-name = "bvsmt"
+name = "qfbv"
 version = "0.1.0"
 
 [[package]]
-name = "bvsmt-cli"
+name = "qfbv-cli"
 version = "0.1.0"
 dependencies = [
- "bvsmt",
+ "qfbv",
  "smtlib",
 ]
 

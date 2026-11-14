@@ -1,1 +1,1 @@
-Placeholders for unsupported features in crate `BVSmt`: 0
+Placeholders for unsupported features in crate `QFBV`: 0

@@ -1,17 +1,14 @@
-theory BVSmt_Spec
-  imports SMT_Semantics
+theory QFBV_CoreSpec
+  imports "QFBV_Spec.QFBV_Spec"
 begin
 
-text \<open>\<open>map\<close> below is \<^const>\<open>List.map\<close>, not the iterator function of AutoCorrode.\<close>
-hide_const (open) Rust_Iterator.map
-
-section \<open>The top-level specification of the solver\<close>
+section \<open>The specification of the core solver\<close>
 
 text \<open>
   OVERVIEW
 
   The Rust entry point is \<^verbatim>\<open>pub fn solve(p: &Problem) -> Answer\<close> (\<^verbatim>\<open>core/src/lib.rs\<close>), translated
-  to \<^verbatim>\<open>BVSmt_ctx.solve\<close>. A problem has variables of the widths \<^const>\<open>Problem_widths\<close>,
+  to \<^verbatim>\<open>QFBV_ctx.solve\<close>. A problem has variables of the widths \<^const>\<open>Problem_widths\<close>,
   definitions \<^const>\<open>Problem_defs\<close> (each may refer to the earlier ones by \<^const>\<open>Term_Ref\<close>), and
   assertions \<^const>\<open>Problem_asserts\<close> (terms of width 1). Booleans are bit-vectors of width 1, true
   being 1. Bit lists are least significant bit first.
@@ -31,7 +28,7 @@ text \<open>
   the logic QF_BV of SMT-LIB 2.6 (\<^verbatim>\<open>spec/smtlib-2.6/\<close> holds the two source files), and for \<open>=\<close>,
   \<open>distinct\<close> and \<open>ite\<close> of the Core theory on bit-vectors. Each constructor takes the operands of the
   binary form in which SMT-LIB defines the function. This core is reached through
-  \<^verbatim>\<open>check_sat\<close> (the second section of this theory), which takes a general problem
+  \<^verbatim>\<open>check_sat\<close> (\<^verbatim>\<open>QFBV_Spec\<close>), which takes a general problem
   (\<^typ>\<open>SmtProblem\<close>, built by the unverified SMT-LIB front end \<^verbatim>\<open>frontend/\<close>) and translates
   it into a \<^typ>\<open>Problem\<close>: the forms that SMT-LIB defines as abbreviations of the binary ones
   (\<open>bvand\<close>, \<open>bvor\<close>, \<open>bvadd\<close>, \<open>bvmul\<close>, \<open>bvxor\<close> with more than two operands, and \<open>distinct\<close> and
@@ -80,7 +77,7 @@ text \<open>
     translated function. That it carries over to the compiled Rust program rests on the
     translation: with enough fuel, the translated function does what the Rust function does,
     and fuel only adds a panic when it runs out.
-  \<^item> \<open>solve_correct\<close> is stated in the locale \<open>BVSmt_heap\<close>, whose assumptions describe a heap with
+  \<^item> \<open>solve_correct\<close> is stated in the locale \<open>QFBV_heap\<close>, whose assumptions describe a heap with
     one kind of reference per type of mutable local. This theory gives no interpretation of the
     locale. As in other AutoCorrode developments, the assumptions are those of AutoCorrode's
     reference model, and the theorem holds for every heap that satisfies them.
@@ -373,7 +370,7 @@ definition size_bound :: \<open>Problem \<Rightarrow> nat\<close> where
      1000000 * (1 + sum_list ws + length ws + length (Problem_defs p) + length (Problem_asserts p) +
                 sum_list (map (term_weight ws ds) (Problem_defs p @ Problem_asserts p)))\<close>
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>The contract\<close>
@@ -391,140 +388,67 @@ end
 
 subsection \<open>The overflow condition\<close>
 
-text \<open>The condition on the size of a problem: its \<^const>\<open>size_bound\<close> fits in a 64-bit word. It is
-  sufficient for the solver's \<^verbatim>\<open>usize\<close> counters to stay within range, but it is not necessary:
-  \<^const>\<open>size_bound\<close> is a generous over-estimate (a factor 1000000 and the cube of every width), so
-  the condition also excludes problems the solver would handle. For example, a single
-  \<open>bvmul\<close> of width 30000 already makes \<^const>\<open>size_bound\<close> exceed \<open>2^64\<close>. The condition is
-  separate from the fuel: the top-level statement quantifies the fuel existentially.\<close>
+text \<open>\<^const>\<open>size_bound\<close> bounds the fuel; it may be large. The counters of the solver (of type
+  \<^verbatim>\<open>usize\<close>) are bounded by the following linear measures instead.\<close>
+
+text \<open>The weight of a term for the counters of the rewriting: one plus the width of each subterm.\<close>
+definition lweight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>lweight ws ds t \<equiv> sum_list (map (\<lambda>u. width ws ds u + 1) (subterms t))\<close>
+
+text \<open>The number of stages of the barrel shifter on width \<open>n\<close>: the least \<open>i\<close> with \<open>n \<le> 2^i\<close>.\<close>
+definition nst :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>nst n \<equiv> LEAST i. n \<le> 2 ^ i\<close>
+
+text \<open>A bound on the variables and clauses that blasting the rewriting of a binary operation on
+  operands of width \<open>w\<close> adds: quadratic for multiplication, division and remainder, \<open>w\<close> times the
+  number of stages for shifts, linear otherwise.\<close>
+definition ebin :: \<open>Op \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>ebin op w \<equiv>
+     if op \<in> {Op_Mul, Op_Udiv, Op_Urem, Op_Sdiv, Op_Srem, Op_Smod} then 76 * w * w + 300 * w + 20
+     else if op \<in> {Op_Shl, Op_Lshr, Op_Ashr} then 10 * w * nst w + 30 * w
+     else 30 * w + 20\<close>
+
+definition enode :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>enode ws ds u \<equiv> (case u of
+     Term_Bin op a b \<Rightarrow> ebin op (width ws ds a)
+   | Term_Neg a \<Rightarrow> 15 * width ws ds a
+   | Term_SignExtend i a \<Rightarrow> 5 * unat i
+   | Term_Ite c a b \<Rightarrow> 5 * width ws ds a
+   | _ \<Rightarrow> 0)\<close>
+
+definition ecount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+  \<open>ecount ws ds t \<equiv> sum_list (map (enode ws ds) (subterms t))\<close>
+
+definition ovf_bound :: \<open>Problem \<Rightarrow> nat\<close> where
+  \<open>ovf_bound p \<equiv>
+     let ws = var_widths p in
+     let ds = def_widths ws [] (Problem_defs p) in
+     4 * (1 + sum_list ws + length ws + length (Problem_defs p) + length (Problem_asserts p) +
+          sum_list (map (\<lambda>t. 4 * lweight ws ds t + ecount ws ds t) (Problem_defs p @ Problem_asserts p)))\<close>
+
+text \<open>The condition on the size of a problem: \<^const>\<open>ovf_bound\<close> is below \<open>2^63\<close>.\<close>
 definition sizes_ok :: \<open>Problem \<Rightarrow> bool\<close> where
-  \<open>sizes_ok p \<equiv> size_bound p < 2 ^ 64\<close>
+  \<open>sizes_ok p \<equiv> ovf_bound p < 2 ^ 63\<close>
 
 subsection \<open>The statement over all instances with enough fuel\<close>
 
-text \<open>The fuel \<^verbatim>\<open>urust_fuel\<close> is a parameter of \<^locale>\<open>BVSmt_ctx\<close>, so a statement that quantifies
-  over it is made outside the locale. The assumptions of \<^locale>\<open>BVSmt_ctx\<close> do not mention the
-  fuel, so its instances that differ only in the fuel share their assumptions. The locale
-  \<^verbatim>\<open>BVSmt_heap\<close> has the parameters and assumptions of \<^locale>\<open>BVSmt_ctx\<close> except the fuel (it
-  repeats \<^verbatim>\<open>urust/BVSmt_Locale.thy\<close> without its last line); each value of the fuel gives an
-  instance of \<^locale>\<open>BVSmt_ctx\<close> with the parameters of \<^verbatim>\<open>BVSmt_heap\<close>.\<close>
+text \<open>Like the top-level statement, \<open>solve_correct\<close> is made in the locale \<^locale>\<open>QFBV_heap\<close>.\<close>
 
-locale BVSmt_heap =
-  reference reference_types
-  + ref_1: reference_allocatable reference_types _ _ _ _ _ _ _ prism_1 \<comment> \<open>(Lit list) list\<close>
-  + ref_2: reference_allocatable reference_types _ _ _ _ _ _ _ prism_2 \<comment> \<open>Lit list\<close>
-  + ref_3: reference_allocatable reference_types _ _ _ _ _ _ _ prism_3 \<comment> \<open>64 word\<close>
-  + ref_4: reference_allocatable reference_types _ _ _ _ _ _ _ prism_4 \<comment> \<open>Cnf\<close>
-  + ref_5: reference_allocatable reference_types _ _ _ _ _ _ _ prism_5 \<comment> \<open>Lit\<close>
-  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>Lit option\<close>
-  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>bool\<close>
-  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>(bool option) list\<close>
-  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>bool list\<close>
-  + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool list) list\<close>
-  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>CoreTerm list\<close>
-  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>(64 word) list\<close>
-  + ref_13: reference_allocatable reference_types _ _ _ _ _ _ _ prism_13 \<comment> \<open>Lower\<close>
-  + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term list\<close>
-  + ref_15: reference_allocatable reference_types _ _ _ _ _ _ _ prism_15 \<comment> \<open>Term\<close>
-  + ref_16: reference_allocatable reference_types _ _ _ _ _ _ _ prism_16 \<comment> \<open>Tr\<close>
-  + ref_17: reference_allocatable reference_types _ _ _ _ _ _ _ prism_17 \<comment> \<open>SmtInterp list\<close>
-  for reference_types :: \<open>'s::{sepalg} \<Rightarrow> 'addr \<Rightarrow> 'gv \<Rightarrow> 'abort \<Rightarrow> 'i prompt \<Rightarrow> 'o prompt_output \<Rightarrow> unit\<close>
-  and prism_1 :: \<open>('gv, (Lit list) list) prism\<close>
-  and prism_2 :: \<open>('gv, Lit list) prism\<close>
-  and prism_3 :: \<open>('gv, 64 word) prism\<close>
-  and prism_4 :: \<open>('gv, Cnf) prism\<close>
-  and prism_5 :: \<open>('gv, Lit) prism\<close>
-  and prism_6 :: \<open>('gv, Lit option) prism\<close>
-  and prism_7 :: \<open>('gv, bool) prism\<close>
-  and prism_8 :: \<open>('gv, (bool option) list) prism\<close>
-  and prism_9 :: \<open>('gv, bool list) prism\<close>
-  and prism_10 :: \<open>('gv, (bool list) list) prism\<close>
-  and prism_11 :: \<open>('gv, CoreTerm list) prism\<close>
-  and prism_12 :: \<open>('gv, (64 word) list) prism\<close>
-  and prism_13 :: \<open>('gv, Lower) prism\<close>
-  and prism_14 :: \<open>('gv, Term list) prism\<close>
-  and prism_15 :: \<open>('gv, Term) prism\<close>
-  and prism_16 :: \<open>('gv, Tr) prism\<close>
-  and prism_17 :: \<open>('gv, SmtInterp list) prism\<close>
+context QFBV_heap
 begin
 
 abbreviation solve :: \<open>nat \<Rightarrow> Problem \<Rightarrow> ('s, Answer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>solve fuel \<equiv>
-     BVSmt_ctx.solve update_raw_fun dereference_raw_fun reference_raw_fun
+     QFBV_ctx.solve update_raw_fun dereference_raw_fun reference_raw_fun
        prism_1 prism_2 prism_3 prism_4 prism_5 prism_6 prism_7 prism_8 prism_9
        prism_10 prism_11 prism_12 prism_13 fuel\<close>
 
 abbreviation solve_contract :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort) function_contract\<close> where
-  \<open>solve_contract \<equiv> BVSmt_ctx.solve_contract can_alloc_reference\<close>
+  \<open>solve_contract \<equiv> QFBV_ctx.solve_contract can_alloc_reference\<close>
 
 definition solve_correct where
   \<open>solve_correct \<Gamma> \<equiv>
      \<forall>p. problem_wt p \<and> sizes_ok p \<longrightarrow> (\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p)\<close>
-
-end
-
-
-section \<open>The specification of the solver on general problems\<close>
-
-text \<open>
-  The Rust entry point on general problems is \<^verbatim>\<open>pub fn check_sat(p: &SmtProblem) -> SmtAnswer\<close>,
-  translated to \<^verbatim>\<open>BVSmt_ctx.check_sat\<close>. Its specification uses the semantics of
-  \<^verbatim>\<open>SMT_Semantics\<close> (the same theory in both solvers) and differs from that of the QF\_UF solver
-  in the fragment (this solver handles the problems without uninterpreted sorts whose declared
-  symbols are all constants) and in the size of problems for which it may answer
-  \<^verbatim>\<open>Unknown\<close>.\<close>
-
-text \<open>The fragment of this solver: no uninterpreted sort, and every declared symbol a constant.\<close>
-definition smt_fragment :: \<open>SmtProblem \<Rightarrow> bool\<close> where
-  \<open>smt_fragment p \<equiv> unat (SmtProblem_num_sorts p) = 0 \<and> (\<forall>f \<in> set (SmtProblem_funs p). SmtFun_args f = [])\<close>
-
-context BVSmt_ctx
-begin
-
-definition check_sat_contract :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort) function_contract\<close> where
-  \<open>check_sat_contract p \<equiv>
-     let pre = can_alloc_reference \<star> \<langle>smt_wf p \<and> smt_repr_ok p\<rangle> in
-     let post = \<lambda>r. can_alloc_reference \<star>
-        \<langle>case r of
-           SmtAnswer_Sat m \<Rightarrow> smt_is_model p m
-         | SmtAnswer_Unsat \<Rightarrow> \<not> smt_satisfiable p
-         | SmtAnswer_Unknown \<Rightarrow> \<not> smt_fragment p \<or> \<not> smt_sizes_ok p\<rangle> in
-     make_function_contract pre post\<close>
-
-text \<open>\<^const>\<open>check_sat_contract\<close> \<open>p\<close>:
-  \<^item> Precondition: \<open>p\<close> is well-sorted (\<^const>\<open>smt_wf\<close>), and every list in it has fewer than
-    \<open>2^63\<close> elements (\<^const>\<open>smt_repr_ok\<close>, which holds for every value of a Rust program).
-  \<^item> \<^verbatim>\<open>Sat(m)\<close>: \<open>m\<close> is a model of \<open>p\<close>. \<^verbatim>\<open>Unsat\<close>: \<open>p\<close> has no model. \<^verbatim>\<open>Unknown\<close>: \<open>p\<close> is not in
-    the fragment of this solver, or it is large (\<^const>\<open>smt_size_bound\<close> \<open>p\<close> is not below
-    \<open>2^64\<close>). For a problem in the fragment with \<^const>\<open>smt_sizes_ok\<close> the answer is \<^verbatim>\<open>Sat\<close>
-    or \<^verbatim>\<open>Unsat\<close>. (The solver checks a bound on the size of the problem it translates \<open>p\<close> into,
-    so it may also answer \<^verbatim>\<open>Sat\<close> or \<^verbatim>\<open>Unsat\<close> for a larger problem.)
-  \<^item> No panic (the abort postcondition is false), as for \<^const>\<open>solve_contract\<close>. The program
-    logic does not model the exhaustion of memory or of the stack, so the contract says nothing
-    about them.\<close>
-
-end
-
-context BVSmt_heap
-begin
-
-abbreviation check_sat :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>check_sat fuel \<equiv>
-     BVSmt_ctx.check_sat update_raw_fun dereference_raw_fun reference_raw_fun
-       prism_1 prism_2 prism_3 prism_4 prism_5 prism_6 prism_7 prism_8 prism_9
-       prism_10 prism_11 prism_12 prism_13 prism_14 prism_15 prism_16 prism_17 fuel\<close>
-
-abbreviation check_sat_contract :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort) function_contract\<close> where
-  \<open>check_sat_contract \<equiv> BVSmt_ctx.check_sat_contract can_alloc_reference\<close>
-
-definition check_sat_correct where
-  \<open>check_sat_correct \<Gamma> \<equiv>
-     \<forall>p. smt_wf p \<and> smt_repr_ok p \<longrightarrow> (\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; check_sat fuel p \<Turnstile>\<^sub>F check_sat_contract p)\<close>
-
-text \<open>\<^const>\<open>check_sat_correct\<close> \<open>\<Gamma>\<close> is the top-level statement: for every problem that satisfies the
-  precondition of \<^const>\<open>BVSmt_ctx.check_sat_contract\<close> there is a bound \<open>N\<close> such that, with any
-  fuel at least \<open>N\<close>, \<^verbatim>\<open>check_sat\<close> satisfies the contract. \<^verbatim>\<open>BVSmt_Top\<close> proves it as the theorem
-  \<open>check_sat_correct\<close>.\<close>
 
 end
 

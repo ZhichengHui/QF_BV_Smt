@@ -1,6 +1,47 @@
-theory BVSmt_Proof
-  imports BVSmt_Refine BVSmt_Encode BVSmt_Dpll BVSmt_Bound BVSmt_LowerRefine BVSmt_LowerBound
+theory QFBV_Proof
+  imports QFBV_Refine QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount
 begin
+
+lemma lin1: \<open>1 \<le> w + 1\<close> for w :: nat
+  by simp
+
+lemma lin2: \<open>x \<le> y \<Longrightarrow> x + 1 \<le> 2 * (y + 1)\<close> for x y :: nat
+  by simp
+
+lemma ob_arith:
+  assumes \<open>4 * (1 + w + a + b + c + (4 * S + E)) < (2::nat) ^ 63\<close>
+  shows \<open>L \<le> E \<Longrightarrow> 2 + w + c + L < 2 ^ 63\<close> \<open>a < 2 ^ 63\<close> \<open>c < 2 ^ 63\<close> \<open>n \<le> 2 * S \<Longrightarrow> n < 2 ^ 63\<close>
+  using assms by simp_all
+
+lemma tb_arith:
+  \<open>T \<le> 2 * (2 * S) + 52 \<Longrightarrow> 4 * (1 + a + b + c + d + (4 * S + E)) < (2::nat) ^ 63 \<Longrightarrow> T < 2 ^ 63\<close>
+  for T S a b c d E :: nat
+  by simp
+
+lemma lw_leaf:
+  \<open>lweight ws ds (Term_Const bs) = width ws ds (Term_Const bs) + 1\<close>
+  \<open>lweight ws ds (Term_Var i) = width ws ds (Term_Var i) + 1\<close>
+  \<open>lweight ws ds (Term_Ref j) = width ws ds (Term_Ref j) + 1\<close>
+  by (simp_all add: lweight_def)
+
+lemma lw_un:
+  \<open>lweight ws ds (Term_Not a) = width ws ds (Term_Not a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_Neg a) = width ws ds (Term_Neg a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_Extract hi lo a) = width ws ds (Term_Extract hi lo a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_Repeat i a) = width ws ds (Term_Repeat i a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_ZeroExtend i a) = width ws ds (Term_ZeroExtend i a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_SignExtend i a) = width ws ds (Term_SignExtend i a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_RotateLeft i a) = width ws ds (Term_RotateLeft i a) + 1 + lweight ws ds a\<close>
+  \<open>lweight ws ds (Term_RotateRight i a) = width ws ds (Term_RotateRight i a) + 1 + lweight ws ds a\<close>
+  by (simp_all add: lweight_def)
+
+lemma lw_Bin:
+  \<open>lweight ws ds (Term_Bin op a b) = width ws ds (Term_Bin op a b) + 1 + lweight ws ds a + lweight ws ds b\<close>
+  by (simp add: lweight_def)
+
+lemma lw_Ite:
+  \<open>lweight ws ds (Term_Ite c a b) = width ws ds (Term_Ite c a b) + 1 + lweight ws ds c + lweight ws ds a + lweight ws ds b\<close>
+  by (simp add: lweight_def)
 
 section \<open>Bounds relating the size of a term to its weight\<close>
 
@@ -9,29 +50,29 @@ text \<open>The recursion depth \<open>Suc (size t)\<close> and the width of any
 lemma size_le_len_sub: \<open>Suc (size t) \<le> length (subterms t)\<close>
   by (induction t) auto
 
-lemma len_le_cubesum: \<open>length xs \<le> sum_list (map (\<lambda>u. (width ws ds u + 1) ^ 3) xs)\<close>
+lemma len_le_linsum: \<open>length xs \<le> sum_list (map (\<lambda>u. (width ws ds u + 1)) xs)\<close>
 proof (induction xs)
   case Nil
   show ?case by simp
 next
   case (Cons x xs)
-  show ?case using add_le_mono[OF cube1[of \<open>width ws ds x\<close>] Cons.IH] by simp
+  show ?case using add_le_mono[OF lin1[of \<open>width ws ds x\<close>] Cons.IH] by simp
 qed
 
-lemma len_sub_le_tw: \<open>length (subterms t) \<le> term_weight ws ds t\<close>
-  using len_le_cubesum[of \<open>subterms t\<close>] by (simp add: term_weight_def)
+lemma len_sub_le_tw: \<open>length (subterms t) \<le> lweight ws ds t\<close>
+  using len_le_linsum[of \<open>subterms t\<close>] by (simp add: lweight_def)
 
-lemma size_le_tw: \<open>Suc (size t) \<le> term_weight ws ds t\<close>
+lemma size_le_tw: \<open>Suc (size t) \<le> lweight ws ds t\<close>
   using size_le_len_sub[of t] len_sub_le_tw[of t ws ds] by simp
 
 lemma width_le_tw:
   assumes \<open>u \<in> set (subterms t)\<close>
-  shows \<open>width ws ds u \<le> term_weight ws ds t\<close>
+  shows \<open>width ws ds u \<le> lweight ws ds t\<close>
 proof -
-  have \<open>width ws ds u \<le> (width ws ds u + 1) ^ 3\<close>
-    using power_increasing[of 1 3 \<open>width ws ds u + 1\<close>] by simp
-  also have \<open>(width ws ds u + 1) ^ 3 \<le> term_weight ws ds t\<close>
-    unfolding term_weight_def using assms by (intro member_le_sum_list; simp)
+  have \<open>width ws ds u \<le> (width ws ds u + 1)\<close>
+    by simp
+  also have \<open>(width ws ds u + 1) \<le> lweight ws ds t\<close>
+    unfolding lweight_def using assms by (intro member_le_sum_list; simp)
   finally show ?thesis .
 qed
 
@@ -45,124 +86,124 @@ lemma lower_bin_m_len3: \<open>length (fst (fst (lower_bin_m L op ka kb))) \<le>
   by (cases op) (simp_all add: lower_bin_m_def Let_def push_m_def split_def)
 
 lemma lower_m_length:
-  \<open>wt ws ds t \<Longrightarrow> length (fst (fst (lower_m ws dm L t))) \<le> length (fst L) + 2 * term_weight ws ds t\<close>
+  \<open>wt ws ds t \<Longrightarrow> length (fst (fst (lower_m ws dm L t))) \<le> length (fst L) + 2 * lweight ws ds t\<close>
 proof (induction t arbitrary: L)
   case (Term_Const bs)
-  show ?case using cube1[of \<open>length bs\<close>] by (simp add: push_m_def tw_leaf; linarith)
+  show ?case using lin1[of \<open>length bs\<close>] by (simp add: push_m_def lw_leaf; linarith)
 next
   case (Term_Var i)
-  show ?case using cube1[of \<open>ws ! unat i\<close>] by (simp add: push_m_def tw_leaf; linarith)
+  show ?case using lin1[of \<open>ws ! unat i\<close>] by (simp add: push_m_def lw_leaf; linarith)
 next
   case (Term_Ref j)
-  show ?case by (simp add: tw_leaf; linarith)
+  show ?case by (simp add: lw_leaf; linarith)
 next
   case (Term_Not a)
   have wta: \<open>wt ws ds a\<close> using Term_Not.prems by simp
-  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_Not.IH[OF wta] by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_Not a)))) = length (fst (fst (lower_m ws dm L a))) + 1\<close>
     by (simp add: push_m_def split_def)
-  show ?case using ih L cube1[of \<open>width ws ds (Term_Not a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using ih L lin1[of \<open>width ws ds (Term_Not a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_Neg a)
   have wta: \<open>wt ws ds a\<close> using Term_Neg.prems by simp
-  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_Neg.IH[OF wta] by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_Neg a)))) = length (fst (fst (lower_m ws dm L a))) + 1\<close>
     by (simp add: push_m_def split_def)
-  show ?case using ih L cube1[of \<open>width ws ds (Term_Neg a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using ih L lin1[of \<open>width ws ds (Term_Neg a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_Bin op a b)
   have w: \<open>wt ws ds a\<close> \<open>wt ws ds b\<close> using Term_Bin.prems by simp_all
-  have c3: \<open>3 \<le> 2 * (width ws ds (Term_Bin op a b) + 1) ^ 3\<close>
-    using wt_width_pos[OF Term_Bin.prems(1)] power_increasing[of 1 3 \<open>width ws ds (Term_Bin op a b) + 1\<close>] by simp
+  have c3: \<open>3 \<le> 2 * (width ws ds (Term_Bin op a b) + 1)\<close>
+    using wt_width_pos[OF Term_Bin.prems(1)] by simp
   have lb: \<open>length (fst (fst (lower_m ws dm L (Term_Bin op a b)))) \<le>
            length (fst (fst (lower_m ws dm (fst (lower_m ws dm L a)) b))) + 3\<close>
     using lower_bin_m_len3[of \<open>fst (lower_m ws dm (fst (lower_m ws dm L a)) b)\<close> op
         \<open>snd (lower_m ws dm L a)\<close> \<open>snd (lower_m ws dm (fst (lower_m ws dm L a)) b)\<close>] by simp
   have \<open>length (fst (fst (lower_m ws dm L (Term_Bin op a b)))) \<le>
-        length (fst L) + 2 * term_weight ws ds a + 2 * term_weight ws ds b + 3\<close>
+        length (fst L) + 2 * lweight ws ds a + 2 * lweight ws ds b + 3\<close>
     using lb Term_Bin.IH(2)[OF w(2), of \<open>fst (lower_m ws dm L a)\<close>] Term_Bin.IH(1)[OF w(1), of L] by linarith
-  then show ?case using c3 unfolding tw_Bin add_mult_distrib2 by linarith
+  then show ?case using c3 unfolding lw_Bin add_mult_distrib2 by linarith
 next
   case (Term_Extract hi lo a)
   have wta: \<open>wt ws ds a\<close> using Term_Extract.prems by simp
-  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_Extract.IH[OF wta] by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_Extract hi lo a)))) = length (fst (fst (lower_m ws dm L a))) + 1\<close>
     by (simp add: push_m_def split_def Let_def)
-  show ?case using ih L cube1[of \<open>width ws ds (Term_Extract hi lo a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using ih L lin1[of \<open>width ws ds (Term_Extract hi lo a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_Repeat i a)
   have w: \<open>wt ws ds a\<close> \<open>1 \<le> unat i\<close> using Term_Repeat.prems by simp_all
   have wp: \<open>1 \<le> width ws ds a\<close> using wt_width_pos[OF w(1)] .
   have iW: \<open>unat i \<le> width ws ds (Term_Repeat i a)\<close>
     using mult_le_mono2[OF wp, of \<open>unat i\<close>] by simp
-  have cR: \<open>width ws ds (Term_Repeat i a) + 1 \<le> (width ws ds (Term_Repeat i a) + 1) ^ 3\<close>
-    using power_increasing[of 1 3 \<open>width ws ds (Term_Repeat i a) + 1\<close>] by simp
+  have cR: \<open>width ws ds (Term_Repeat i a) + 1 \<le> (width ws ds (Term_Repeat i a) + 1)\<close>
+    by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_Repeat i a)))) =
            length (fst (fst (lower_m ws dm L a))) + 1 + unat i\<close>
     unfolding lower_m_Repeat'' by (simp add: rep_fold_len)
-  have \<open>\<dots> \<le> length (fst L) + 2 * term_weight ws ds a + 1 + unat i\<close>
+  have \<open>\<dots> \<le> length (fst L) + 2 * lweight ws ds a + 1 + unat i\<close>
     using Term_Repeat.IH[OF w(1), of L] by simp
-  also have \<open>\<dots> \<le> length (fst L) + 2 * term_weight ws ds (Term_Repeat i a)\<close>
-    using iW cR unfolding tw_un add_mult_distrib2 by linarith
+  also have \<open>\<dots> \<le> length (fst L) + 2 * lweight ws ds (Term_Repeat i a)\<close>
+    using iW cR unfolding lw_un add_mult_distrib2 by linarith
   finally show ?case using L by simp
 next
   case (Term_ZeroExtend i a)
   have wta: \<open>wt ws ds a\<close> using Term_ZeroExtend.prems by simp
-  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_ZeroExtend.IH[OF wta] by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_ZeroExtend i a)))) = length (fst (fst (lower_m ws dm L a))) + 1\<close>
     by (simp add: push_m_def split_def Let_def)
-  show ?case using ih L cube1[of \<open>width ws ds (Term_ZeroExtend i a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using ih L lin1[of \<open>width ws ds (Term_ZeroExtend i a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_SignExtend i a)
   have wta: \<open>wt ws ds a\<close> using Term_SignExtend.prems by simp
-  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst (fst (lower_m ws dm L a))) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_SignExtend.IH[OF wta] by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_SignExtend i a)))) = length (fst (fst (lower_m ws dm L a))) + 1\<close>
     by (simp add: push_m_def split_def Let_def)
-  show ?case using ih L cube1[of \<open>width ws ds (Term_SignExtend i a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using ih L lin1[of \<open>width ws ds (Term_SignExtend i a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_RotateLeft i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have w: \<open>wt ws ds a\<close> using Term_RotateLeft.prems by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_RotateLeft i a)))) \<le> length (fst L1) + 1\<close>
     using a by (simp add: lower_m_RotateLeft' Let_def push_m_def split: if_splits)
-  have ih: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_RotateLeft.IH[OF w, of L] a by simp
-  show ?case using L ih cube1[of \<open>width ws ds (Term_RotateLeft i a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using L ih lin1[of \<open>width ws ds (Term_RotateLeft i a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_RotateRight i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have w: \<open>wt ws ds a\<close> using Term_RotateRight.prems by simp
   have L: \<open>length (fst (fst (lower_m ws dm L (Term_RotateRight i a)))) \<le> length (fst L1) + 1\<close>
     using a by (simp add: lower_m_RotateRight' Let_def push_m_def split: if_splits)
-  have ih: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have ih: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using Term_RotateRight.IH[OF w, of L] a by simp
-  show ?case using L ih cube1[of \<open>width ws ds (Term_RotateRight i a)\<close>]
-    unfolding tw_un add_mult_distrib2 by linarith
+  show ?case using L ih lin1[of \<open>width ws ds (Term_RotateRight i a)\<close>]
+    unfolding lw_un add_mult_distrib2 by linarith
 next
   case (Term_Ite c a b)
   have w: \<open>wt ws ds c\<close> \<open>wt ws ds a\<close> \<open>wt ws ds b\<close> using Term_Ite.prems by simp_all
   have \<open>length (fst (fst (lower_m ws dm L (Term_Ite c a b)))) =
         length (fst (fst (lower_m ws dm (fst (lower_m ws dm (fst (lower_m ws dm L c)) a)) b))) + 1\<close>
     by (simp add: push_m_def)
-  also have \<open>\<dots> \<le> length (fst (fst (lower_m ws dm (fst (lower_m ws dm L c)) a))) + 2 * term_weight ws ds b + 1\<close>
+  also have \<open>\<dots> \<le> length (fst (fst (lower_m ws dm (fst (lower_m ws dm L c)) a))) + 2 * lweight ws ds b + 1\<close>
     using Term_Ite.IH(3)[OF w(3), of \<open>fst (lower_m ws dm (fst (lower_m ws dm L c)) a)\<close>] by simp
-  also have \<open>\<dots> \<le> length (fst (fst (lower_m ws dm L c))) + 2 * term_weight ws ds a + 2 * term_weight ws ds b + 1\<close>
+  also have \<open>\<dots> \<le> length (fst (fst (lower_m ws dm L c))) + 2 * lweight ws ds a + 2 * lweight ws ds b + 1\<close>
     using Term_Ite.IH(2)[OF w(2), of \<open>fst (lower_m ws dm L c)\<close>] by simp
-  also have \<open>\<dots> \<le> length (fst L) + 2 * term_weight ws ds c + 2 * term_weight ws ds a + 2 * term_weight ws ds b + 1\<close>
+  also have \<open>\<dots> \<le> length (fst L) + 2 * lweight ws ds c + 2 * lweight ws ds a + 2 * lweight ws ds b + 1\<close>
     using Term_Ite.IH(1)[OF w(1), of L] by simp
-  also have \<open>\<dots> \<le> length (fst L) + 2 * term_weight ws ds (Term_Ite c a b)\<close>
-    using cube1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding tw_Ite add_mult_distrib2 by linarith
+  also have \<open>\<dots> \<le> length (fst L) + 2 * lweight ws ds (Term_Ite c a b)\<close>
+    using lin1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding lw_Ite add_mult_distrib2 by linarith
   finally show ?case .
 qed
 
@@ -201,20 +242,20 @@ lemma lower_bin_m_bnd:
 
 lemma lower_m_bnd:
   \<open>wt ws ds t \<Longrightarrow> lok ws L \<Longrightarrow> dm_ok ds dm L \<Longrightarrow> bnd L \<Longrightarrow>
-   length (fst L) + 2 * term_weight ws ds t < 2 ^ 64 \<Longrightarrow>
+   length (fst L) + 2 * lweight ws ds t < 2 ^ 64 \<Longrightarrow>
    (\<forall>u \<in> set (subterms t). width ws ds u < 2 ^ 64) \<Longrightarrow>
    bnd (fst (lower_m ws dm L t))\<close>
 proof (induction t arbitrary: L)
   case (Term_Const bs)
   have wb: \<open>length bs < 2 ^ 64\<close> using Term_Const.prems(6) by simp
   have len: \<open>length (fst L) + 1 < 2 ^ 64\<close>
-    using Term_Const.prems(5) cube1[of \<open>length bs\<close>] unfolding tw_leaf width.simps add_mult_distrib2 by linarith
+    using Term_Const.prems(5) lin1[of \<open>length bs\<close>] unfolding lw_leaf width.simps add_mult_distrib2 by linarith
   show ?case using bnd_push[OF Term_Const.prems(4) wb len] by simp
 next
   case (Term_Var i)
   have wb: \<open>ws ! unat i < 2 ^ 64\<close> using Term_Var.prems(6) by simp
   have len: \<open>length (fst L) + 1 < 2 ^ 64\<close>
-    using Term_Var.prems(5) cube1[of \<open>ws ! unat i\<close>] unfolding tw_leaf width.simps add_mult_distrib2 by linarith
+    using Term_Var.prems(5) lin1[of \<open>ws ! unat i\<close>] unfolding lw_leaf width.simps add_mult_distrib2 by linarith
   show ?case using bnd_push[OF Term_Var.prems(4) wb len] by simp
 next
   case (Term_Ref j)
@@ -224,34 +265,34 @@ next
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wta: \<open>wt ws ds a\<close> using Term_Not.prems(1) by simp
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_Not.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_Not.prems(5) cube1[of \<open>width ws ds (Term_Not a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_Not.prems(5) lin1[of \<open>width ws ds (Term_Not a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_Not.IH[OF wta Term_Not.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wta Term_Not.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> and ka64: \<open>ka < 2 ^ 64\<close> using EA by (simp_all add: env_ok_def)
   have wsub: \<open>snd L1 ! ka < 2 ^ 64\<close> using wa Term_Not.prems(6) by simp
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wta, of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_Not.prems(5) cube1[of \<open>width ws ds (Term_Not a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_Not.prems(5) lin1[of \<open>width ws ds (Term_Not a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] by simp
 next
   case (Term_Neg a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wta: \<open>wt ws ds a\<close> using Term_Neg.prems(1) by simp
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_Neg.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_Neg.prems(5) cube1[of \<open>width ws ds (Term_Neg a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_Neg.prems(5) lin1[of \<open>width ws ds (Term_Neg a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_Neg.IH[OF wta Term_Neg.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wta Term_Neg.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have wsub: \<open>snd L1 ! ka < 2 ^ 64\<close> using wa Term_Neg.prems(6) by simp
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wta, of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_Neg.prems(5) cube1[of \<open>width ws ds (Term_Neg a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_Neg.prems(5) lin1[of \<open>width ws ds (Term_Neg a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] by simp
 next
   case (Term_Bin op a b)
@@ -261,17 +302,17 @@ next
     using Term_Bin.prems(1) by simp_all
   have suba: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_Bin.prems(6) by simp
   have subb: \<open>\<forall>u \<in> set (subterms b). width ws ds u < 2 ^ 64\<close> using Term_Bin.prems(6) by simp
-  have buda: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_Bin.prems(5) cube1[of \<open>width ws ds (Term_Bin op a b)\<close>] unfolding tw_Bin add_mult_distrib2 by linarith
+  have buda: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_Bin.prems(5) lin1[of \<open>width ws ds (Term_Bin op a b)\<close>] unfolding lw_Bin add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_Bin.IH(1)[OF wt(1) Term_Bin.prems(2,3,4) buda suba] a by simp
   have Sa: \<open>env_ok ws L1 ka (width ws ds a) \<and> lok ws L1 \<and> lext ws L L1\<close>
     using lower_m_correct[OF wt(1) Term_Bin.prems(2,3) a B1] lext_lok by blast
   have L1: \<open>lok ws L1\<close> and X1: \<open>lext ws L L1\<close> using Sa by blast+
   have D1: \<open>dm_ok ds dm L1\<close> using dm_ok_lext[OF Term_Bin.prems(2,3) X1] .
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt(1), of dm L] a by simp
-  have budb: \<open>length (fst L1) + 2 * term_weight ws ds b < 2 ^ 64\<close>
-    using lena Term_Bin.prems(5) cube1[of \<open>width ws ds (Term_Bin op a b)\<close>] unfolding tw_Bin add_mult_distrib2 by linarith
+  have budb: \<open>length (fst L1) + 2 * lweight ws ds b < 2 ^ 64\<close>
+    using lena Term_Bin.prems(5) lin1[of \<open>width ws ds (Term_Bin op a b)\<close>] unfolding lw_Bin add_mult_distrib2 by linarith
   have B2: \<open>bnd L2\<close> using Term_Bin.IH(2)[OF wt(2) L1 D1 B1 budb subb] b by simp
   have EA: \<open>env_ok ws L2 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt(1) Term_Bin.prems(2,3) a B1] lower_m_correct[OF wt(2) L1 D1 b B2] env_lext by blast
@@ -289,12 +330,12 @@ next
     then have \<open>snd L2 ! ka + snd L2 ! kb = width ws ds (Term_Bin op a b)\<close> using wa wb by simp
     then show \<open>snd L2 ! ka + snd L2 ! kb < 2 ^ 64\<close> using Term_Bin.prems(6) by simp
   qed
-  have lenb: \<open>length (fst L2) \<le> length (fst L) + 2 * term_weight ws ds a + 2 * term_weight ws ds b\<close>
+  have lenb: \<open>length (fst L2) \<le> length (fst L) + 2 * lweight ws ds a + 2 * lweight ws ds b\<close>
     using lower_m_length[OF wt(2), of dm L1] b lena by simp
-  have c3: \<open>3 \<le> 2 * (width ws ds (Term_Bin op a b) + 1) ^ 3\<close>
-    using wt_width_pos[OF Term_Bin.prems(1)] power_increasing[of 1 3 \<open>width ws ds (Term_Bin op a b) + 1\<close>] by simp
+  have c3: \<open>3 \<le> 2 * (width ws ds (Term_Bin op a b) + 1)\<close>
+    using wt_width_pos[OF Term_Bin.prems(1)] by simp
   have len3: \<open>length (fst L2) + 3 < 2 ^ 64\<close>
-    using lenb Term_Bin.prems(5) c3 unfolding tw_Bin add_mult_distrib2 by linarith
+    using lenb Term_Bin.prems(5) c3 unfolding lw_Bin add_mult_distrib2 by linarith
   have R: \<open>lower_m ws dm L (Term_Bin op a b) = lower_bin_m L2 op ka kb\<close> using a b by simp
   show ?case using R lower_bin_m_bnd[OF B2 len3 wa64 wb64 cc] by simp
 next
@@ -302,8 +343,8 @@ next
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wt: \<open>wt ws ds a\<close> \<open>unat lo \<le> unat hi\<close> \<open>unat hi < width ws ds a\<close> using Term_Extract.prems(1) by simp_all
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_Extract.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_Extract.prems(5) cube1[of \<open>width ws ds (Term_Extract hi lo a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_Extract.prems(5) lin1[of \<open>width ws ds (Term_Extract hi lo a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_Extract.IH[OF wt(1) Term_Extract.prems(2,3,4) bud sub] a by simp
   have selfa: \<open>a \<in> set (subterms a)\<close> by (cases a) auto
   have wsub: \<open>unat hi - unat lo + 1 < 2 ^ 64\<close>
@@ -311,10 +352,10 @@ next
     have \<open>unat hi - unat lo + 1 \<le> width ws ds a\<close> using wt(2,3) by simp
     then show ?thesis using bspec[OF sub selfa] by simp
   qed
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt(1), of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_Extract.prems(5) cube1[of \<open>width ws ds (Term_Extract hi lo a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_Extract.prems(5) lin1[of \<open>width ws ds (Term_Extract hi lo a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] by (simp add: Let_def)
 next
   case (Term_Repeat i a)
@@ -322,23 +363,23 @@ next
   have wt: \<open>wt ws ds a\<close> \<open>1 \<le> unat i\<close> using Term_Repeat.prems(1) by simp_all
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_Repeat.prems(6) by simp
   have wR: \<open>width ws ds (Term_Repeat i a) < 2 ^ 64\<close> using Term_Repeat.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_Repeat.prems(5) cube1[of \<open>width ws ds (Term_Repeat i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_Repeat.prems(5) lin1[of \<open>width ws ds (Term_Repeat i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_Repeat.IH[OF wt(1) Term_Repeat.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt(1) Term_Repeat.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> and L1: \<open>lok ws L1\<close> using EA by (simp_all add: env_ok_def)
   obtain L2 k0 where p: \<open>push_m L1 (CoreTerm_Const []) 0 = (L2, k0)\<close> by (cases \<open>push_m L1 (CoreTerm_Const []) 0\<close>)
-  have lenL1: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lenL1: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt(1), of dm L] a by simp
   have iW: \<open>unat i \<le> width ws ds (Term_Repeat i a)\<close>
     using mult_le_mono2[OF wt_width_pos[OF wt(1)], of \<open>unat i\<close>] by simp
-  have cR: \<open>width ws ds (Term_Repeat i a) + 1 \<le> (width ws ds (Term_Repeat i a) + 1) ^ 3\<close>
-    using power_increasing[of 1 3 \<open>width ws ds (Term_Repeat i a) + 1\<close>] by simp
-  have cubeW: \<open>unat i + 1 \<le> 2 * (width ws ds (Term_Repeat i a) + 1) ^ 3\<close>
-    using iW cR by linarith
+  have cR: \<open>width ws ds (Term_Repeat i a) + 1 \<le> (width ws ds (Term_Repeat i a) + 1)\<close>
+    by simp
+  have cubeW: \<open>unat i + 1 \<le> 2 * (width ws ds (Term_Repeat i a) + 1)\<close>
+    using lin2[OF iW] .
   have lenbud: \<open>length (fst L1) + 1 + unat i < 2 ^ 64\<close>
-    using lenL1 Term_Repeat.prems(5) cubeW unfolding tw_un add_mult_distrib2 by linarith
+    using lenL1 Term_Repeat.prems(5) cubeW unfolding lw_un add_mult_distrib2 by linarith
   have lb2: \<open>length (fst L1) + 1 < 2 ^ 64\<close> using lenbud by linarith
   have B2: \<open>bnd L2\<close>
     using bnd_push[OF B1 _ lb2, where t=\<open>CoreTerm_Const []\<close> and w=0] p by (simp add: push_m_def)
@@ -355,51 +396,51 @@ next
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wt: \<open>wt ws ds a\<close> using Term_ZeroExtend.prems(1) by simp
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_ZeroExtend.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_ZeroExtend.prems(5) cube1[of \<open>width ws ds (Term_ZeroExtend i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_ZeroExtend.prems(5) lin1[of \<open>width ws ds (Term_ZeroExtend i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_ZeroExtend.IH[OF wt Term_ZeroExtend.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt Term_ZeroExtend.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have wsub: \<open>snd L1 ! ka + unat i < 2 ^ 64\<close> using wa Term_ZeroExtend.prems(6) by simp
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt, of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_ZeroExtend.prems(5) cube1[of \<open>width ws ds (Term_ZeroExtend i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_ZeroExtend.prems(5) lin1[of \<open>width ws ds (Term_ZeroExtend i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] by (simp add: Let_def)
 next
   case (Term_SignExtend i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wt: \<open>wt ws ds a\<close> using Term_SignExtend.prems(1) by simp
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_SignExtend.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_SignExtend.prems(5) cube1[of \<open>width ws ds (Term_SignExtend i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_SignExtend.prems(5) lin1[of \<open>width ws ds (Term_SignExtend i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_SignExtend.IH[OF wt Term_SignExtend.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt Term_SignExtend.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have wsub: \<open>snd L1 ! ka + unat i < 2 ^ 64\<close> using wa Term_SignExtend.prems(6) by simp
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt, of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_SignExtend.prems(5) cube1[of \<open>width ws ds (Term_SignExtend i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_SignExtend.prems(5) lin1[of \<open>width ws ds (Term_SignExtend i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] by (simp add: Let_def)
 next
   case (Term_RotateLeft i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wt: \<open>wt ws ds a\<close> using Term_RotateLeft.prems(1) by simp
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_RotateLeft.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_RotateLeft.prems(5) cube1[of \<open>width ws ds (Term_RotateLeft i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_RotateLeft.prems(5) lin1[of \<open>width ws ds (Term_RotateLeft i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_RotateLeft.IH[OF wt Term_RotateLeft.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt Term_RotateLeft.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have wsub: \<open>snd L1 ! ka < 2 ^ 64\<close> using wa Term_RotateLeft.prems(6) by simp
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt, of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_RotateLeft.prems(5) cube1[of \<open>width ws ds (Term_RotateLeft i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_RotateLeft.prems(5) lin1[of \<open>width ws ds (Term_RotateLeft i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] B1
     by (simp add: lower_m_RotateLeft' Let_def split: if_splits)
 next
@@ -407,17 +448,17 @@ next
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   have wt: \<open>wt ws ds a\<close> using Term_RotateRight.prems(1) by simp
   have sub: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_RotateRight.prems(6) by simp
-  have bud: \<open>length (fst L) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using Term_RotateRight.prems(5) cube1[of \<open>width ws ds (Term_RotateRight i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+  have bud: \<open>length (fst L) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using Term_RotateRight.prems(5) lin1[of \<open>width ws ds (Term_RotateRight i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_RotateRight.IH[OF wt Term_RotateRight.prems(2,3,4) bud sub] a by simp
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt Term_RotateRight.prems(2,3) a B1] by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have wsub: \<open>snd L1 ! ka < 2 ^ 64\<close> using wa Term_RotateRight.prems(6) by simp
-  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt, of dm L] a by simp
   have len: \<open>length (fst L1) + 1 < 2 ^ 64\<close>
-    using lena Term_RotateRight.prems(5) cube1[of \<open>width ws ds (Term_RotateRight i a)\<close>] unfolding tw_un add_mult_distrib2 by linarith
+    using lena Term_RotateRight.prems(5) lin1[of \<open>width ws ds (Term_RotateRight i a)\<close>] unfolding lw_un add_mult_distrib2 by linarith
   show ?case using a bnd_push[OF B1 wsub len] B1
     by (simp add: lower_m_RotateRight' Let_def split: if_splits)
 next
@@ -430,33 +471,33 @@ next
   have subc: \<open>\<forall>u \<in> set (subterms c). width ws ds u < 2 ^ 64\<close> using Term_Ite.prems(6) by simp
   have suba: \<open>\<forall>u \<in> set (subterms a). width ws ds u < 2 ^ 64\<close> using Term_Ite.prems(6) by simp
   have subb: \<open>\<forall>u \<in> set (subterms b). width ws ds u < 2 ^ 64\<close> using Term_Ite.prems(6) by simp
-  have budc: \<open>length (fst L) + 2 * term_weight ws ds c < 2 ^ 64\<close>
-    using Term_Ite.prems(5) cube1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding tw_Ite add_mult_distrib2 by linarith
+  have budc: \<open>length (fst L) + 2 * lweight ws ds c < 2 ^ 64\<close>
+    using Term_Ite.prems(5) lin1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding lw_Ite add_mult_distrib2 by linarith
   have B1: \<open>bnd L1\<close> using Term_Ite.IH(1)[OF wt(1) Term_Ite.prems(2,3,4) budc subc] c by simp
   have L1: \<open>lok ws L1\<close> and X1: \<open>lext ws L L1\<close>
     using lower_m_correct[OF wt(1) Term_Ite.prems(2,3) c B1] lext_lok by blast+
   have D1: \<open>dm_ok ds dm L1\<close> using dm_ok_lext[OF Term_Ite.prems(2,3) X1] .
-  have lenc: \<open>length (fst L1) \<le> length (fst L) + 2 * term_weight ws ds c\<close>
+  have lenc: \<open>length (fst L1) \<le> length (fst L) + 2 * lweight ws ds c\<close>
     using lower_m_length[OF wt(1), of dm L] c by simp
-  have buda: \<open>length (fst L1) + 2 * term_weight ws ds a < 2 ^ 64\<close>
-    using lenc Term_Ite.prems(5) cube1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding tw_Ite add_mult_distrib2 by linarith
+  have buda: \<open>length (fst L1) + 2 * lweight ws ds a < 2 ^ 64\<close>
+    using lenc Term_Ite.prems(5) lin1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding lw_Ite add_mult_distrib2 by linarith
   have B2: \<open>bnd L2\<close> using Term_Ite.IH(2)[OF wt(2) L1 D1 B1 buda suba] a by simp
   have L2: \<open>lok ws L2\<close> and X2: \<open>lext ws L1 L2\<close>
     using lower_m_correct[OF wt(2) L1 D1 a B2] lext_lok by blast+
   have D2: \<open>dm_ok ds dm L2\<close> using dm_ok_lext[OF L1 D1 X2] .
-  have lena: \<open>length (fst L2) \<le> length (fst L) + 2 * term_weight ws ds c + 2 * term_weight ws ds a\<close>
+  have lena: \<open>length (fst L2) \<le> length (fst L) + 2 * lweight ws ds c + 2 * lweight ws ds a\<close>
     using lower_m_length[OF wt(2), of dm L1] a lenc by simp
-  have budb: \<open>length (fst L2) + 2 * term_weight ws ds b < 2 ^ 64\<close>
-    using lena Term_Ite.prems(5) cube1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding tw_Ite add_mult_distrib2 by linarith
+  have budb: \<open>length (fst L2) + 2 * lweight ws ds b < 2 ^ 64\<close>
+    using lena Term_Ite.prems(5) lin1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding lw_Ite add_mult_distrib2 by linarith
   have B3: \<open>bnd L3\<close> using Term_Ite.IH(3)[OF wt(3) L2 D2 B2 budb subb] b by simp
   have EA: \<open>env_ok ws L3 ka (width ws ds a)\<close>
     using lower_m_correct[OF wt(2) L1 D1 a B2] lower_m_correct[OF wt(3) L2 D2 b B3] env_lext by blast
   have wa: \<open>snd L3 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have wsub: \<open>snd L3 ! ka < 2 ^ 64\<close> using wa Term_Ite.prems(6) by simp
-  have lenb: \<open>length (fst L3) \<le> length (fst L) + 2 * term_weight ws ds c + 2 * term_weight ws ds a + 2 * term_weight ws ds b\<close>
+  have lenb: \<open>length (fst L3) \<le> length (fst L) + 2 * lweight ws ds c + 2 * lweight ws ds a + 2 * lweight ws ds b\<close>
     using lower_m_length[OF wt(3), of dm L2] b lena by simp
   have len: \<open>length (fst L3) + 1 < 2 ^ 64\<close>
-    using lenb Term_Ite.prems(5) cube1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding tw_Ite add_mult_distrib2 by linarith
+    using lenb Term_Ite.prems(5) lin1[of \<open>width ws ds (Term_Ite c a b)\<close>] unfolding lw_Ite add_mult_distrib2 by linarith
   show ?case using c a b bnd_push[OF B3 wsub len] by simp
 qed
 
@@ -478,17 +519,57 @@ qed
 
 lemma member_tw_app_le:
   assumes \<open>t \<in> set xs\<close>
-  shows \<open>term_weight ws ds t \<le> sum_list (map (term_weight ws ds) (xs @ ys))\<close>
+  shows \<open>lweight ws ds t \<le> sum_list (map (lweight ws ds) (xs @ ys))\<close>
 proof -
-  have \<open>term_weight ws ds t \<le> sum_list (map (term_weight ws ds) xs)\<close>
+  have \<open>lweight ws ds t \<le> sum_list (map (lweight ws ds) xs)\<close>
     using assms by (intro member_le_sum_list; simp)
   then show ?thesis by simp
 qed
 
+lemma lweight_le_tw: \<open>lweight ws ds t \<le> term_weight ws ds t\<close>
+  unfolding lweight_def term_weight_def
+  by (rule sum_list_mono) (simp add: power_increasing[of 1 3, simplified])
+
+lemma lweight_append: \<open>wt ws ds t \<Longrightarrow> lweight ws (ds @ e) t = lweight ws ds t\<close>
+  unfolding lweight_def
+  using wt_subterm wt_width_append by (auto intro!: arg_cong[where f = sum_list] map_cong)
+
+lemma lweight_take:
+  assumes \<open>defs_wt ws [] D\<close> \<open>j < length D\<close>
+  shows \<open>lweight ws (def_widths ws [] (take j D)) (D ! j) = lweight ws (def_widths ws [] D) (D ! j)\<close>
+proof -
+  have \<open>def_widths ws [] D = def_widths ws (def_widths ws [] (take j D)) (drop j D)\<close>
+    using QFBV_Lower.def_widths_append[of ws \<open>[]\<close> \<open>take j D\<close> \<open>drop j D\<close>] by simp
+  then obtain e where \<open>def_widths ws [] D = def_widths ws [] (take j D) @ e\<close>
+    using QFBV_Lower.def_widths_prefix by metis
+  then show ?thesis using lweight_append[OF QFBV_Lower.defs_wt_nth[OF assms]] by simp
+qed
+
 lemma size_bound_sum:
-  \<open>1000000 * sum_list (map (term_weight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p)))
+  \<open>1000000 * sum_list (map (lweight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p)))
      (Problem_defs p @ Problem_asserts p)) \<le> size_bound p\<close>
-  by (simp add: size_bound_def Let_def)
+proof -
+  let ?ws = \<open>var_widths p\<close> and ?ds = \<open>def_widths (var_widths p) [] (Problem_defs p)\<close>
+  have \<open>sum_list (map (lweight ?ws ?ds) (Problem_defs p @ Problem_asserts p)) \<le>
+        sum_list (map (term_weight ?ws ?ds) (Problem_defs p @ Problem_asserts p))\<close>
+    by (rule sum_list_mono) (rule lweight_le_tw)
+  then show ?thesis by (simp add: size_bound_def Let_def)
+qed
+
+text \<open>\<^const>\<open>sizes_ok\<close> bounds the linear weights and the widths.\<close>
+lemma ovf_sum:
+  \<open>4 * sum_list (map (lweight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p)))
+     (Problem_defs p @ Problem_asserts p)) \<le> ovf_bound p\<close>
+proof -
+  let ?ws = \<open>var_widths p\<close> and ?ds = \<open>def_widths (var_widths p) [] (Problem_defs p)\<close>
+  have \<open>sum_list (map (\<lambda>t. 4 * lweight ?ws ?ds t) (Problem_defs p @ Problem_asserts p)) \<le>
+        sum_list (map (\<lambda>t. 4 * lweight ?ws ?ds t + ecount ?ws ?ds t) (Problem_defs p @ Problem_asserts p))\<close>
+    by (rule sum_list_mono) simp
+  moreover have \<open>sum_list (map (\<lambda>t. 4 * lweight ?ws ?ds t) (Problem_defs p @ Problem_asserts p)) =
+                 4 * sum_list (map (lweight ?ws ?ds) (Problem_defs p @ Problem_asserts p))\<close>
+    by (simp add: sum_list_const_mult)
+  ultimately show ?thesis by (simp add: ovf_bound_def Let_def)
+qed
 
 text \<open>Named partial results of the two loops of \<^const>\<open>lower_problem_m\<close>, with the step rule as a
   simp rule so that the loop proof can advance the invariant one iteration at a time.\<close>
@@ -518,8 +599,67 @@ lemma ldefs_part_res: \<open>ldefs_part p (length (Problem_defs p)) = ldefs_res 
 lemma lasserts_part_res: \<open>lasserts_part p (length (Problem_asserts p)) = lasserts_res p\<close>
   by (simp add: lasserts_part_def lasserts_res_def)
 
+lemma p6364: \<open>(2::nat) ^ 63 \<le> 2 ^ 64\<close>
+  by simp
+
+lemma ldefs_len:
+  assumes \<open>problem_wt p\<close>
+  shows \<open>j \<le> length (Problem_defs p) \<Longrightarrow>
+    length (fst (fst (foldl (ldefs_step p) (([], []), []) [0..<j]))) \<le>
+    2 * sum_list (map (lweight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p))) (take j (Problem_defs p)))\<close>
+proof (induction j)
+  case 0
+  then show ?case by simp
+next
+  case (Suc j)
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close>
+  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  obtain Lj dmj where f: \<open>foldl (ldefs_step p) (([], []), []) [0..<j] = (Lj, dmj)\<close>
+    by (cases \<open>foldl (ldefs_step p) (([], []), []) [0..<j]\<close>)
+  have jl: \<open>j < length ?D\<close> using Suc.prems by simp
+  have dwt: \<open>defs_wt ?ws [] ?D\<close> using assms by (simp add: problem_wt_def Let_def)
+  have wtj: \<open>wt ?ws (def_widths ?ws [] (take j ?D)) (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
+  have IH: \<open>length (fst Lj) \<le> 2 * sum_list (map (lweight ?ws ?ds) (take j ?D))\<close> using Suc.IH jl f by simp
+  have R: \<open>foldl (ldefs_step p) (([], []), []) [0..<Suc j] =
+           (fst (lower_m ?ws dmj Lj (?D ! j)), dmj @ [snd (lower_m ?ws dmj Lj (?D ! j))])\<close>
+    using f by (simp add: ldefs_step_def split_def Let_def)
+  have st: \<open>length (fst (fst (lower_m ?ws dmj Lj (?D ! j)))) \<le> length (fst Lj) + 2 * lweight ?ws ?ds (?D ! j)\<close>
+    using lower_m_length[OF wtj, of dmj Lj] lweight_take[OF dwt jl] by simp
+  have tk: \<open>take (Suc j) ?D = take j ?D @ [?D ! j]\<close> using take_Suc_conv_app_nth[OF jl] .
+  show ?case using R IH st by (simp add: tk)
+qed
+
+lemma lasserts_len:
+  assumes \<open>problem_wt p\<close>
+  shows \<open>i \<le> length (Problem_asserts p) \<Longrightarrow>
+    length (fst (fst (foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<i]))) \<le>
+    length (fst (fst (ldefs_res p))) +
+    2 * sum_list (map (lweight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p))) (take i (Problem_asserts p)))\<close>
+proof (induction i)
+  case 0
+  then show ?case by simp
+next
+  case (Suc i)
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
+  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  let ?dm = \<open>snd (ldefs_res p)\<close> and ?L0 = \<open>fst (ldefs_res p)\<close>
+  obtain Li csi where f: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i] = (Li, csi)\<close>
+    by (cases \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i]\<close>)
+  have il: \<open>i < length ?A\<close> using Suc.prems by simp
+  have wti: \<open>wt ?ws ?ds (?A ! i)\<close> using assms il by (simp add: problem_wt_def Let_def)
+  have IH: \<open>length (fst Li) \<le> length (fst ?L0) + 2 * sum_list (map (lweight ?ws ?ds) (take i ?A))\<close>
+    using Suc.IH il f by simp
+  have R: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<Suc i] =
+           (fst (lower_m ?ws ?dm Li (?A ! i)), csi @ [cr (snd (lower_m ?ws ?dm Li (?A ! i)))])\<close>
+    using f by (simp add: lasserts_step_def split_def Let_def)
+  have st: \<open>length (fst (fst (lower_m ?ws ?dm Li (?A ! i)))) \<le> length (fst Li) + 2 * lweight ?ws ?ds (?A ! i)\<close>
+    using lower_m_length[OF wti, of ?dm Li] by simp
+  have tk: \<open>take (Suc i) ?A = take i ?A @ [?A ! i]\<close> using take_Suc_conv_app_nth[OF il] .
+  show ?case using R IH st by (simp add: tk)
+qed
+
 lemma ldefs_bnd:
-  assumes \<open>problem_wt p\<close> \<open>size_bound p < 2 ^ 64\<close>
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
   shows \<open>j \<le> length (Problem_defs p) \<Longrightarrow> bnd (fst (foldl (ldefs_step p) (([], []), []) [0..<j]))\<close>
 proof (induction j)
   case 0
@@ -529,7 +669,7 @@ next
   let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
   let ?dsj = \<open>def_widths ?ws [] (take j ?D)\<close>
-  let ?SUM = \<open>sum_list (map (term_weight ?ws ?ds) (?D @ ?A))\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
   obtain Lj dmj where f: \<open>foldl (ldefs_step p) (([], []), []) [0..<j] = (Lj, dmj)\<close>
     by (cases \<open>foldl (ldefs_step p) (([], []), []) [0..<j]\<close>)
   have jl: \<open>j < length ?D\<close> and jle: \<open>j \<le> length ?D\<close> using Suc.prems by simp_all
@@ -539,30 +679,23 @@ next
   have lok: \<open>lok ?ws Lj\<close> and dmok: \<open>dm_ok ?dsj dmj Lj\<close>
     using inv by (simp_all add: ldefs_inv_def Let_def)
   have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
-  have sb: \<open>1000000 * ?SUM \<le> size_bound p\<close> using size_bound_sum by simp
-  have twj: \<open>term_weight ?ws ?dsj (?D ! j) \<le> ?SUM\<close>
-    using term_weight_take[OF dwt jl] member_tw_app_le[of \<open>?D ! j\<close> ?D ?ws ?ds ?A] nth_mem[OF jl] by simp
-  have sumj: \<open>sum_list (map (term_weight ?ws ?ds) (take j ?D)) \<le> ?SUM\<close>
-    by (rule sum_list_take_app_le)
-  have budget: \<open>length (fst Lj) + 2 * term_weight ?ws ?dsj (?D ! j) < 2 ^ 64\<close>
+  have ob: \<open>4 * ?SUM < 2 ^ 63\<close> using ovf_sum[of p] assms(2) by (simp add: sizes_ok_def)
+  have twj: \<open>lweight ?ws ?dsj (?D ! j) \<le> sum_list (map (lweight ?ws ?ds) (drop j ?D @ ?A))\<close>
   proof -
-    have \<open>length (fst Lj) \<le> 800 * sum_list (map (term_weight ?ws ?ds) (take j ?D))\<close>
-      using ldefs_cost[OF assms(1) jle f Bj] length_le_lcost[of Lj ?ws] by simp
-    then have \<open>length (fst Lj) + 2 * term_weight ?ws ?dsj (?D ! j) \<le> 802 * ?SUM\<close>
-      using twj sumj by simp
-    also have \<open>\<dots> \<le> 1000000 * ?SUM\<close> by simp
-    also have \<open>\<dots> \<le> size_bound p\<close> using sb by simp
-    also have \<open>\<dots> < 2 ^ 64\<close> using assms(2) by simp
-    finally show ?thesis .
+    have \<open>?D ! j \<in> set (drop j ?D)\<close> using jl by (simp add: in_set_conv_nth) (metis add.right_neutral nth_drop zero_less_diff)
+    then show ?thesis using lweight_take[OF dwt jl] member_tw_app_le[of \<open>?D ! j\<close> \<open>drop j ?D\<close> ?ws ?ds ?A] by simp
   qed
+  have split: \<open>?SUM = sum_list (map (lweight ?ws ?ds) (take j ?D)) + sum_list (map (lweight ?ws ?ds) (drop j ?D @ ?A))\<close>
+    by (metis append_assoc append_take_drop_id map_append sum_list_append)
+  have lenj: \<open>length (fst Lj) \<le> 2 * sum_list (map (lweight ?ws ?ds) (take j ?D))\<close>
+    using ldefs_len[OF assms(1) jle] f by simp
+  have budget: \<open>length (fst Lj) + 2 * lweight ?ws ?dsj (?D ! j) < 2 ^ 64\<close>
+    using lenj twj split ob p6364 by linarith
   have subw: \<open>\<forall>u \<in> set (subterms (?D ! j)). width ?ws ?dsj u < 2 ^ 64\<close>
   proof
     fix u assume \<open>u \<in> set (subterms (?D ! j))\<close>
-    then have \<open>width ?ws ?dsj u \<le> term_weight ?ws ?dsj (?D ! j)\<close> by (rule width_le_tw)
-    also have \<open>\<dots> \<le> ?SUM\<close> using twj by simp
-    also have \<open>\<dots> \<le> size_bound p\<close> using sb by simp
-    also have \<open>\<dots> < 2 ^ 64\<close> using assms(2) by simp
-    finally show \<open>width ?ws ?dsj u < 2 ^ 64\<close> .
+    then have \<open>width ?ws ?dsj u \<le> lweight ?ws ?dsj (?D ! j)\<close> by (rule width_le_tw)
+    then show \<open>width ?ws ?dsj u < 2 ^ 64\<close> using twj split ob p6364 by linarith
   qed
   have R: \<open>foldl (ldefs_step p) (([], []), []) [0..<Suc j] =
            (fst (lower_m ?ws dmj Lj (?D ! j)), dmj @ [snd (lower_m ?ws dmj Lj (?D ! j))])\<close>
@@ -571,7 +704,7 @@ next
 qed
 
 lemma lasserts_bnd:
-  assumes \<open>problem_wt p\<close> \<open>size_bound p < 2 ^ 64\<close>
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
   shows \<open>i \<le> length (Problem_asserts p) \<Longrightarrow>
          bnd (fst (foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<i]))\<close>
 proof (induction i)
@@ -581,7 +714,7 @@ next
   case (Suc i)
   let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
-  let ?SUM = \<open>sum_list (map (term_weight ?ws ?ds) (?D @ ?A))\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
   let ?dm = \<open>snd (ldefs_res p)\<close> and ?L0 = \<open>fst (ldefs_res p)\<close>
   obtain Li csi where f: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i] = (Li, csi)\<close>
     by (cases \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i]\<close>)
@@ -604,36 +737,26 @@ next
     show ?thesis using dm_ok_lext[OF lok0 dmok0 lx] .
   qed
   have wti: \<open>wt ?ws ?ds (?A ! i)\<close> using assms(1) il by (simp add: problem_wt_def Let_def)
-  have sb: \<open>1000000 * ?SUM \<le> size_bound p\<close> using size_bound_sum by simp
-  have twi: \<open>term_weight ?ws ?ds (?A ! i) \<le> ?SUM\<close>
-    using member_tw_app_le[of \<open>?A ! i\<close> ?A ?ws ?ds, where ys = \<open>[]\<close>] nth_mem[OF il]
-      member_le_sum_list[of \<open>term_weight ?ws ?ds (?A ! i)\<close> \<open>map (term_weight ?ws ?ds) (?D @ ?A)\<close>] by simp
-  have Licost: \<open>length (fst Li) \<le> lcost ?ws Li\<close> by (rule length_le_lcost)
-  have budget: \<open>length (fst Li) + 2 * term_weight ?ws ?ds (?A ! i) < 2 ^ 64\<close>
+  have ob: \<open>4 * ?SUM < 2 ^ 63\<close> using ovf_sum[of p] assms(2) by (simp add: sizes_ok_def)
+  have twi: \<open>lweight ?ws ?ds (?A ! i) \<le> sum_list (map (lweight ?ws ?ds) (drop i ?A))\<close>
   proof -
-    have \<open>lcost ?ws Li \<le> lcost ?ws ?L0 + 800 * sum_list (map (term_weight ?ws ?ds) (take i ?A))\<close>
-      using lasserts_cost[OF assms(1) ile I1 f Bi] by simp
-    moreover have \<open>lcost ?ws ?L0 \<le> 800 * sum_list (map (term_weight ?ws ?ds) ?D)\<close>
-      using ldefs_cost[OF assms(1) order_refl feq B0] by (simp add: ldefs_res_def take_all)
-    ultimately have \<open>length (fst Li) \<le> 800 * (sum_list (map (term_weight ?ws ?ds) ?D) + sum_list (map (term_weight ?ws ?ds) (take i ?A)))\<close>
-      using Licost by simp
-    moreover have \<open>sum_list (map (term_weight ?ws ?ds) ?D) + sum_list (map (term_weight ?ws ?ds) (take i ?A)) \<le> ?SUM\<close>
-      using sum_list_take_app_le[of \<open>term_weight ?ws ?ds\<close> i ?A \<open>[]\<close>] by simp
-    ultimately have \<open>length (fst Li) + 2 * term_weight ?ws ?ds (?A ! i) \<le> 802 * ?SUM\<close>
-      using twi by simp
-    also have \<open>\<dots> \<le> 1000000 * ?SUM\<close> by simp
-    also have \<open>\<dots> \<le> size_bound p\<close> using sb by simp
-    also have \<open>\<dots> < 2 ^ 64\<close> using assms(2) by simp
-    finally show ?thesis .
+    have \<open>?A ! i \<in> set (drop i ?A)\<close> using il by (simp add: in_set_conv_nth) (metis add.right_neutral nth_drop zero_less_diff)
+    then show ?thesis by (intro member_le_sum_list) simp_all
   qed
+  have L0: \<open>length (fst ?L0) \<le> 2 * sum_list (map (lweight ?ws ?ds) ?D)\<close>
+    using ldefs_len[OF assms(1) order_refl] by (simp add: ldefs_res_def)
+  have Li: \<open>length (fst Li) \<le> length (fst ?L0) + 2 * sum_list (map (lweight ?ws ?ds) (take i ?A))\<close>
+    using lasserts_len[OF assms(1) ile] f by simp
+  have split: \<open>?SUM = sum_list (map (lweight ?ws ?ds) ?D) + sum_list (map (lweight ?ws ?ds) (take i ?A)) +
+                      sum_list (map (lweight ?ws ?ds) (drop i ?A))\<close>
+    by (metis add.assoc append_take_drop_id map_append sum_list_append)
+  have budget: \<open>length (fst Li) + 2 * lweight ?ws ?ds (?A ! i) < 2 ^ 64\<close>
+    using L0 Li twi split ob p6364 by linarith
   have subw: \<open>\<forall>u \<in> set (subterms (?A ! i)). width ?ws ?ds u < 2 ^ 64\<close>
   proof
     fix u assume \<open>u \<in> set (subterms (?A ! i))\<close>
-    then have \<open>width ?ws ?ds u \<le> term_weight ?ws ?ds (?A ! i)\<close> by (rule width_le_tw)
-    also have \<open>\<dots> \<le> ?SUM\<close> using twi by simp
-    also have \<open>\<dots> \<le> size_bound p\<close> using sb by simp
-    also have \<open>\<dots> < 2 ^ 64\<close> using assms(2) by simp
-    finally show \<open>width ?ws ?ds u < 2 ^ 64\<close> .
+    then have \<open>width ?ws ?ds u \<le> lweight ?ws ?ds (?A ! i)\<close> by (rule width_le_tw)
+    then show \<open>width ?ws ?ds u < 2 ^ 64\<close> using twi split ob p6364 by linarith
   qed
   have R: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<Suc i] =
            (fst (lower_m ?ws ?dm Li (?A ! i)), csi @ [cr (snd (lower_m ?ws ?dm Li (?A ! i)))])\<close>
@@ -642,10 +765,220 @@ next
 qed
 
 lemma prob_bnd:
-  assumes \<open>problem_wt p\<close> \<open>size_bound p < 2 ^ 64\<close>
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
   shows \<open>bnd (fst (lasserts_res p))\<close>
   using lasserts_bnd[OF assms, of \<open>length (Problem_asserts p)\<close>] by (simp add: lasserts_res_def)
 
+subsection \<open>The fuel of the core solver\<close>
+
+lemma ecount_take:
+  assumes \<open>defs_wt ws [] D\<close> \<open>j < length D\<close>
+  shows \<open>ecount ws (def_widths ws [] (take j D)) (D ! j) = ecount ws (def_widths ws [] D) (D ! j)\<close>
+proof -
+  have \<open>def_widths ws [] D = def_widths ws (def_widths ws [] (take j D)) (drop j D)\<close>
+    using QFBV_Lower.def_widths_append[of ws \<open>[]\<close> \<open>take j D\<close> \<open>drop j D\<close>] by simp
+  then obtain e where \<open>def_widths ws [] D = def_widths ws [] (take j D) @ e\<close>
+    using QFBV_Lower.def_widths_prefix by metis
+  then show ?thesis using ecount_append[OF QFBV_Lower.defs_wt_nth[OF assms]] by simp
+qed
+
+text \<open>The rewriting of the definitions: its CNF count is at most the sum of the \<^const>\<open>ecount\<close> of
+  the definitions rewritten so far, and every core definition is small.\<close>
+lemma ldefs_count:
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
+  shows \<open>j \<le> length (Problem_defs p) \<Longrightarrow>
+    lcnt (var_widths p) (fst (foldl (ldefs_step p) (([], []), []) [0..<j])) \<le>
+      sum_list (map (ecount (var_widths p) (def_widths (var_widths p) [] (Problem_defs p))) (take j (Problem_defs p))) \<and>
+    lsmall (var_widths p)
+      (2 * sum_list (map (lweight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p))) (Problem_defs p @ Problem_asserts p)))
+      (fst (foldl (ldefs_step p) (([], []), []) [0..<j]))\<close>
+proof (induction j)
+  case 0
+  show ?case by (simp add: lcnt_def lsmall_nil)
+next
+  case (Suc j)
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
+  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  let ?dsj = \<open>def_widths ?ws [] (take j ?D)\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
+  obtain Lj dmj where f: \<open>foldl (ldefs_step p) (([], []), []) [0..<j] = (Lj, dmj)\<close>
+    by (cases \<open>foldl (ldefs_step p) (([], []), []) [0..<j]\<close>)
+  have jl: \<open>j < length ?D\<close> and jle: \<open>j \<le> length ?D\<close> using Suc.prems by simp_all
+  have Bj: \<open>bnd Lj\<close> using ldefs_bnd[OF assms jle] f by simp
+  have dwt: \<open>defs_wt ?ws [] ?D\<close> using assms(1) by (simp add: problem_wt_def Let_def)
+  have inv: \<open>ldefs_inv p j (Lj, dmj)\<close> using ldefs_loop[OF dwt jle f Bj] .
+  have lok: \<open>lok ?ws Lj\<close> and dmok: \<open>dm_ok ?dsj dmj Lj\<close>
+    using inv by (simp_all add: ldefs_inv_def Let_def)
+  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
+  have IH: \<open>lcnt ?ws Lj \<le> sum_list (map (ecount ?ws ?ds) (take j ?D))\<close> \<open>lsmall ?ws (2 * ?SUM) Lj\<close>
+    using Suc.IH jle f by simp_all
+  obtain L' k where lm: \<open>lower_m ?ws dmj Lj (?D ! j) = (L', k)\<close> by (cases \<open>lower_m ?ws dmj Lj (?D ! j)\<close>)
+  have R: \<open>foldl (ldefs_step p) (([], []), []) [0..<Suc j] = (L', dmj @ [k])\<close>
+    using f lm by (simp add: ldefs_step_def split_def Let_def)
+  have B': \<open>bnd L'\<close> using ldefs_bnd[OF assms Suc.prems] R by simp
+  note C = lower_m_count[OF wtj lok dmok lm B', of \<open>2 * ?SUM\<close>]
+  have twj: \<open>lweight ?ws ?dsj (?D ! j) \<le> ?SUM\<close>
+  proof -
+    have \<open>?D ! j \<in> set ?D\<close> using jl by simp
+    then show ?thesis using lweight_take[OF dwt jl] member_tw_app_le[of \<open>?D ! j\<close> ?D ?ws ?ds ?A] by simp
+  qed
+  have ws: \<open>wsmall ?ws ?dsj (2 * ?SUM) (?D ! j)\<close>
+    unfolding wsmall_def using width_le_tw twj by (meson le_trans mult_le_mono2)
+  have ec: \<open>ecount ?ws ?dsj (?D ! j) = ecount ?ws ?ds (?D ! j)\<close> using ecount_take[OF dwt jl] .
+  have tk: \<open>take (Suc j) ?D = take j ?D @ [?D ! j]\<close> using take_Suc_conv_app_nth[OF jl] .
+  show ?case using IH C ws ec R tk by simp
+qed
+
+lemma lasserts_count:
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
+  shows \<open>i \<le> length (Problem_asserts p) \<Longrightarrow>
+    lcnt (var_widths p) (fst (foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<i])) \<le>
+      sum_list (map (ecount (var_widths p) (def_widths (var_widths p) [] (Problem_defs p)))
+        (Problem_defs p @ take i (Problem_asserts p))) \<and>
+    lsmall (var_widths p)
+      (2 * sum_list (map (lweight (var_widths p) (def_widths (var_widths p) [] (Problem_defs p))) (Problem_defs p @ Problem_asserts p)))
+      (fst (foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<i]))\<close>
+proof (induction i)
+  case 0
+  show ?case using ldefs_count[OF assms order_refl] by (simp add: ldefs_res_def)
+next
+  case (Suc i)
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
+  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
+  let ?dm = \<open>snd (ldefs_res p)\<close> and ?L0 = \<open>fst (ldefs_res p)\<close>
+  obtain Li csi where f: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i] = (Li, csi)\<close>
+    by (cases \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i]\<close>)
+  have il: \<open>i < length ?A\<close> and ile: \<open>i \<le> length ?A\<close> using Suc.prems by simp_all
+  have Bi: \<open>bnd Li\<close> using lasserts_bnd[OF assms ile] f by simp
+  have B0: \<open>bnd ?L0\<close> using ldefs_bnd[OF assms, of \<open>length ?D\<close>] by (simp add: ldefs_res_def)
+  have dwt: \<open>defs_wt ?ws [] ?D\<close> using assms(1) by (simp add: problem_wt_def Let_def)
+  have feq: \<open>foldl (ldefs_step p) (([], []), []) [0..<length ?D] = (?L0, ?dm)\<close>
+    by (simp add: ldefs_res_def)
+  have I1: \<open>ldefs_inv p (length ?D) (?L0, ?dm)\<close>
+    using ldefs_loop[OF dwt order_refl feq B0] .
+  have inv: \<open>lasserts_inv p ?dm ?L0 i (Li, csi)\<close>
+    using lasserts_loop[OF assms(1) ile I1 f Bi] .
+  have lx: \<open>lext ?ws ?L0 Li\<close> using inv by (simp add: lasserts_inv_def Let_def)
+  have lok: \<open>lok ?ws Li\<close> using lx lext_lok by blast
+  have dmok: \<open>dm_ok ?ds ?dm Li\<close>
+  proof -
+    have lok0: \<open>lok ?ws ?L0\<close> using I1 by (simp add: ldefs_inv_def Let_def)
+    have dmok0: \<open>dm_ok ?ds ?dm ?L0\<close> using I1 by (simp add: ldefs_inv_def Let_def take_all)
+    show ?thesis using dm_ok_lext[OF lok0 dmok0 lx] .
+  qed
+  have wti: \<open>wt ?ws ?ds (?A ! i)\<close> using assms(1) il by (simp add: problem_wt_def Let_def)
+  have IH: \<open>lcnt ?ws Li \<le> sum_list (map (ecount ?ws ?ds) (?D @ take i ?A))\<close> \<open>lsmall ?ws (2 * ?SUM) Li\<close>
+    using Suc.IH ile f by simp_all
+  obtain L' k where lm: \<open>lower_m ?ws ?dm Li (?A ! i) = (L', k)\<close> by (cases \<open>lower_m ?ws ?dm Li (?A ! i)\<close>)
+  have R: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<Suc i] = (L', csi @ [cr k])\<close>
+    using f lm by (simp add: lasserts_step_def split_def Let_def)
+  have B': \<open>bnd L'\<close> using lasserts_bnd[OF assms Suc.prems] R by simp
+  note C = lower_m_count[OF wti lok dmok lm B', of \<open>2 * ?SUM\<close>]
+  have twi: \<open>lweight ?ws ?ds (?A ! i) \<le> ?SUM\<close>
+  proof -
+    have \<open>?A ! i \<in> set (?D @ ?A)\<close> using il by simp
+    then show ?thesis by (intro member_le_sum_list) auto
+  qed
+  have ws: \<open>wsmall ?ws ?ds (2 * ?SUM) (?A ! i)\<close>
+    unfolding wsmall_def using width_le_tw twi by (meson le_trans mult_le_mono2)
+  have tk: \<open>take (Suc i) ?A = take i ?A @ [?A ! i]\<close> using take_Suc_conv_app_nth[OF il] .
+  show ?case using IH C ws R tk by simp
+qed
+
+text \<open>Within \<^const>\<open>sizes_ok\<close>, the core problem built by the rewriting is within the fuel of the
+  core solver.\<close>
+theorem lower_fuel_lt:
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
+  shows \<open>fuel_bound (lower_problem_m p) < 2 ^ 64\<close>
+proof -
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
+  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
+  let ?EC = \<open>sum_list (map (ecount ?ws ?ds) (?D @ ?A))\<close>
+  obtain L2 cs where a: \<open>lasserts_res p = (L2, cs)\<close> by (cases \<open>lasserts_res p\<close>)
+  let ?q = \<open>lower_problem_m p\<close>
+  have q: \<open>?q = make_CoreProblem (Problem_widths p) (fst L2) cs\<close> using lower_problem_m_eq[of p] a by simp
+  have B2: \<open>bnd L2\<close> using prob_bnd[OF assms] a by simp
+  have cwt: \<open>cproblem_wt ?q\<close> using lower_problem_correct(1)[OF assms(1)] prob_bnd[OF assms] .
+  have qw: \<open>cvar_widths ?q = ?ws\<close> \<open>CoreProblem_defs ?q = fst L2\<close> \<open>CoreProblem_asserts ?q = cs\<close>
+    using q by (simp_all add: cvar_widths_def var_widths_def)
+  \<comment> \<open>The loop invariant of the assertions.\<close>
+  have B0: \<open>bnd (fst (ldefs_res p))\<close> using ldefs_bnd[OF assms, of \<open>length ?D\<close>] by (simp add: ldefs_res_def)
+  have dwt: \<open>defs_wt ?ws [] ?D\<close> using assms(1) by (simp add: problem_wt_def Let_def)
+  have feq: \<open>foldl (ldefs_step p) (([], []), []) [0..<length ?D] = (fst (ldefs_res p), snd (ldefs_res p))\<close>
+    by (simp add: ldefs_res_def)
+  have I1: \<open>ldefs_inv p (length ?D) (fst (ldefs_res p), snd (ldefs_res p))\<close>
+    using ldefs_loop[OF dwt order_refl feq B0] .
+  have fa: \<open>foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<length ?A] = (L2, cs)\<close>
+    using a by (simp add: lasserts_res_def)
+  have I2: \<open>lasserts_inv p (snd (ldefs_res p)) (fst (ldefs_res p)) (length ?A) (L2, cs)\<close>
+    using lasserts_loop[OF assms(1) order_refl I1 fa B2] .
+  have lok: \<open>lok ?ws L2\<close> using I2 lext_lok by (simp add: lasserts_inv_def Let_def) blast
+  have cds: \<open>cdef_widths ?ws [] (fst L2) = snd L2\<close> using lok by (simp add: lok_def)
+  have len: \<open>length cs = length ?A\<close> and each: \<open>\<forall>n < length ?A. \<exists>k. cs ! n = cr k \<and> env_ok ?ws L2 k 1\<close>
+    using I2 by (simp_all add: lasserts_inv_def Let_def) blast
+  \<comment> \<open>The counts.\<close>
+  have CNT: \<open>lcnt ?ws L2 \<le> ?EC\<close> and SM: \<open>lsmall ?ws (2 * ?SUM) L2\<close>
+    using lasserts_count[OF assms order_refl] fa by simp_all
+  have csz: \<open>\<forall>t \<in> set cs. ccount ?ws (snd L2) t = 0 \<and> tbound ?ws (snd L2) t \<le> 4\<close>
+  proof
+    fix t assume \<open>t \<in> set cs\<close>
+    then obtain n where n: \<open>n < length ?A\<close> \<open>t = cs ! n\<close> using len by (auto simp add: in_set_conv_nth)
+    then obtain k where k: \<open>t = cr k\<close> \<open>env_ok ?ws L2 k 1\<close> using each by blast
+    have \<open>cwidth ?ws (snd L2) (cr k) = 1\<close> using cr_env[OF k(2)] by simp
+    moreover have \<open>size (cr k) = 0\<close> by (simp add: cr_def)
+    ultimately show \<open>ccount ?ws (snd L2) t = 0 \<and> tbound ?ws (snd L2) t \<le> 4\<close>
+      using k(1) by (simp add: cc_cr tbound_def)
+  qed
+  have sumc: \<open>sum_list (map (ccount ?ws (snd L2)) (fst L2 @ cs)) = lcnt ?ws L2\<close>
+  proof -
+    have \<open>sum_list (map (ccount ?ws (snd L2)) cs) = 0\<close> using csz by (simp add: sum_list_eq_0_iff)
+    then show ?thesis by (simp add: lcnt_def)
+  qed
+  \<comment> \<open>The bounds from \<^const>\<open>sizes_ok\<close>.\<close>
+  have ob: \<open>4 * (1 + sum_list ?ws + length ?ws + length ?D + length ?A + (4 * ?SUM + ?EC)) < 2 ^ 63\<close>
+  proof -
+    have \<open>sum_list (map (\<lambda>t. 4 * lweight ?ws ?ds t + ecount ?ws ?ds t) (?D @ ?A)) = 4 * ?SUM + ?EC\<close>
+      by (simp add: sum_list_addf sum_list_const_mult)
+    then show ?thesis using assms(2) by (simp add: sizes_ok_def ovf_bound_def Let_def)
+  qed
+  have l2: \<open>length (fst L2) \<le> 2 * ?SUM\<close>
+  proof -
+    have \<open>length (fst (fst (ldefs_res p))) \<le> 2 * sum_list (map (lweight ?ws ?ds) ?D)\<close>
+      using ldefs_len[OF assms(1) order_refl] by (simp add: ldefs_res_def)
+    moreover have \<open>length (fst L2) \<le> length (fst (fst (ldefs_res p))) + 2 * sum_list (map (lweight ?ws ?ds) ?A)\<close>
+      using lasserts_len[OF assms(1) order_refl] fa by simp
+    ultimately show ?thesis by simp
+  qed
+  have tb: \<open>\<forall>t \<in> set (fst L2 @ cs). tbound ?ws (snd L2) t < 2 ^ 63\<close>
+  proof
+    fix t assume \<open>t \<in> set (fst L2 @ cs)\<close>
+    then consider \<open>t \<in> set (fst L2)\<close> | \<open>t \<in> set cs\<close> by auto
+    then show \<open>tbound ?ws (snd L2) t < 2 ^ 63\<close>
+    proof cases
+      case 1
+      show ?thesis using tb_arith[OF lsmall_tbound[OF SM 1] ob] .
+    next
+      case 2
+      then show ?thesis using csz by fastforce
+    qed
+  qed
+  show ?thesis
+  proof (rule fuel_bound_lt)
+    show \<open>cproblem_wt ?q\<close> by (rule cwt)
+    show \<open>2 + sum_list (cvar_widths ?q) + length (CoreProblem_asserts ?q) +
+      sum_list (map (ccount (cvar_widths ?q) (cdef_widths (cvar_widths ?q) [] (CoreProblem_defs ?q)))
+        (CoreProblem_defs ?q @ CoreProblem_asserts ?q)) < 2 ^ 63\<close>
+      unfolding qw cds sumc len using ob_arith(1)[OF ob CNT] .
+    show \<open>length (cvar_widths ?q) < 2 ^ 63\<close> unfolding qw using ob_arith(2)[OF ob] .
+    show \<open>length (CoreProblem_defs ?q) < 2 ^ 63\<close> unfolding qw using ob_arith(4)[OF ob l2] .
+    show \<open>length (CoreProblem_asserts ?q) < 2 ^ 63\<close> unfolding qw len using ob_arith(3)[OF ob] .
+    show \<open>\<forall>t \<in> set (CoreProblem_defs ?q @ CoreProblem_asserts ?q).
+       tbound (cvar_widths ?q) (cdef_widths (cvar_widths ?q) [] (CoreProblem_defs ?q)) t < 2 ^ 63\<close>
+      unfolding qw cds using tb .
+  qed
+qed
 
 section \<open>The top-level theorem\<close>
 
@@ -680,7 +1013,7 @@ proof -
     using encode_sound[OF assms(1-3) assms(6)] by simp
 qed
 
-context BVSmt_ctx
+context QFBV_ctx
 begin
 
 subsection \<open>The solver meets its contract\<close>
@@ -691,12 +1024,12 @@ text \<open>The theorem: \<^const>\<open>csolve_contract\<close> holds whenever 
   \<^const>\<open>fuel_bound\<close> (\<open>fuel_bound_le\<close>), which the proof uses; a problem that is not well-sorted
   makes the precondition of the contract false.\<close>
 theorem solve_core_spec:
-  assumes \<open>csize_bound p \<le> urust_fuel\<close> \<open>csize_bound p < 2 ^ 64\<close>
+  assumes \<open>csize_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
   shows \<open>\<Gamma>; solve_core p \<Turnstile>\<^sub>F csolve_contract p\<close>
 proof (cases \<open>cproblem_wt p\<close>)
   case True
   have assms2: \<open>fuel_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
-    using fuel_bound_le[OF True] assms by simp_all
+    using fuel_bound_le[OF True] assms by (simp_all add: le_trans)
   obtain s vs where e: \<open>encode_m p = (s, vs)\<close>
     by (cases \<open>encode_m p\<close>)
   note fb = fuel_bound_ge[OF e]
@@ -743,7 +1076,7 @@ text \<open>For every definition and assertion, the recursion depth is within th
   precondition \<^const>\<open>lpre\<close> holds, because both are bounded by the weight of the term, hence by
   \<^const>\<open>size_bound\<close>.\<close>
 lemma ldefs_step_pre:
-  assumes \<open>problem_wt p\<close> \<open>size_bound p \<le> urust_fuel\<close> \<open>size_bound p < 2 ^ 64\<close> \<open>j < length (Problem_defs p)\<close>
+  assumes \<open>problem_wt p\<close> \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>j < length (Problem_defs p)\<close>
   shows \<open>Suc (size (Problem_defs p ! j)) \<le> urust_fuel \<and>
          lpre urust_fuel (var_widths p) (snd (foldl (ldefs_step p) (([], []), []) [0..<j]))
            (fst (foldl (ldefs_step p) (([], []), []) [0..<j])) (Problem_defs p ! j) \<and>
@@ -753,7 +1086,7 @@ proof -
   let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
   let ?dsj = \<open>def_widths ?ws [] (take j ?D)\<close>
-  let ?SUM = \<open>sum_list (map (term_weight ?ws ?ds) (?D @ ?A))\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
   obtain Lj dmj where f: \<open>foldl (ldefs_step p) (([], []), []) [0..<j] = (Lj, dmj)\<close>
     by (cases \<open>foldl (ldefs_step p) (([], []), []) [0..<j]\<close>)
   have jl: \<open>j < length ?D\<close> and jle: \<open>j \<le> length ?D\<close> using assms(4) by simp_all
@@ -767,14 +1100,14 @@ proof -
     using f by (simp add: ldefs_step_def split_def Let_def)
   have Bsuc: \<open>bnd (fst (lower_m ?ws dmj Lj (?D ! j)))\<close> using ldefs_bnd[OF assms(1,3), of \<open>Suc j\<close>] R assms(4) by simp
   have sb: \<open>1000000 * ?SUM \<le> size_bound p\<close> using size_bound_sum by simp
-  have twj: \<open>term_weight ?ws ?dsj (?D ! j) \<le> ?SUM\<close>
-    using term_weight_take[OF dwt jl] member_tw_app_le[of \<open>?D ! j\<close> ?D ?ws ?ds ?A] nth_mem[OF jl] by simp
-  have twle: \<open>term_weight ?ws ?dsj (?D ! j) \<le> urust_fuel\<close> using twj sb assms(2) by simp
+  have twj: \<open>lweight ?ws ?dsj (?D ! j) \<le> ?SUM\<close>
+    using lweight_take[OF dwt jl] member_tw_app_le[of \<open>?D ! j\<close> ?D ?ws ?ds ?A] nth_mem[OF jl] by simp
+  have twle: \<open>lweight ?ws ?dsj (?D ! j) \<le> urust_fuel\<close> using twj sb assms(2) by simp
   have sz: \<open>Suc (size (?D ! j)) \<le> urust_fuel\<close> using size_le_tw[of \<open>?D ! j\<close> ?ws ?dsj] twle by simp
   have subw: \<open>\<forall>u \<in> set (subterms (?D ! j)). width ?ws ?dsj u \<le> urust_fuel\<close>
   proof
     fix u assume \<open>u \<in> set (subterms (?D ! j))\<close>
-    then have \<open>width ?ws ?dsj u \<le> term_weight ?ws ?dsj (?D ! j)\<close> by (rule width_le_tw)
+    then have \<open>width ?ws ?dsj u \<le> lweight ?ws ?dsj (?D ! j)\<close> by (rule width_le_tw)
     then show \<open>width ?ws ?dsj u \<le> urust_fuel\<close> using twle by simp
   qed
   have lp: \<open>lpre urust_fuel ?ws dmj Lj (?D ! j)\<close> using lpre_intro[OF wtj lok dmok Bsuc subw] .
@@ -784,7 +1117,7 @@ proof -
 qed
 
 lemma lasserts_step_pre:
-  assumes \<open>problem_wt p\<close> \<open>size_bound p \<le> urust_fuel\<close> \<open>size_bound p < 2 ^ 64\<close> \<open>i < length (Problem_asserts p)\<close>
+  assumes \<open>problem_wt p\<close> \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>i < length (Problem_asserts p)\<close>
   shows \<open>Suc (size (Problem_asserts p ! i)) \<le> urust_fuel \<and>
          lpre urust_fuel (var_widths p) (snd (ldefs_res p))
            (fst (foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<i])) (Problem_asserts p ! i) \<and>
@@ -793,7 +1126,7 @@ lemma lasserts_step_pre:
 proof -
   let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
-  let ?SUM = \<open>sum_list (map (term_weight ?ws ?ds) (?D @ ?A))\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
   let ?dm = \<open>snd (ldefs_res p)\<close> and ?L0 = \<open>fst (ldefs_res p)\<close>
   obtain Li csi where f: \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i] = (Li, csi)\<close>
     by (cases \<open>foldl (lasserts_step p ?dm) (?L0, []) [0..<i]\<close>)
@@ -821,14 +1154,14 @@ proof -
   have Bsuc: \<open>bnd (fst (lower_m ?ws ?dm Li (?A ! i)))\<close>
     using lasserts_bnd[OF assms(1,3), of \<open>Suc i\<close>] R assms(4) by simp
   have sb: \<open>1000000 * ?SUM \<le> size_bound p\<close> using size_bound_sum by simp
-  have twi: \<open>term_weight ?ws ?ds (?A ! i) \<le> ?SUM\<close>
-    using member_le_sum_list[of \<open>term_weight ?ws ?ds (?A ! i)\<close> \<open>map (term_weight ?ws ?ds) (?D @ ?A)\<close>] nth_mem[OF il] by simp
-  have twle: \<open>term_weight ?ws ?ds (?A ! i) \<le> urust_fuel\<close> using twi sb assms(2) by simp
+  have twi: \<open>lweight ?ws ?ds (?A ! i) \<le> ?SUM\<close>
+    using member_le_sum_list[of \<open>lweight ?ws ?ds (?A ! i)\<close> \<open>map (lweight ?ws ?ds) (?D @ ?A)\<close>] nth_mem[OF il] by simp
+  have twle: \<open>lweight ?ws ?ds (?A ! i) \<le> urust_fuel\<close> using twi sb assms(2) by simp
   have sz: \<open>Suc (size (?A ! i)) \<le> urust_fuel\<close> using size_le_tw[of \<open>?A ! i\<close> ?ws ?ds] twle by simp
   have subw: \<open>\<forall>u \<in> set (subterms (?A ! i)). width ?ws ?ds u \<le> urust_fuel\<close>
   proof
     fix u assume \<open>u \<in> set (subterms (?A ! i))\<close>
-    then have \<open>width ?ws ?ds u \<le> term_weight ?ws ?ds (?A ! i)\<close> by (rule width_le_tw)
+    then have \<open>width ?ws ?ds u \<le> lweight ?ws ?ds (?A ! i)\<close> by (rule width_le_tw)
     then show \<open>width ?ws ?ds u \<le> urust_fuel\<close> using twle by simp
   qed
   have lp: \<open>lpre urust_fuel ?ws ?dm Li (?A ! i)\<close> using lpre_intro[OF wti lok dmok Bsuc subw] .
@@ -841,7 +1174,7 @@ qed
 subsection \<open>\<^verbatim>\<open>lower_problem\<close> computes the core problem\<close>
 
 definition lp_pre :: \<open>Problem \<Rightarrow> bool\<close> where
-  \<open>lp_pre p \<equiv> problem_wt p \<and> size_bound p \<le> urust_fuel \<and> size_bound p < 2 ^ 64\<close>
+  \<open>lp_pre p \<equiv> problem_wt p \<and> size_bound p \<le> urust_fuel \<and> sizes_ok p\<close>
 
 lemma lp_lens:
   assumes \<open>lp_pre p\<close>
@@ -850,9 +1183,11 @@ lemma lp_lens:
 proof -
   have \<open>length (Problem_defs p) \<le> size_bound p\<close> \<open>length (Problem_asserts p) \<le> size_bound p\<close>
     by (simp_all add: size_bound_def Let_def)
-  then show \<open>length (Problem_defs p) \<le> urust_fuel\<close> \<open>length (Problem_defs p) < 2 ^ 64\<close>
+  moreover have \<open>4 * length (Problem_defs p) \<le> ovf_bound p\<close> \<open>4 * length (Problem_asserts p) \<le> ovf_bound p\<close>
+    by (simp_all add: ovf_bound_def Let_def)
+  ultimately show \<open>length (Problem_defs p) \<le> urust_fuel\<close> \<open>length (Problem_defs p) < 2 ^ 64\<close>
     \<open>length (Problem_asserts p) \<le> urust_fuel\<close> \<open>length (Problem_asserts p) < 2 ^ 64\<close>
-    using assms by (auto simp add: lp_pre_def)
+    using assms by (auto simp add: lp_pre_def sizes_ok_def)
 qed
 
 definition lower_problem_contract :: \<open>Problem \<Rightarrow> ('s, CoreProblem, 'abort) function_contract\<close> where
@@ -946,7 +1281,7 @@ text \<open>\<^const>\<open>solve\<close> only calls \<^const>\<open>lower_probl
 declare lower_spec cref_spec lower_problem_spec [crush_specs del]
 
 theorem solve_spec:
-  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>size_bound p < 2 ^ 64\<close>
+  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close>
   shows \<open>\<Gamma>; solve p \<Turnstile>\<^sub>F solve_contract p\<close>
 proof (cases \<open>problem_wt p\<close>)
   case True
@@ -955,7 +1290,7 @@ proof (cases \<open>problem_wt p\<close>)
       instead of the (very large) unfolded \<^term>\<open>lower_problem_m p\<close>.\<close>
   obtain q where q: \<open>lower_problem_m p = q\<close> by blast
   have sz: \<open>csize_bound q \<le> urust_fuel\<close> using lower_size_bound[OF True bnd] assms(1) q by simp
-  have sz2: \<open>csize_bound q < 2 ^ 64\<close> using lower_size_bound[OF True bnd] assms(2) q by simp
+  have sz2: \<open>fuel_bound q < 2 ^ 64\<close> using lower_fuel_lt[OF True assms(2)] q by simp
   have cwt: \<open>cproblem_wt q\<close> using lower_problem_correct(1)[OF True bnd] q by simp
   have cm: \<open>cis_model q m = is_model p m\<close> for m using lower_problem_correct(2)[OF True bnd] q by simp
   show ?thesis
@@ -977,29 +1312,29 @@ end
 
 subsection \<open>The specification over all instances with enough fuel\<close>
 
-context BVSmt_heap
+context QFBV_heap
 begin
 
-text \<open>\<^verbatim>\<open>BVSmt_heap\<close> has the assumptions of \<^locale>\<open>BVSmt_ctx\<close> (it drops only the fuel, which carries
-  no assumption), so its parameters with any fuel form an instance of \<^locale>\<open>BVSmt_ctx\<close> and the
-  contract lemmas of \<^locale>\<open>BVSmt_ctx\<close> apply.\<close>
-lemma BVSmt_ctxI:
-  \<open>BVSmt_ctx update_raw_fun dereference_raw_fun reference_raw_fun points_to_raw' gref_can_store
+text \<open>\<^verbatim>\<open>QFBV_heap\<close> has the assumptions of \<^locale>\<open>QFBV_ctx\<close> (it drops only the fuel, which carries
+  no assumption), so its parameters with any fuel form an instance of \<^locale>\<open>QFBV_ctx\<close> and the
+  contract lemmas of \<^locale>\<open>QFBV_ctx\<close> apply.\<close>
+lemma QFBV_ctxI:
+  \<open>QFBV_ctx update_raw_fun dereference_raw_fun reference_raw_fun points_to_raw' gref_can_store
      new_gref_can_store can_alloc_reference prism_1 prism_2 prism_3 prism_4 prism_5 prism_6
      prism_7 prism_8 prism_9 prism_10 prism_11 prism_12 prism_13 prism_14 prism_15 prism_16 prism_17\<close>
   by intro_locales
 
-text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>BVSmt_Spec\<close>. The bound on
-  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close>, which \<open>BVSmt_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close>
+text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>QFBV_Spec\<close>. The bound on
+  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close>, which \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close>
   supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
 theorem solve_correct:
   shows \<open>solve_correct \<Gamma>\<close>
 proof (unfold solve_correct_def, intro allI impI)
   fix p :: Problem
   assume \<open>problem_wt p \<and> sizes_ok p\<close>
-  then have ov: \<open>size_bound p < 2 ^ 64\<close> by (simp add: sizes_ok_def)
+  then have ov: \<open>sizes_ok p\<close> by simp
   have \<open>\<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close> if \<open>size_bound p \<le> fuel\<close> for fuel
-    by (rule BVSmt_ctx.solve_spec[OF BVSmt_ctxI that ov])
+    by (rule QFBV_ctx.solve_spec[OF QFBV_ctxI that ov])
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
     by (intro exI[of _ \<open>size_bound p\<close>]) simp
 qed

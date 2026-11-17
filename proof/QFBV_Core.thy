@@ -48,19 +48,36 @@ fun cwt :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Right
 subsection \<open>Evaluation\<close>
 
 text \<open>A binary operator on the values \<open>x\<close>, \<open>y\<close> of operands of widths \<open>w\<close>, \<open>v\<close>.\<close>
-fun cbin_sem :: \<open>BinOp \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+definition cbin_sem :: \<open>BinOp \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>cbin_sem op w x v y \<equiv>
+     (case op of
+        BinOp_And \<Rightarrow> (Bit_Operations.and x y)
+      | BinOp_Or \<Rightarrow> (Bit_Operations.or x y)
+      | BinOp_Xor \<Rightarrow> (Bit_Operations.xor x y)
+      | BinOp_Add \<Rightarrow> ((x + y) mod 2 ^ w)
+      | BinOp_Mul \<Rightarrow> ((x * y) mod 2 ^ w)
+      | BinOp_Udiv \<Rightarrow> (if y = 0 then 2 ^ w - 1 else x div y)
+      | BinOp_Urem \<Rightarrow> (if y = 0 then x else x mod y)
+      | BinOp_Shl \<Rightarrow> ((x * 2 ^ y) mod 2 ^ w)
+      | BinOp_Lshr \<Rightarrow> (x div 2 ^ y)
+      | BinOp_Concat \<Rightarrow> (x * 2 ^ v + y)
+      | BinOp_Eq \<Rightarrow> (of_bool (x = y))
+      | BinOp_Ult \<Rightarrow> (of_bool (x < y)))\<close>
+
+lemma cbin_sem_simps [simp]:
   \<open>cbin_sem BinOp_And w x v y = Bit_Operations.and x y\<close>
-| \<open>cbin_sem BinOp_Or w x v y = Bit_Operations.or x y\<close>
-| \<open>cbin_sem BinOp_Xor w x v y = Bit_Operations.xor x y\<close>
-| \<open>cbin_sem BinOp_Add w x v y = (x + y) mod 2 ^ w\<close>
-| \<open>cbin_sem BinOp_Mul w x v y = (x * y) mod 2 ^ w\<close>
-| \<open>cbin_sem BinOp_Udiv w x v y = (if y = 0 then 2 ^ w - 1 else x div y)\<close>
-| \<open>cbin_sem BinOp_Urem w x v y = (if y = 0 then x else x mod y)\<close>
-| \<open>cbin_sem BinOp_Shl w x v y = (x * 2 ^ y) mod 2 ^ w\<close>
-| \<open>cbin_sem BinOp_Lshr w x v y = x div 2 ^ y\<close>
-| \<open>cbin_sem BinOp_Concat w x v y = x * 2 ^ v + y\<close>
-| \<open>cbin_sem BinOp_Eq w x v y = of_bool (x = y)\<close>
-| \<open>cbin_sem BinOp_Ult w x v y = of_bool (x < y)\<close>
+  \<open>cbin_sem BinOp_Or w x v y = Bit_Operations.or x y\<close>
+  \<open>cbin_sem BinOp_Xor w x v y = Bit_Operations.xor x y\<close>
+  \<open>cbin_sem BinOp_Add w x v y = (x + y) mod 2 ^ w\<close>
+  \<open>cbin_sem BinOp_Mul w x v y = (x * y) mod 2 ^ w\<close>
+  \<open>cbin_sem BinOp_Udiv w x v y = (if y = 0 then 2 ^ w - 1 else x div y)\<close>
+  \<open>cbin_sem BinOp_Urem w x v y = (if y = 0 then x else x mod y)\<close>
+  \<open>cbin_sem BinOp_Shl w x v y = (x * 2 ^ y) mod 2 ^ w\<close>
+  \<open>cbin_sem BinOp_Lshr w x v y = x div 2 ^ y\<close>
+  \<open>cbin_sem BinOp_Concat w x v y = x * 2 ^ v + y\<close>
+  \<open>cbin_sem BinOp_Eq w x v y = of_bool (x = y)\<close>
+  \<open>cbin_sem BinOp_Ult w x v y = of_bool (x < y)\<close>
+  by (simp_all add: cbin_sem_def)
 
 text \<open>The value of a term, given the widths \<open>ws\<close>, \<open>ds\<close> and the values \<open>vs\<close>, \<open>dv\<close> of the variables
   and the definitions.\<close>

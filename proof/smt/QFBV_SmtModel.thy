@@ -11,40 +11,88 @@ text \<open>HOL functions that compute what the Rust functions of the translatio
 definition tref :: \<open>nat \<Rightarrow> Term\<close> where
   \<open>tref k \<equiv> Term_Ref (word_of_nat k)\<close>
 
-fun tr_op :: \<open>SmtOp \<Rightarrow> Op\<close> where
+definition tr_op :: \<open>SmtOp \<Rightarrow> Op\<close> where
+  \<open>tr_op op \<equiv>
+     (case op of
+        SmtOp_And \<Rightarrow> Op_And
+      | SmtOp_Bvand \<Rightarrow> Op_And
+      | SmtOp_Or \<Rightarrow> Op_Or
+      | SmtOp_Bvor \<Rightarrow> Op_Or
+      | SmtOp_Xor \<Rightarrow> Op_Xor
+      | SmtOp_Bvxor \<Rightarrow> Op_Xor
+      | SmtOp_Bvnand \<Rightarrow> Op_Nand
+      | SmtOp_Bvnor \<Rightarrow> Op_Nor
+      | SmtOp_Bvxnor \<Rightarrow> Op_Xnor
+      | SmtOp_Bvcomp \<Rightarrow> Op_Comp
+      | SmtOp_Bvadd \<Rightarrow> Op_Add
+      | SmtOp_Bvsub \<Rightarrow> Op_Sub
+      | SmtOp_Bvmul \<Rightarrow> Op_Mul
+      | SmtOp_Bvudiv \<Rightarrow> Op_Udiv
+      | SmtOp_Bvurem \<Rightarrow> Op_Urem
+      | SmtOp_Bvsdiv \<Rightarrow> Op_Sdiv
+      | SmtOp_Bvsrem \<Rightarrow> Op_Srem
+      | SmtOp_Bvsmod \<Rightarrow> Op_Smod
+      | SmtOp_Bvshl \<Rightarrow> Op_Shl
+      | SmtOp_Bvlshr \<Rightarrow> Op_Lshr
+      | SmtOp_Bvashr \<Rightarrow> Op_Ashr
+      | SmtOp_Concat \<Rightarrow> Op_Concat
+      | SmtOp_Eq \<Rightarrow> Op_Eq
+      | SmtOp_Distinct \<Rightarrow> Op_Distinct
+      | SmtOp_Bvult \<Rightarrow> Op_Ult
+      | SmtOp_Bvule \<Rightarrow> Op_Ule
+      | SmtOp_Bvugt \<Rightarrow> Op_Ugt
+      | SmtOp_Bvuge \<Rightarrow> Op_Uge
+      | SmtOp_Bvslt \<Rightarrow> Op_Slt
+      | SmtOp_Bvsle \<Rightarrow> Op_Sle
+      | SmtOp_Bvsgt \<Rightarrow> Op_Sgt
+      | SmtOp_Bvsge \<Rightarrow> Op_Sge
+      | _ \<Rightarrow> Op_Eq)\<close>
+
+lemma tr_op_simps [simp]:
   \<open>tr_op SmtOp_And = Op_And\<close>
-| \<open>tr_op SmtOp_Bvand = Op_And\<close>
-| \<open>tr_op SmtOp_Or = Op_Or\<close>
-| \<open>tr_op SmtOp_Bvor = Op_Or\<close>
-| \<open>tr_op SmtOp_Xor = Op_Xor\<close>
-| \<open>tr_op SmtOp_Bvxor = Op_Xor\<close>
-| \<open>tr_op SmtOp_Bvnand = Op_Nand\<close>
-| \<open>tr_op SmtOp_Bvnor = Op_Nor\<close>
-| \<open>tr_op SmtOp_Bvxnor = Op_Xnor\<close>
-| \<open>tr_op SmtOp_Bvcomp = Op_Comp\<close>
-| \<open>tr_op SmtOp_Bvadd = Op_Add\<close>
-| \<open>tr_op SmtOp_Bvsub = Op_Sub\<close>
-| \<open>tr_op SmtOp_Bvmul = Op_Mul\<close>
-| \<open>tr_op SmtOp_Bvudiv = Op_Udiv\<close>
-| \<open>tr_op SmtOp_Bvurem = Op_Urem\<close>
-| \<open>tr_op SmtOp_Bvsdiv = Op_Sdiv\<close>
-| \<open>tr_op SmtOp_Bvsrem = Op_Srem\<close>
-| \<open>tr_op SmtOp_Bvsmod = Op_Smod\<close>
-| \<open>tr_op SmtOp_Bvshl = Op_Shl\<close>
-| \<open>tr_op SmtOp_Bvlshr = Op_Lshr\<close>
-| \<open>tr_op SmtOp_Bvashr = Op_Ashr\<close>
-| \<open>tr_op SmtOp_Concat = Op_Concat\<close>
-| \<open>tr_op SmtOp_Eq = Op_Eq\<close>
-| \<open>tr_op SmtOp_Distinct = Op_Distinct\<close>
-| \<open>tr_op SmtOp_Bvult = Op_Ult\<close>
-| \<open>tr_op SmtOp_Bvule = Op_Ule\<close>
-| \<open>tr_op SmtOp_Bvugt = Op_Ugt\<close>
-| \<open>tr_op SmtOp_Bvuge = Op_Uge\<close>
-| \<open>tr_op SmtOp_Bvslt = Op_Slt\<close>
-| \<open>tr_op SmtOp_Bvsle = Op_Sle\<close>
-| \<open>tr_op SmtOp_Bvsgt = Op_Sgt\<close>
-| \<open>tr_op SmtOp_Bvsge = Op_Sge\<close>
-| \<open>tr_op _ = Op_Eq\<close>
+  \<open>tr_op SmtOp_Bvand = Op_And\<close>
+  \<open>tr_op SmtOp_Or = Op_Or\<close>
+  \<open>tr_op SmtOp_Bvor = Op_Or\<close>
+  \<open>tr_op SmtOp_Xor = Op_Xor\<close>
+  \<open>tr_op SmtOp_Bvxor = Op_Xor\<close>
+  \<open>tr_op SmtOp_Bvnand = Op_Nand\<close>
+  \<open>tr_op SmtOp_Bvnor = Op_Nor\<close>
+  \<open>tr_op SmtOp_Bvxnor = Op_Xnor\<close>
+  \<open>tr_op SmtOp_Bvcomp = Op_Comp\<close>
+  \<open>tr_op SmtOp_Bvadd = Op_Add\<close>
+  \<open>tr_op SmtOp_Bvsub = Op_Sub\<close>
+  \<open>tr_op SmtOp_Bvmul = Op_Mul\<close>
+  \<open>tr_op SmtOp_Bvudiv = Op_Udiv\<close>
+  \<open>tr_op SmtOp_Bvurem = Op_Urem\<close>
+  \<open>tr_op SmtOp_Bvsdiv = Op_Sdiv\<close>
+  \<open>tr_op SmtOp_Bvsrem = Op_Srem\<close>
+  \<open>tr_op SmtOp_Bvsmod = Op_Smod\<close>
+  \<open>tr_op SmtOp_Bvshl = Op_Shl\<close>
+  \<open>tr_op SmtOp_Bvlshr = Op_Lshr\<close>
+  \<open>tr_op SmtOp_Bvashr = Op_Ashr\<close>
+  \<open>tr_op SmtOp_Concat = Op_Concat\<close>
+  \<open>tr_op SmtOp_Eq = Op_Eq\<close>
+  \<open>tr_op SmtOp_Distinct = Op_Distinct\<close>
+  \<open>tr_op SmtOp_Bvult = Op_Ult\<close>
+  \<open>tr_op SmtOp_Bvule = Op_Ule\<close>
+  \<open>tr_op SmtOp_Bvugt = Op_Ugt\<close>
+  \<open>tr_op SmtOp_Bvuge = Op_Uge\<close>
+  \<open>tr_op SmtOp_Bvslt = Op_Slt\<close>
+  \<open>tr_op SmtOp_Bvsle = Op_Sle\<close>
+  \<open>tr_op SmtOp_Bvsgt = Op_Sgt\<close>
+  \<open>tr_op SmtOp_Bvsge = Op_Sge\<close>
+  \<open>tr_op SmtOp_Not = Op_Eq\<close>
+  \<open>tr_op SmtOp_Implies = Op_Eq\<close>
+  \<open>tr_op SmtOp_Ite = Op_Eq\<close>
+  \<open>tr_op (SmtOp_Extract a0 a1) = Op_Eq\<close>
+  \<open>tr_op SmtOp_Bvnot = Op_Eq\<close>
+  \<open>tr_op SmtOp_Bvneg = Op_Eq\<close>
+  \<open>tr_op (SmtOp_Repeat a0) = Op_Eq\<close>
+  \<open>tr_op (SmtOp_ZeroExtend a0) = Op_Eq\<close>
+  \<open>tr_op (SmtOp_SignExtend a0) = Op_Eq\<close>
+  \<open>tr_op (SmtOp_RotateLeft a0) = Op_Eq\<close>
+  \<open>tr_op (SmtOp_RotateRight a0) = Op_Eq\<close>
+  by (simp_all add: tr_op_def)
 
 definition fold_left_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> where
   \<open>fold_left_m op ks \<equiv> foldl (\<lambda>acc k. Term_Bin (tr_op op) acc (tref k)) (tref (hd ks)) (tl ks)\<close>
@@ -67,29 +115,77 @@ definition pairwise_m :: \<open>nat list \<Rightarrow> Term\<close> where
 definition implies_m :: \<open>nat list \<Rightarrow> Term\<close> where
   \<open>implies_m ks \<equiv> foldr (\<lambda>k acc. Term_Bin Op_Or (Term_Not (tref k)) acc) (butlast ks) (tref (last ks))\<close>
 
-fun tr_app_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> where
+definition tr_app_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> where
+  \<open>tr_app_m op ks \<equiv>
+     (case op of
+        SmtOp_Not \<Rightarrow> (Term_Not (tref (ks ! 0)))
+      | SmtOp_Bvnot \<Rightarrow> (Term_Not (tref (ks ! 0)))
+      | SmtOp_Bvneg \<Rightarrow> (Term_Neg (tref (ks ! 0)))
+      | SmtOp_And \<Rightarrow> (fold_left_m SmtOp_And ks)
+      | SmtOp_Or \<Rightarrow> (fold_left_m SmtOp_Or ks)
+      | SmtOp_Xor \<Rightarrow> (fold_left_m SmtOp_Xor ks)
+      | SmtOp_Bvand \<Rightarrow> (fold_left_m SmtOp_Bvand ks)
+      | SmtOp_Bvor \<Rightarrow> (fold_left_m SmtOp_Bvor ks)
+      | SmtOp_Bvadd \<Rightarrow> (fold_left_m SmtOp_Bvadd ks)
+      | SmtOp_Bvmul \<Rightarrow> (fold_left_m SmtOp_Bvmul ks)
+      | SmtOp_Bvxor \<Rightarrow> (fold_left_m SmtOp_Bvxor ks)
+      | SmtOp_Implies \<Rightarrow> (implies_m ks)
+      | SmtOp_Eq \<Rightarrow> (chain_m SmtOp_Eq ks)
+      | SmtOp_Distinct \<Rightarrow> (pairwise_m ks)
+      | SmtOp_Ite \<Rightarrow> (Term_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2)))
+      | SmtOp_Extract i j \<Rightarrow> (Term_Extract i j (tref (ks ! 0)))
+      | SmtOp_Repeat i \<Rightarrow> (Term_Repeat i (tref (ks ! 0)))
+      | SmtOp_ZeroExtend i \<Rightarrow> (Term_ZeroExtend i (tref (ks ! 0)))
+      | SmtOp_SignExtend i \<Rightarrow> (Term_SignExtend i (tref (ks ! 0)))
+      | SmtOp_RotateLeft i \<Rightarrow> (Term_RotateLeft i (tref (ks ! 0)))
+      | SmtOp_RotateRight i \<Rightarrow> (Term_RotateRight i (tref (ks ! 0)))
+      | _ \<Rightarrow> (Term_Bin (tr_op op) (tref (ks ! 0)) (tref (ks ! 1))))\<close>
+
+lemma tr_app_m_simps [simp]:
   \<open>tr_app_m SmtOp_Not ks = Term_Not (tref (ks ! 0))\<close>
-| \<open>tr_app_m SmtOp_Bvnot ks = Term_Not (tref (ks ! 0))\<close>
-| \<open>tr_app_m SmtOp_Bvneg ks = Term_Neg (tref (ks ! 0))\<close>
-| \<open>tr_app_m SmtOp_And ks = fold_left_m SmtOp_And ks\<close>
-| \<open>tr_app_m SmtOp_Or ks = fold_left_m SmtOp_Or ks\<close>
-| \<open>tr_app_m SmtOp_Xor ks = fold_left_m SmtOp_Xor ks\<close>
-| \<open>tr_app_m SmtOp_Bvand ks = fold_left_m SmtOp_Bvand ks\<close>
-| \<open>tr_app_m SmtOp_Bvor ks = fold_left_m SmtOp_Bvor ks\<close>
-| \<open>tr_app_m SmtOp_Bvadd ks = fold_left_m SmtOp_Bvadd ks\<close>
-| \<open>tr_app_m SmtOp_Bvmul ks = fold_left_m SmtOp_Bvmul ks\<close>
-| \<open>tr_app_m SmtOp_Bvxor ks = fold_left_m SmtOp_Bvxor ks\<close>
-| \<open>tr_app_m SmtOp_Implies ks = implies_m ks\<close>
-| \<open>tr_app_m SmtOp_Eq ks = chain_m SmtOp_Eq ks\<close>
-| \<open>tr_app_m SmtOp_Distinct ks = pairwise_m ks\<close>
-| \<open>tr_app_m SmtOp_Ite ks = Term_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2))\<close>
-| \<open>tr_app_m (SmtOp_Extract i j) ks = Term_Extract i j (tref (ks ! 0))\<close>
-| \<open>tr_app_m (SmtOp_Repeat i) ks = Term_Repeat i (tref (ks ! 0))\<close>
-| \<open>tr_app_m (SmtOp_ZeroExtend i) ks = Term_ZeroExtend i (tref (ks ! 0))\<close>
-| \<open>tr_app_m (SmtOp_SignExtend i) ks = Term_SignExtend i (tref (ks ! 0))\<close>
-| \<open>tr_app_m (SmtOp_RotateLeft i) ks = Term_RotateLeft i (tref (ks ! 0))\<close>
-| \<open>tr_app_m (SmtOp_RotateRight i) ks = Term_RotateRight i (tref (ks ! 0))\<close>
-| \<open>tr_app_m op ks = Term_Bin (tr_op op) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvnot ks = Term_Not (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_Bvneg ks = Term_Neg (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_And ks = fold_left_m SmtOp_And ks\<close>
+  \<open>tr_app_m SmtOp_Or ks = fold_left_m SmtOp_Or ks\<close>
+  \<open>tr_app_m SmtOp_Xor ks = fold_left_m SmtOp_Xor ks\<close>
+  \<open>tr_app_m SmtOp_Bvand ks = fold_left_m SmtOp_Bvand ks\<close>
+  \<open>tr_app_m SmtOp_Bvor ks = fold_left_m SmtOp_Bvor ks\<close>
+  \<open>tr_app_m SmtOp_Bvadd ks = fold_left_m SmtOp_Bvadd ks\<close>
+  \<open>tr_app_m SmtOp_Bvmul ks = fold_left_m SmtOp_Bvmul ks\<close>
+  \<open>tr_app_m SmtOp_Bvxor ks = fold_left_m SmtOp_Bvxor ks\<close>
+  \<open>tr_app_m SmtOp_Implies ks = implies_m ks\<close>
+  \<open>tr_app_m SmtOp_Eq ks = chain_m SmtOp_Eq ks\<close>
+  \<open>tr_app_m SmtOp_Distinct ks = pairwise_m ks\<close>
+  \<open>tr_app_m SmtOp_Ite ks = Term_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2))\<close>
+  \<open>tr_app_m (SmtOp_Extract i j) ks = Term_Extract i j (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_Repeat i) ks = Term_Repeat i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_ZeroExtend i) ks = Term_ZeroExtend i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_SignExtend i) ks = Term_SignExtend i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_RotateLeft i) ks = Term_RotateLeft i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_RotateRight i) ks = Term_RotateRight i (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_Concat ks = Term_Bin (tr_op SmtOp_Concat) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvudiv ks = Term_Bin (tr_op SmtOp_Bvudiv) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvurem ks = Term_Bin (tr_op SmtOp_Bvurem) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvshl ks = Term_Bin (tr_op SmtOp_Bvshl) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvlshr ks = Term_Bin (tr_op SmtOp_Bvlshr) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvult ks = Term_Bin (tr_op SmtOp_Bvult) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvnand ks = Term_Bin (tr_op SmtOp_Bvnand) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvnor ks = Term_Bin (tr_op SmtOp_Bvnor) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvxnor ks = Term_Bin (tr_op SmtOp_Bvxnor) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvcomp ks = Term_Bin (tr_op SmtOp_Bvcomp) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsub ks = Term_Bin (tr_op SmtOp_Bvsub) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsdiv ks = Term_Bin (tr_op SmtOp_Bvsdiv) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsrem ks = Term_Bin (tr_op SmtOp_Bvsrem) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsmod ks = Term_Bin (tr_op SmtOp_Bvsmod) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvashr ks = Term_Bin (tr_op SmtOp_Bvashr) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvule ks = Term_Bin (tr_op SmtOp_Bvule) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvugt ks = Term_Bin (tr_op SmtOp_Bvugt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvuge ks = Term_Bin (tr_op SmtOp_Bvuge) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvslt ks = Term_Bin (tr_op SmtOp_Bvslt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsle ks = Term_Bin (tr_op SmtOp_Bvsle) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsgt ks = Term_Bin (tr_op SmtOp_Bvsgt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsge ks = Term_Bin (tr_op SmtOp_Bvsge) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  by (simp_all add: tr_app_m_def)
 
 text \<open>The translation of a term and of a list of arguments (each added as a definition). \<open>dm\<close>: the
   definition of each definition without parameters of \<open>p\<close>; \<open>env\<close>: the definitions of the
@@ -139,10 +235,18 @@ definition tr_asserts_m :: \<open>SmtProblem \<Rightarrow> Term list \<times> na
      foldl (\<lambda>(S, ts) t. let r = tr_term_m p (snd Sd) [] (length (SmtProblem_defs p)) S t in (fst r, ts @ [snd r]))
        (fst Sd, []) (SmtProblem_asserts p)\<close>
 
-fun sort_width_m :: \<open>SmtSort \<Rightarrow> nat\<close> where
+definition sort_width_m :: \<open>SmtSort \<Rightarrow> nat\<close> where
+  \<open>sort_width_m srt \<equiv>
+     (case srt of
+        SmtSort_Bool \<Rightarrow> 1
+      | SmtSort_BitVec w \<Rightarrow> (unat w)
+      | SmtSort_Uninterpreted s \<Rightarrow> 0)\<close>
+
+lemma sort_width_m_simps [simp]:
   \<open>sort_width_m SmtSort_Bool = 1\<close>
-| \<open>sort_width_m (SmtSort_BitVec w) = unat w\<close>
-| \<open>sort_width_m (SmtSort_Uninterpreted s) = 0\<close>
+  \<open>sort_width_m (SmtSort_BitVec w) = unat w\<close>
+  \<open>sort_width_m (SmtSort_Uninterpreted s) = 0\<close>
+  by (simp_all add: sort_width_m_def)
 
 definition tr_problem_m :: \<open>SmtProblem \<Rightarrow> Problem\<close> where
   \<open>tr_problem_m p \<equiv>
@@ -204,7 +308,7 @@ text \<open>A well-sorted term keeps its width and value when definitions are ad
 lemma wt_width_eval_append:
   \<open>wt ws ds t \<Longrightarrow> length dv = length ds \<Longrightarrow>
      wt ws (ds @ e) t \<and> width ws (ds @ e) t = width ws ds t \<and> eval ws (ds @ e) vs (dv @ ev) t = eval ws ds vs dv t\<close>
-  by (induction t) (auto simp: nth_append split: Op.splits)
+  by (induction t) (auto simp: nth_append split: Op_splits)
 
 section \<open>Correctness of the translation\<close>
 
@@ -325,7 +429,7 @@ lemma la2_bv:
 
 lemma smt_bin_width_Some:
   \<open>smt_bin_width ss = Some y \<Longrightarrow> \<exists>a. ss = [SmtSort_BitVec a, SmtSort_BitVec a] \<and> y = unat a\<close>
-  by (cases ss rule: smt_bin_width.cases) (auto split: if_splits)
+  by (auto simp: smt_bin_width_def split: list.splits SmtSort.splits if_splits)
 
 lemma smt_same_width_Some:
   \<open>smt_same_width ss = Some y \<Longrightarrow> \<exists>a. ss \<noteq> [] \<and> (\<forall>s \<in> set ss. s = SmtSort_BitVec a) \<and> y = unat a\<close>
@@ -349,30 +453,78 @@ proof -
 qed
 
 text \<open>The bit-vector functions whose value is a fold of \<^const>\<open>smt_bv_bin\<close>.\<close>
-fun fold_op :: \<open>SmtOp \<Rightarrow> bool\<close> where
+definition fold_op :: \<open>SmtOp \<Rightarrow> bool\<close> where
+  \<open>fold_op op \<equiv>
+     (case op of
+        SmtOp_Bvand \<Rightarrow> True
+      | SmtOp_Bvor \<Rightarrow> True
+      | SmtOp_Bvadd \<Rightarrow> True
+      | SmtOp_Bvmul \<Rightarrow> True
+      | SmtOp_Bvudiv \<Rightarrow> True
+      | SmtOp_Bvurem \<Rightarrow> True
+      | SmtOp_Bvshl \<Rightarrow> True
+      | SmtOp_Bvlshr \<Rightarrow> True
+      | SmtOp_Bvnand \<Rightarrow> True
+      | SmtOp_Bvnor \<Rightarrow> True
+      | SmtOp_Bvxor \<Rightarrow> True
+      | SmtOp_Bvxnor \<Rightarrow> True
+      | SmtOp_Bvsub \<Rightarrow> True
+      | SmtOp_Bvsdiv \<Rightarrow> True
+      | SmtOp_Bvsrem \<Rightarrow> True
+      | SmtOp_Bvsmod \<Rightarrow> True
+      | SmtOp_Bvashr \<Rightarrow> True
+      | _ \<Rightarrow> False)\<close>
+
+lemma fold_op_simps [simp]:
   \<open>fold_op SmtOp_Bvand = True\<close>
-| \<open>fold_op SmtOp_Bvor = True\<close>
-| \<open>fold_op SmtOp_Bvadd = True\<close>
-| \<open>fold_op SmtOp_Bvmul = True\<close>
-| \<open>fold_op SmtOp_Bvudiv = True\<close>
-| \<open>fold_op SmtOp_Bvurem = True\<close>
-| \<open>fold_op SmtOp_Bvshl = True\<close>
-| \<open>fold_op SmtOp_Bvlshr = True\<close>
-| \<open>fold_op SmtOp_Bvnand = True\<close>
-| \<open>fold_op SmtOp_Bvnor = True\<close>
-| \<open>fold_op SmtOp_Bvxor = True\<close>
-| \<open>fold_op SmtOp_Bvxnor = True\<close>
-| \<open>fold_op SmtOp_Bvsub = True\<close>
-| \<open>fold_op SmtOp_Bvsdiv = True\<close>
-| \<open>fold_op SmtOp_Bvsrem = True\<close>
-| \<open>fold_op SmtOp_Bvsmod = True\<close>
-| \<open>fold_op SmtOp_Bvashr = True\<close>
-| \<open>fold_op _ = False\<close>
+  \<open>fold_op SmtOp_Bvor = True\<close>
+  \<open>fold_op SmtOp_Bvadd = True\<close>
+  \<open>fold_op SmtOp_Bvmul = True\<close>
+  \<open>fold_op SmtOp_Bvudiv = True\<close>
+  \<open>fold_op SmtOp_Bvurem = True\<close>
+  \<open>fold_op SmtOp_Bvshl = True\<close>
+  \<open>fold_op SmtOp_Bvlshr = True\<close>
+  \<open>fold_op SmtOp_Bvnand = True\<close>
+  \<open>fold_op SmtOp_Bvnor = True\<close>
+  \<open>fold_op SmtOp_Bvxor = True\<close>
+  \<open>fold_op SmtOp_Bvxnor = True\<close>
+  \<open>fold_op SmtOp_Bvsub = True\<close>
+  \<open>fold_op SmtOp_Bvsdiv = True\<close>
+  \<open>fold_op SmtOp_Bvsrem = True\<close>
+  \<open>fold_op SmtOp_Bvsmod = True\<close>
+  \<open>fold_op SmtOp_Bvashr = True\<close>
+  \<open>fold_op SmtOp_Not = False\<close>
+  \<open>fold_op SmtOp_And = False\<close>
+  \<open>fold_op SmtOp_Or = False\<close>
+  \<open>fold_op SmtOp_Xor = False\<close>
+  \<open>fold_op SmtOp_Implies = False\<close>
+  \<open>fold_op SmtOp_Eq = False\<close>
+  \<open>fold_op SmtOp_Distinct = False\<close>
+  \<open>fold_op SmtOp_Ite = False\<close>
+  \<open>fold_op SmtOp_Concat = False\<close>
+  \<open>fold_op (SmtOp_Extract a0 a1) = False\<close>
+  \<open>fold_op SmtOp_Bvnot = False\<close>
+  \<open>fold_op SmtOp_Bvneg = False\<close>
+  \<open>fold_op SmtOp_Bvult = False\<close>
+  \<open>fold_op SmtOp_Bvcomp = False\<close>
+  \<open>fold_op (SmtOp_Repeat a0) = False\<close>
+  \<open>fold_op (SmtOp_ZeroExtend a0) = False\<close>
+  \<open>fold_op (SmtOp_SignExtend a0) = False\<close>
+  \<open>fold_op (SmtOp_RotateLeft a0) = False\<close>
+  \<open>fold_op (SmtOp_RotateRight a0) = False\<close>
+  \<open>fold_op SmtOp_Bvule = False\<close>
+  \<open>fold_op SmtOp_Bvugt = False\<close>
+  \<open>fold_op SmtOp_Bvuge = False\<close>
+  \<open>fold_op SmtOp_Bvslt = False\<close>
+  \<open>fold_op SmtOp_Bvsle = False\<close>
+  \<open>fold_op SmtOp_Bvsgt = False\<close>
+  \<open>fold_op SmtOp_Bvsge = False\<close>
+  by (simp_all add: fold_op_def)
 
 lemma fold_op_sem:
   \<open>fold_op op \<Longrightarrow> smt_op_sem op xs =
      VBv (smt_bv_width (hd xs)) (foldl (\<lambda>x v. smt_bv_bin op (smt_bv_width (hd xs)) x (smt_bv_val v)) (smt_bv_val (hd xs)) (tl xs))\<close>
-  by (cases op) (simp_all add: Let_def del: smt_bv_bin.simps)
+  by (cases op) (simp_all add: Let_def del: smt_bv_bin_simps)
 
 lemma fold_op_sort:
   \<open>fold_op op \<Longrightarrow> smt_op_sort op ss = Some s \<Longrightarrow> \<exists>a. ss \<noteq> [] \<and> (\<forall>x \<in> set ss. x = SmtSort_BitVec a) \<and> s = SmtSort_BitVec a\<close>
@@ -406,7 +558,7 @@ proof (cases \<open>fold_op op\<close>)
     using fold_op_sort[OF True assms(1)] by blast
   have \<open>1 \<le> unat a\<close> using a(1,2) assms(3) by (cases ss) auto
   then show ?thesis using fold_sort[OF assms(2) a(1,2), of op] fold_op_sem[OF True, of xs] a(3)
-    by (auto simp del: smt_bv_bin.simps)
+    by (auto simp del: smt_bv_bin_simps)
 next
   case False
   then show ?thesis
@@ -510,10 +662,18 @@ definition ref_ok :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term l
      def_values ws [] vs [] S ! k = enc v \<and> smt_has_sort s v\<close>
 
 text \<open>A sort of the fragment: Bool or a bit-vector sort of width at least 1.\<close>
-fun frag_sort :: \<open>SmtSort \<Rightarrow> bool\<close> where
+definition frag_sort :: \<open>SmtSort \<Rightarrow> bool\<close> where
+  \<open>frag_sort srt \<equiv>
+     (case srt of
+        SmtSort_Bool \<Rightarrow> True
+      | SmtSort_BitVec w \<Rightarrow> (1 \<le> unat w)
+      | SmtSort_Uninterpreted s \<Rightarrow> False)\<close>
+
+lemma frag_sort_simps [simp]:
   \<open>frag_sort SmtSort_Bool = True\<close>
-| \<open>frag_sort (SmtSort_BitVec w) = (1 \<le> unat w)\<close>
-| \<open>frag_sort (SmtSort_Uninterpreted s) = False\<close>
+  \<open>frag_sort (SmtSort_BitVec w) = (1 \<le> unat w)\<close>
+  \<open>frag_sort (SmtSort_Uninterpreted s) = False\<close>
+  by (simp_all add: frag_sort_def)
 
 lemma sort_width_frag: \<open>frag_sort s \<Longrightarrow> 1 \<le> sort_width_m s\<close>
   by (cases s) auto
@@ -846,7 +1006,7 @@ proof -
     proof
       fix k assume \<open>k \<in> set ks\<close>
       then obtain i where \<open>i < length ss\<close> \<open>k = ks ! i\<close> using assms(3) by (auto simp: in_set_conv_nth)
-      then show \<open>wt ws ?dw (tref k) \<and> width ws ?dw (tref k) = unat a\<close> using T a(2) by (metis nth_mem sort_width_m.simps(2))
+      then show \<open>wt ws ?dw (tref k) \<and> width ws ?dw (tref k) = unat a\<close> using T a(2) by (metis nth_mem sort_width_m_simps(2))
     qed
     have X: \<open>xs ! i = VBv (unat a) (smt_bv_val (xs ! i))\<close> if \<open>i < length xs\<close> for i
     proof -
@@ -886,7 +1046,7 @@ proof -
         foldl_map_h[of \<open>\<lambda>x. bin_sem (tr_op op) (unat a) x (unat a)\<close> \<open>\<lambda>k. eval ws ?dw vs ?dv (tref k)\<close>]
       by auto
     show ?thesis using F a(3) hx tlE fold_op_sem[OF True, of xs] bin_sem_fold[OF True]
-      by (simp add: foldl_map_h del: smt_bv_bin.simps)
+      by (simp add: foldl_map_h del: smt_bv_bin_simps)
   next
     case False
     then show ?thesis

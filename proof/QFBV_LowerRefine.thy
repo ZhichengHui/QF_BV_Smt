@@ -710,7 +710,7 @@ definition lower_bin_contract :: \<open>lst \<Rightarrow> Op \<Rightarrow> nat \
 lemma lower_bin_spec [crush_specs]:
   shows \<open>\<Gamma>; lower_bin (lower_of L) op (word_of_nat ka) (word_of_nat kb) \<Turnstile>\<^sub>F lower_bin_contract L op ka kb\<close>
   apply (crush_boot f: lower_bin_def contract: lower_bin_contract_def)
-  apply (cases op; simp only: Op.case)
+  apply (cases op; simp only: Op_case_simps)
   apply (crush_base simp add: kok_def lower_bin_m_def push_m_def unat_of_nat_64' unat_plus_of_nat unat_1_plus_wn)+
   done
 

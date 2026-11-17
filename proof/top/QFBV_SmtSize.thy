@@ -282,7 +282,7 @@ definition sat_eq :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> bool\<
   \<open>sat_eq A B \<equiv> length A = length B \<and> (\<forall>i < length A. sat (A ! i) = sat (B ! i))\<close>
 
 lemma sat_width_cong: \<open>sat_eq A B \<Longrightarrow> tix nw (length A) t \<Longrightarrow> sat (width ws A t) = sat (width ws B t)\<close>
-  by (induction t) (auto simp: sat_eq_def split: Op.splits intro: sat_add_cong sat_mul_cong)
+  by (induction t) (auto simp: sat_eq_def split: Op_splits intro: sat_add_cong sat_mul_cong)
 
 lemma sat_sum_cong:
   \<open>(\<forall>x \<in> set xs. sat (f x) = sat (g x)) \<Longrightarrow> sat (sum_list (map f xs)) = sat (sum_list (map g xs))\<close>
@@ -807,7 +807,7 @@ definition bin_cost_contract :: \<open>Op \<Rightarrow> 64 word \<Rightarrow> ('
 lemma bin_cost_spec [crush_specs]:
   shows \<open>\<Gamma>; bin_cost op w \<Turnstile>\<^sub>F bin_cost_contract op w\<close>
   apply (crush_boot f: bin_cost_def contract: bin_cost_contract_def)
-  apply (cases op; simp only: Op.case)
+  apply (cases op; simp only: Op_case_simps)
   apply (crush_base simp add: ebin_def sat_mul_sat_l sat_add_sat_l sat_add_sat_r)+
   done
 
@@ -819,7 +819,7 @@ definition op_width_contract :: \<open>Op \<Rightarrow> 64 word \<Rightarrow> 64
 lemma op_width_spec [crush_specs]:
   shows \<open>\<Gamma>; op_width op a b \<Turnstile>\<^sub>F op_width_contract op a b\<close>
   apply (crush_boot f: op_width_def contract: op_width_contract_def)
-  apply (cases op; simp only: Op.case)
+  apply (cases op; simp only: Op_case_simps)
   apply (crush_base simp add: opw_def sat_sat)+
   done
 
@@ -879,8 +879,7 @@ next
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat width_Bin_opw simp del: width.simps)
      apply (rule fw_plus, rule opw_chain, assumption+)
      apply (auto intro!: sat_add_cong sat_cong_ge[OF _ ebin_ge])[1]
-    apply (unfold opw_def[symmetric])
-    apply (rule sat_opw_cong; assumption)
+    apply (cases op; auto simp: opw_def intro: sat_add_cong)
     done
 next
   case (Term_Extract hi lo a)
@@ -1240,10 +1239,18 @@ proof -
 qed
 
 text \<open>A value of each sort, for an interpretation of the declared constants.\<close>
-fun sdef :: \<open>SmtSort \<Rightarrow> sval\<close> where
+definition sdef :: \<open>SmtSort \<Rightarrow> sval\<close> where
+  \<open>sdef srt \<equiv>
+     (case srt of
+        SmtSort_Bool \<Rightarrow> (VBool False)
+      | SmtSort_BitVec w \<Rightarrow> (VBv (unat w) 0)
+      | SmtSort_Uninterpreted s \<Rightarrow> (VElem 0))\<close>
+
+lemma sdef_simps [simp]:
   \<open>sdef SmtSort_Bool = VBool False\<close>
-| \<open>sdef (SmtSort_BitVec w) = VBv (unat w) 0\<close>
-| \<open>sdef (SmtSort_Uninterpreted s) = VElem 0\<close>
+  \<open>sdef (SmtSort_BitVec w) = VBv (unat w) 0\<close>
+  \<open>sdef (SmtSort_Uninterpreted s) = VElem 0\<close>
+  by (simp_all add: sdef_def)
 
 lemma sdef_has_sort: \<open>smt_has_sort s (sdef s)\<close>
   by (cases s) auto

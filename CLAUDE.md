@@ -29,10 +29,6 @@ header); pod agents get all of it from the environment their launcher sets.
   `urust/`, `spec/`, `proof/`; run `tools/devcopy.sh`, which writes `dev/` (a flat copy with
   unqualified imports, not committed); check `dev/<Theory>.thy` with the Pool Server, giving its
   absolute path. Re-run `tools/devcopy.sh` after every edit before checking again.
-- `QFBV_Proof` takes about ten minutes to check, so a dev copy of a theory that imports it loads
-  slowly. To work on such a theory (`proof/smt/`, `proof/top/`), replace in `dev/` (never in the
-  sources) the proofs of the theories it imports by `sorry`; at the end, check the changed
-  theories in a dev copy without those `sorry`s.
 - Close every file you opened with `isabelle_close` before finishing.
 - Before opening a pull request, every theory you changed checks in the Pool Server without
   errors. Run `tools/check.sh` (it must end with `EXIT 0`) only when the change can break theories

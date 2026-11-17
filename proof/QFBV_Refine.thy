@@ -616,7 +616,7 @@ definition gate_bitwise_contract :: \<open>st \<Rightarrow> BinOp \<Rightarrow> 
 lemma gate_bitwise_spec [crush_specs]:
   shows \<open>\<Gamma>; gate_bitwise (cnf_of s) op a b \<Turnstile>\<^sub>F gate_bitwise_contract s op a b\<close>
   apply (crush_boot f: gate_bitwise_def contract: gate_bitwise_contract_def)
-  apply (cases op; simp only: BinOp.case)
+  apply (cases op; simp only: BinOp_case_simps)
          apply (crush_base simp add: bitw_m_def)+
   done
 
@@ -1191,7 +1191,7 @@ proof (induction t arbitrary: s)
     \<open>length (snd (blast_m vs dl (fst (blast_m vs dl s a)) b)) = cwidth (map length vs) (map length dl) b\<close>
     by simp_all
   then show ?case using CoreTerm_Bin.prems
-    by (cases \<open>op = BinOp_Concat\<close>) (simp_all add: blast_bin_m_length bin_width_def split: BinOp.splits)
+    by (cases \<open>op = BinOp_Concat\<close>) (simp_all add: blast_bin_m_length bin_width_def split: BinOp_splits)
 next
   case (CoreTerm_Extract hi lo a)
   then show ?case by (simp add: Suc_diff_le)
@@ -1364,7 +1364,7 @@ lemma wt_subterms: \<open>cwt ws ds t \<Longrightarrow> u \<in> set (csubterms t
   by (induction t) auto
 
 lemma wt_width_append: \<open>cwt ws ds t \<Longrightarrow> cwidth ws (ds @ e) t = cwidth ws ds t\<close>
-  by (induction t) (auto simp: nth_append split: BinOp.splits)
+  by (induction t) (auto simp: nth_append split: BinOp_splits)
 
 lemma tbound_size: \<open>Suc (size t) \<le> tbound ws ds t\<close>
   by (simp add: tbound_def)
@@ -1613,7 +1613,7 @@ definition blast_bin_contract ::
 lemma blast_bin_spec [crush_specs]:
   shows \<open>\<Gamma>; blast_bin (cnf_of s) op a b \<Turnstile>\<^sub>F blast_bin_contract s op a b\<close>
   apply (crush_boot f: blast_bin_def contract: blast_bin_contract_def)
-  apply (cases op; simp only: BinOp.case)
+  apply (cases op; simp only: BinOp_case_simps)
              apply (crush_base simp add: bin_ok_def)+
   done
 

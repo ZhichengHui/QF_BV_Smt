@@ -7,28 +7,76 @@ section \<open>The Rust functions of the translation compute their models\<close
 subsection \<open>The precondition of the recursion\<close>
 
 text \<open>The least number of arguments with which \<^verbatim>\<open>tr_app\<close> does not panic.\<close>
-fun min_ar :: \<open>SmtOp \<Rightarrow> nat\<close> where
+definition min_ar :: \<open>SmtOp \<Rightarrow> nat\<close> where
+  \<open>min_ar op \<equiv>
+     (case op of
+        SmtOp_Not \<Rightarrow> 1
+      | SmtOp_Bvnot \<Rightarrow> 1
+      | SmtOp_Bvneg \<Rightarrow> 1
+      | SmtOp_And \<Rightarrow> 1
+      | SmtOp_Or \<Rightarrow> 1
+      | SmtOp_Xor \<Rightarrow> 1
+      | SmtOp_Bvand \<Rightarrow> 1
+      | SmtOp_Bvor \<Rightarrow> 1
+      | SmtOp_Bvadd \<Rightarrow> 1
+      | SmtOp_Bvmul \<Rightarrow> 1
+      | SmtOp_Implies \<Rightarrow> 1
+      | SmtOp_Eq \<Rightarrow> 2
+      | SmtOp_Distinct \<Rightarrow> 2
+      | SmtOp_Ite \<Rightarrow> 3
+      | SmtOp_Extract i j \<Rightarrow> 1
+      | SmtOp_Repeat i \<Rightarrow> 1
+      | SmtOp_ZeroExtend i \<Rightarrow> 1
+      | SmtOp_SignExtend i \<Rightarrow> 1
+      | SmtOp_RotateLeft i \<Rightarrow> 1
+      | SmtOp_RotateRight i \<Rightarrow> 1
+      | _ \<Rightarrow> 2)\<close>
+
+lemma min_ar_simps [simp]:
   \<open>min_ar SmtOp_Not = 1\<close>
-| \<open>min_ar SmtOp_Bvnot = 1\<close>
-| \<open>min_ar SmtOp_Bvneg = 1\<close>
-| \<open>min_ar SmtOp_And = 1\<close>
-| \<open>min_ar SmtOp_Or = 1\<close>
-| \<open>min_ar SmtOp_Xor = 1\<close>
-| \<open>min_ar SmtOp_Bvand = 1\<close>
-| \<open>min_ar SmtOp_Bvor = 1\<close>
-| \<open>min_ar SmtOp_Bvadd = 1\<close>
-| \<open>min_ar SmtOp_Bvmul = 1\<close>
-| \<open>min_ar SmtOp_Implies = 1\<close>
-| \<open>min_ar SmtOp_Eq = 2\<close>
-| \<open>min_ar SmtOp_Distinct = 2\<close>
-| \<open>min_ar SmtOp_Ite = 3\<close>
-| \<open>min_ar (SmtOp_Extract i j) = 1\<close>
-| \<open>min_ar (SmtOp_Repeat i) = 1\<close>
-| \<open>min_ar (SmtOp_ZeroExtend i) = 1\<close>
-| \<open>min_ar (SmtOp_SignExtend i) = 1\<close>
-| \<open>min_ar (SmtOp_RotateLeft i) = 1\<close>
-| \<open>min_ar (SmtOp_RotateRight i) = 1\<close>
-| \<open>min_ar _ = 2\<close>
+  \<open>min_ar SmtOp_Bvnot = 1\<close>
+  \<open>min_ar SmtOp_Bvneg = 1\<close>
+  \<open>min_ar SmtOp_And = 1\<close>
+  \<open>min_ar SmtOp_Or = 1\<close>
+  \<open>min_ar SmtOp_Xor = 1\<close>
+  \<open>min_ar SmtOp_Bvand = 1\<close>
+  \<open>min_ar SmtOp_Bvor = 1\<close>
+  \<open>min_ar SmtOp_Bvadd = 1\<close>
+  \<open>min_ar SmtOp_Bvmul = 1\<close>
+  \<open>min_ar SmtOp_Implies = 1\<close>
+  \<open>min_ar SmtOp_Eq = 2\<close>
+  \<open>min_ar SmtOp_Distinct = 2\<close>
+  \<open>min_ar SmtOp_Ite = 3\<close>
+  \<open>min_ar (SmtOp_Extract i j) = 1\<close>
+  \<open>min_ar (SmtOp_Repeat i) = 1\<close>
+  \<open>min_ar (SmtOp_ZeroExtend i) = 1\<close>
+  \<open>min_ar (SmtOp_SignExtend i) = 1\<close>
+  \<open>min_ar (SmtOp_RotateLeft i) = 1\<close>
+  \<open>min_ar (SmtOp_RotateRight i) = 1\<close>
+  \<open>min_ar SmtOp_Concat = 2\<close>
+  \<open>min_ar SmtOp_Bvudiv = 2\<close>
+  \<open>min_ar SmtOp_Bvurem = 2\<close>
+  \<open>min_ar SmtOp_Bvshl = 2\<close>
+  \<open>min_ar SmtOp_Bvlshr = 2\<close>
+  \<open>min_ar SmtOp_Bvult = 2\<close>
+  \<open>min_ar SmtOp_Bvnand = 2\<close>
+  \<open>min_ar SmtOp_Bvnor = 2\<close>
+  \<open>min_ar SmtOp_Bvxor = 2\<close>
+  \<open>min_ar SmtOp_Bvxnor = 2\<close>
+  \<open>min_ar SmtOp_Bvcomp = 2\<close>
+  \<open>min_ar SmtOp_Bvsub = 2\<close>
+  \<open>min_ar SmtOp_Bvsdiv = 2\<close>
+  \<open>min_ar SmtOp_Bvsrem = 2\<close>
+  \<open>min_ar SmtOp_Bvsmod = 2\<close>
+  \<open>min_ar SmtOp_Bvashr = 2\<close>
+  \<open>min_ar SmtOp_Bvule = 2\<close>
+  \<open>min_ar SmtOp_Bvugt = 2\<close>
+  \<open>min_ar SmtOp_Bvuge = 2\<close>
+  \<open>min_ar SmtOp_Bvslt = 2\<close>
+  \<open>min_ar SmtOp_Bvsle = 2\<close>
+  \<open>min_ar SmtOp_Bvsgt = 2\<close>
+  \<open>min_ar SmtOp_Bvsge = 2\<close>
+  by (simp_all add: min_ar_def)
 
 text \<open>\<open>tok p F dl el n t\<close>: what \<^verbatim>\<open>tr_term\<close> needs not to panic and to compute
   \<^const>\<open>tr_term_m\<close> with the bound \<open>n\<close>, for \<open>dl\<close> entries of \<^verbatim>\<open>dm\<close> and \<open>el\<close> of \<^verbatim>\<open>env\<close>: indices in
@@ -119,7 +167,7 @@ qed simp_all
 subsection \<open>The precondition holds for a well-sorted problem\<close>
 
 lemma bin_width_len: \<open>smt_bin_width ss \<noteq> None \<Longrightarrow> length ss = 2\<close>
-  by (induction ss rule: smt_bin_width.induct) auto
+  by (auto simp: smt_bin_width_def split: list.splits SmtSort.splits)
 
 lemma bin_width_len': \<open>smt_bin_width ss = Some y \<Longrightarrow> length ss = 2\<close>
   using bin_width_len by fastforce

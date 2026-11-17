@@ -471,7 +471,7 @@ lemma wt_sub: \<open>cwt ws ds t \<Longrightarrow> u \<in> set (csubterms t) \<L
   by (induction t) auto
 
 lemma wt_width_app: \<open>cwt ws ds t \<Longrightarrow> cwidth ws (ds @ e) t = cwidth ws ds t\<close>
-  by (induction t) (auto simp: nth_append split: BinOp.splits)
+  by (induction t) (auto simp: nth_append split: BinOp_splits)
 
 lemma tw_app: \<open>cwt ws ds t \<Longrightarrow> cterm_weight ws (ds @ e) t = cterm_weight ws ds t\<close>
   unfolding cterm_weight_def

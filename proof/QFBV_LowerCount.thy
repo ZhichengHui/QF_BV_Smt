@@ -52,7 +52,7 @@ lemma cc_sle: \<open>kb < 2 ^ 64 \<Longrightarrow> ccount ws ds (sle_t ka kb w) 
   by (simp add: sle_t_def msb_t_def cc_simps cc_cr bcost_def cr_width)
 
 lemma cws_le_app: \<open>cwt ws ds t \<Longrightarrow> cws_le ws (ds @ e) t M = cws_le ws ds t M\<close>
-  by (induction t) (auto simp: cws_le_def wt_width_app nth_append split: BinOp.splits)
+  by (induction t) (auto simp: cws_le_def wt_width_app nth_append split: BinOp_splits)
 
 lemma lcnt_widths:
   \<open>lok ws L \<Longrightarrow> map (ccount ws (snd L @ e)) (fst L) = map (ccount ws (snd L)) (fst L)\<close>

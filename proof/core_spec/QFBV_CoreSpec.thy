@@ -2,6 +2,209 @@ theory QFBV_CoreSpec
   imports "QFBV_Spec.QFBV_Spec"
 begin
 
+section \<open>Case analysis on the word enumerations\<close>
+
+text \<open>\<^typ>\<open>Op\<close> and \<^typ>\<open>BinOp\<close> are \<^verbatim>\<open>simple_word_enum\<close>s (AutoCorrode): types defined over machine
+  words, with a simproc that reduces \<open>case\<close> on a variant but no rules by variant. These lemmas give
+  the case analysis by variant (the default \<open>cases\<close> rule of each type), its split rules and the
+  \<open>case\<close> equations, in the forms the datatype package provides for a datatype.\<close>
+
+lemma Op_exhaust [case_names Op_And Op_Or Op_Xor Op_Nand Op_Nor Op_Xnor Op_Comp Op_Add Op_Sub Op_Mul Op_Udiv Op_Urem Op_Sdiv Op_Srem Op_Smod Op_Shl Op_Lshr Op_Ashr Op_Concat Op_Eq Op_Distinct Op_Ult Op_Ule Op_Ugt Op_Uge Op_Slt Op_Sle Op_Sgt Op_Sge, cases type: Op]:
+  obtains \<open>x = Op_And\<close>
+  | \<open>x = Op_Or\<close>
+  | \<open>x = Op_Xor\<close>
+  | \<open>x = Op_Nand\<close>
+  | \<open>x = Op_Nor\<close>
+  | \<open>x = Op_Xnor\<close>
+  | \<open>x = Op_Comp\<close>
+  | \<open>x = Op_Add\<close>
+  | \<open>x = Op_Sub\<close>
+  | \<open>x = Op_Mul\<close>
+  | \<open>x = Op_Udiv\<close>
+  | \<open>x = Op_Urem\<close>
+  | \<open>x = Op_Sdiv\<close>
+  | \<open>x = Op_Srem\<close>
+  | \<open>x = Op_Smod\<close>
+  | \<open>x = Op_Shl\<close>
+  | \<open>x = Op_Lshr\<close>
+  | \<open>x = Op_Ashr\<close>
+  | \<open>x = Op_Concat\<close>
+  | \<open>x = Op_Eq\<close>
+  | \<open>x = Op_Distinct\<close>
+  | \<open>x = Op_Ult\<close>
+  | \<open>x = Op_Ule\<close>
+  | \<open>x = Op_Ugt\<close>
+  | \<open>x = Op_Uge\<close>
+  | \<open>x = Op_Slt\<close>
+  | \<open>x = Op_Sle\<close>
+  | \<open>x = Op_Sgt\<close>
+  | \<open>x = Op_Sge\<close>
+  using Op_all_total[of x] by (auto simp: Op_all_concrete)
+
+lemma Op_split:
+  \<open>P (case x of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) =
+    ((x = Op_And \<longrightarrow> P f0) \<and>
+     (x = Op_Or \<longrightarrow> P f1) \<and>
+     (x = Op_Xor \<longrightarrow> P f2) \<and>
+     (x = Op_Nand \<longrightarrow> P f3) \<and>
+     (x = Op_Nor \<longrightarrow> P f4) \<and>
+     (x = Op_Xnor \<longrightarrow> P f5) \<and>
+     (x = Op_Comp \<longrightarrow> P f6) \<and>
+     (x = Op_Add \<longrightarrow> P f7) \<and>
+     (x = Op_Sub \<longrightarrow> P f8) \<and>
+     (x = Op_Mul \<longrightarrow> P f9) \<and>
+     (x = Op_Udiv \<longrightarrow> P f10) \<and>
+     (x = Op_Urem \<longrightarrow> P f11) \<and>
+     (x = Op_Sdiv \<longrightarrow> P f12) \<and>
+     (x = Op_Srem \<longrightarrow> P f13) \<and>
+     (x = Op_Smod \<longrightarrow> P f14) \<and>
+     (x = Op_Shl \<longrightarrow> P f15) \<and>
+     (x = Op_Lshr \<longrightarrow> P f16) \<and>
+     (x = Op_Ashr \<longrightarrow> P f17) \<and>
+     (x = Op_Concat \<longrightarrow> P f18) \<and>
+     (x = Op_Eq \<longrightarrow> P f19) \<and>
+     (x = Op_Distinct \<longrightarrow> P f20) \<and>
+     (x = Op_Ult \<longrightarrow> P f21) \<and>
+     (x = Op_Ule \<longrightarrow> P f22) \<and>
+     (x = Op_Ugt \<longrightarrow> P f23) \<and>
+     (x = Op_Uge \<longrightarrow> P f24) \<and>
+     (x = Op_Slt \<longrightarrow> P f25) \<and>
+     (x = Op_Sle \<longrightarrow> P f26) \<and>
+     (x = Op_Sgt \<longrightarrow> P f27) \<and>
+     (x = Op_Sge \<longrightarrow> P f28))\<close>
+  by (cases x) simp_all
+
+lemma Op_split_asm:
+  \<open>P (case x of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) =
+    (\<not> ((x = Op_And \<and> \<not> P f0) \<or>
+        (x = Op_Or \<and> \<not> P f1) \<or>
+        (x = Op_Xor \<and> \<not> P f2) \<or>
+        (x = Op_Nand \<and> \<not> P f3) \<or>
+        (x = Op_Nor \<and> \<not> P f4) \<or>
+        (x = Op_Xnor \<and> \<not> P f5) \<or>
+        (x = Op_Comp \<and> \<not> P f6) \<or>
+        (x = Op_Add \<and> \<not> P f7) \<or>
+        (x = Op_Sub \<and> \<not> P f8) \<or>
+        (x = Op_Mul \<and> \<not> P f9) \<or>
+        (x = Op_Udiv \<and> \<not> P f10) \<or>
+        (x = Op_Urem \<and> \<not> P f11) \<or>
+        (x = Op_Sdiv \<and> \<not> P f12) \<or>
+        (x = Op_Srem \<and> \<not> P f13) \<or>
+        (x = Op_Smod \<and> \<not> P f14) \<or>
+        (x = Op_Shl \<and> \<not> P f15) \<or>
+        (x = Op_Lshr \<and> \<not> P f16) \<or>
+        (x = Op_Ashr \<and> \<not> P f17) \<or>
+        (x = Op_Concat \<and> \<not> P f18) \<or>
+        (x = Op_Eq \<and> \<not> P f19) \<or>
+        (x = Op_Distinct \<and> \<not> P f20) \<or>
+        (x = Op_Ult \<and> \<not> P f21) \<or>
+        (x = Op_Ule \<and> \<not> P f22) \<or>
+        (x = Op_Ugt \<and> \<not> P f23) \<or>
+        (x = Op_Uge \<and> \<not> P f24) \<or>
+        (x = Op_Slt \<and> \<not> P f25) \<or>
+        (x = Op_Sle \<and> \<not> P f26) \<or>
+        (x = Op_Sgt \<and> \<not> P f27) \<or>
+        (x = Op_Sge \<and> \<not> P f28)))\<close>
+  by (cases x) simp_all
+
+lemmas Op_splits = Op_split Op_split_asm
+
+lemma Op_case_simps:
+  \<open>(case Op_And of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f0\<close>
+  \<open>(case Op_Or of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f1\<close>
+  \<open>(case Op_Xor of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f2\<close>
+  \<open>(case Op_Nand of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f3\<close>
+  \<open>(case Op_Nor of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f4\<close>
+  \<open>(case Op_Xnor of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f5\<close>
+  \<open>(case Op_Comp of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f6\<close>
+  \<open>(case Op_Add of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f7\<close>
+  \<open>(case Op_Sub of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f8\<close>
+  \<open>(case Op_Mul of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f9\<close>
+  \<open>(case Op_Udiv of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f10\<close>
+  \<open>(case Op_Urem of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f11\<close>
+  \<open>(case Op_Sdiv of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f12\<close>
+  \<open>(case Op_Srem of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f13\<close>
+  \<open>(case Op_Smod of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f14\<close>
+  \<open>(case Op_Shl of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f15\<close>
+  \<open>(case Op_Lshr of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f16\<close>
+  \<open>(case Op_Ashr of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f17\<close>
+  \<open>(case Op_Concat of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f18\<close>
+  \<open>(case Op_Eq of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f19\<close>
+  \<open>(case Op_Distinct of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f20\<close>
+  \<open>(case Op_Ult of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f21\<close>
+  \<open>(case Op_Ule of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f22\<close>
+  \<open>(case Op_Ugt of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f23\<close>
+  \<open>(case Op_Uge of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f24\<close>
+  \<open>(case Op_Slt of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f25\<close>
+  \<open>(case Op_Sle of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f26\<close>
+  \<open>(case Op_Sgt of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f27\<close>
+  \<open>(case Op_Sge of Op_And \<Rightarrow> f0 | Op_Or \<Rightarrow> f1 | Op_Xor \<Rightarrow> f2 | Op_Nand \<Rightarrow> f3 | Op_Nor \<Rightarrow> f4 | Op_Xnor \<Rightarrow> f5 | Op_Comp \<Rightarrow> f6 | Op_Add \<Rightarrow> f7 | Op_Sub \<Rightarrow> f8 | Op_Mul \<Rightarrow> f9 | Op_Udiv \<Rightarrow> f10 | Op_Urem \<Rightarrow> f11 | Op_Sdiv \<Rightarrow> f12 | Op_Srem \<Rightarrow> f13 | Op_Smod \<Rightarrow> f14 | Op_Shl \<Rightarrow> f15 | Op_Lshr \<Rightarrow> f16 | Op_Ashr \<Rightarrow> f17 | Op_Concat \<Rightarrow> f18 | Op_Eq \<Rightarrow> f19 | Op_Distinct \<Rightarrow> f20 | Op_Ult \<Rightarrow> f21 | Op_Ule \<Rightarrow> f22 | Op_Ugt \<Rightarrow> f23 | Op_Uge \<Rightarrow> f24 | Op_Slt \<Rightarrow> f25 | Op_Sle \<Rightarrow> f26 | Op_Sgt \<Rightarrow> f27 | Op_Sge \<Rightarrow> f28) = f28\<close>
+  by simp_all
+
+lemma BinOp_exhaust [case_names BinOp_And BinOp_Or BinOp_Xor BinOp_Add BinOp_Mul BinOp_Udiv BinOp_Urem BinOp_Shl BinOp_Lshr BinOp_Concat BinOp_Eq BinOp_Ult, cases type: BinOp]:
+  obtains \<open>x = BinOp_And\<close>
+  | \<open>x = BinOp_Or\<close>
+  | \<open>x = BinOp_Xor\<close>
+  | \<open>x = BinOp_Add\<close>
+  | \<open>x = BinOp_Mul\<close>
+  | \<open>x = BinOp_Udiv\<close>
+  | \<open>x = BinOp_Urem\<close>
+  | \<open>x = BinOp_Shl\<close>
+  | \<open>x = BinOp_Lshr\<close>
+  | \<open>x = BinOp_Concat\<close>
+  | \<open>x = BinOp_Eq\<close>
+  | \<open>x = BinOp_Ult\<close>
+  using BinOp_all_total[of x] by (auto simp: BinOp_all_concrete)
+
+lemma BinOp_split:
+  \<open>P (case x of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) =
+    ((x = BinOp_And \<longrightarrow> P f0) \<and>
+     (x = BinOp_Or \<longrightarrow> P f1) \<and>
+     (x = BinOp_Xor \<longrightarrow> P f2) \<and>
+     (x = BinOp_Add \<longrightarrow> P f3) \<and>
+     (x = BinOp_Mul \<longrightarrow> P f4) \<and>
+     (x = BinOp_Udiv \<longrightarrow> P f5) \<and>
+     (x = BinOp_Urem \<longrightarrow> P f6) \<and>
+     (x = BinOp_Shl \<longrightarrow> P f7) \<and>
+     (x = BinOp_Lshr \<longrightarrow> P f8) \<and>
+     (x = BinOp_Concat \<longrightarrow> P f9) \<and>
+     (x = BinOp_Eq \<longrightarrow> P f10) \<and>
+     (x = BinOp_Ult \<longrightarrow> P f11))\<close>
+  by (cases x) simp_all
+
+lemma BinOp_split_asm:
+  \<open>P (case x of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) =
+    (\<not> ((x = BinOp_And \<and> \<not> P f0) \<or>
+        (x = BinOp_Or \<and> \<not> P f1) \<or>
+        (x = BinOp_Xor \<and> \<not> P f2) \<or>
+        (x = BinOp_Add \<and> \<not> P f3) \<or>
+        (x = BinOp_Mul \<and> \<not> P f4) \<or>
+        (x = BinOp_Udiv \<and> \<not> P f5) \<or>
+        (x = BinOp_Urem \<and> \<not> P f6) \<or>
+        (x = BinOp_Shl \<and> \<not> P f7) \<or>
+        (x = BinOp_Lshr \<and> \<not> P f8) \<or>
+        (x = BinOp_Concat \<and> \<not> P f9) \<or>
+        (x = BinOp_Eq \<and> \<not> P f10) \<or>
+        (x = BinOp_Ult \<and> \<not> P f11)))\<close>
+  by (cases x) simp_all
+
+lemmas BinOp_splits = BinOp_split BinOp_split_asm
+
+lemma BinOp_case_simps:
+  \<open>(case BinOp_And of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f0\<close>
+  \<open>(case BinOp_Or of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f1\<close>
+  \<open>(case BinOp_Xor of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f2\<close>
+  \<open>(case BinOp_Add of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f3\<close>
+  \<open>(case BinOp_Mul of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f4\<close>
+  \<open>(case BinOp_Udiv of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f5\<close>
+  \<open>(case BinOp_Urem of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f6\<close>
+  \<open>(case BinOp_Shl of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f7\<close>
+  \<open>(case BinOp_Lshr of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f8\<close>
+  \<open>(case BinOp_Concat of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f9\<close>
+  \<open>(case BinOp_Eq of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f10\<close>
+  \<open>(case BinOp_Ult of BinOp_And \<Rightarrow> f0 | BinOp_Or \<Rightarrow> f1 | BinOp_Xor \<Rightarrow> f2 | BinOp_Add \<Rightarrow> f3 | BinOp_Mul \<Rightarrow> f4 | BinOp_Udiv \<Rightarrow> f5 | BinOp_Urem \<Rightarrow> f6 | BinOp_Shl \<Rightarrow> f7 | BinOp_Lshr \<Rightarrow> f8 | BinOp_Concat \<Rightarrow> f9 | BinOp_Eq \<Rightarrow> f10 | BinOp_Ult \<Rightarrow> f11) = f11\<close>
+  by simp_all
+
 section \<open>The specification of the core solver\<close>
 
 text \<open>
@@ -211,38 +414,73 @@ text \<open>A binary function on the values \<open>x\<close>, \<open>y\<close> o
     the two's complement value of \<open>s\<close> is below that of \<open>t\<close>; \<open>bvsle\<close>: the same with \<open>bvule\<close>;
     \<open>bvsgt s t\<close>: \<open>(bvslt t s)\<close>; \<open>bvsge s t\<close>: \<open>(bvsle t s)\<close>.
   Core theory: \<open>=\<close> is true iff the values are equal, \<open>distinct\<close> iff they differ.\<close>
-fun bin_sem :: \<open>Op \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+definition bin_sem :: \<open>Op \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>bin_sem op w x v y \<equiv>
+     (case op of
+        Op_And \<Rightarrow> (Bit_Operations.and x y)
+      | Op_Or \<Rightarrow> (Bit_Operations.or x y)
+      | Op_Xor \<Rightarrow> (Bit_Operations.xor x y)
+      | Op_Nand \<Rightarrow> (2 ^ w - 1 - Bit_Operations.and x y)
+      | Op_Nor \<Rightarrow> (2 ^ w - 1 - Bit_Operations.or x y)
+      | Op_Xnor \<Rightarrow> (2 ^ w - 1 - Bit_Operations.xor x y)
+      | Op_Comp \<Rightarrow> (of_bool (x = y))
+      | Op_Add \<Rightarrow> ((x + y) mod 2 ^ w)
+      | Op_Sub \<Rightarrow> ((x + (2 ^ w - y)) mod 2 ^ w)
+      | Op_Mul \<Rightarrow> ((x * y) mod 2 ^ w)
+      | Op_Udiv \<Rightarrow> (if y = 0 then 2 ^ w - 1 else x div y)
+      | Op_Urem \<Rightarrow> (if y = 0 then x else x mod y)
+      | Op_Sdiv \<Rightarrow> (if y = 0 then (if sint w x < 0 then 1 else 2 ^ w - 1)
+                else to_bv w (tdiv (sint w x) (sint w y)))
+      | Op_Srem \<Rightarrow> (if y = 0 then x else to_bv w (tmod (sint w x) (sint w y)))
+      | Op_Smod \<Rightarrow> (if y = 0 then x else to_bv w (sint w x mod sint w y))
+      | Op_Shl \<Rightarrow> ((x * 2 ^ y) mod 2 ^ w)
+      | Op_Lshr \<Rightarrow> (x div 2 ^ y)
+      | Op_Ashr \<Rightarrow> (to_bv w (sint w x div 2 ^ y))
+      | Op_Concat \<Rightarrow> (x * 2 ^ v + y)
+      | Op_Eq \<Rightarrow> (of_bool (x = y))
+      | Op_Distinct \<Rightarrow> (of_bool (x \<noteq> y))
+      | Op_Ult \<Rightarrow> (of_bool (x < y))
+      | Op_Ule \<Rightarrow> (of_bool (x \<le> y))
+      | Op_Ugt \<Rightarrow> (of_bool (y < x))
+      | Op_Uge \<Rightarrow> (of_bool (y \<le> x))
+      | Op_Slt \<Rightarrow> (of_bool (sint w x < sint w y))
+      | Op_Sle \<Rightarrow> (of_bool (sint w x \<le> sint w y))
+      | Op_Sgt \<Rightarrow> (of_bool (sint w y < sint w x))
+      | Op_Sge \<Rightarrow> (of_bool (sint w y \<le> sint w x)))\<close>
+
+lemma bin_sem_simps [simp]:
   \<open>bin_sem Op_And w x v y = Bit_Operations.and x y\<close>
-| \<open>bin_sem Op_Or w x v y = Bit_Operations.or x y\<close>
-| \<open>bin_sem Op_Xor w x v y = Bit_Operations.xor x y\<close>
-| \<open>bin_sem Op_Nand w x v y = 2 ^ w - 1 - Bit_Operations.and x y\<close>
-| \<open>bin_sem Op_Nor w x v y = 2 ^ w - 1 - Bit_Operations.or x y\<close>
-| \<open>bin_sem Op_Xnor w x v y = 2 ^ w - 1 - Bit_Operations.xor x y\<close>
-| \<open>bin_sem Op_Comp w x v y = of_bool (x = y)\<close>
-| \<open>bin_sem Op_Add w x v y = (x + y) mod 2 ^ w\<close>
-| \<open>bin_sem Op_Sub w x v y = (x + (2 ^ w - y)) mod 2 ^ w\<close>
-| \<open>bin_sem Op_Mul w x v y = (x * y) mod 2 ^ w\<close>
-| \<open>bin_sem Op_Udiv w x v y = (if y = 0 then 2 ^ w - 1 else x div y)\<close>
-| \<open>bin_sem Op_Urem w x v y = (if y = 0 then x else x mod y)\<close>
-| \<open>bin_sem Op_Sdiv w x v y =
-     (if y = 0 then (if sint w x < 0 then 1 else 2 ^ w - 1)
-      else to_bv w (tdiv (sint w x) (sint w y)))\<close>
-| \<open>bin_sem Op_Srem w x v y = (if y = 0 then x else to_bv w (tmod (sint w x) (sint w y)))\<close>
-| \<open>bin_sem Op_Smod w x v y = (if y = 0 then x else to_bv w (sint w x mod sint w y))\<close>
-| \<open>bin_sem Op_Shl w x v y = (x * 2 ^ y) mod 2 ^ w\<close>
-| \<open>bin_sem Op_Lshr w x v y = x div 2 ^ y\<close>
-| \<open>bin_sem Op_Ashr w x v y = to_bv w (sint w x div 2 ^ y)\<close>
-| \<open>bin_sem Op_Concat w x v y = x * 2 ^ v + y\<close>
-| \<open>bin_sem Op_Eq w x v y = of_bool (x = y)\<close>
-| \<open>bin_sem Op_Distinct w x v y = of_bool (x \<noteq> y)\<close>
-| \<open>bin_sem Op_Ult w x v y = of_bool (x < y)\<close>
-| \<open>bin_sem Op_Ule w x v y = of_bool (x \<le> y)\<close>
-| \<open>bin_sem Op_Ugt w x v y = of_bool (y < x)\<close>
-| \<open>bin_sem Op_Uge w x v y = of_bool (y \<le> x)\<close>
-| \<open>bin_sem Op_Slt w x v y = of_bool (sint w x < sint w y)\<close>
-| \<open>bin_sem Op_Sle w x v y = of_bool (sint w x \<le> sint w y)\<close>
-| \<open>bin_sem Op_Sgt w x v y = of_bool (sint w y < sint w x)\<close>
-| \<open>bin_sem Op_Sge w x v y = of_bool (sint w y \<le> sint w x)\<close>
+  \<open>bin_sem Op_Or w x v y = Bit_Operations.or x y\<close>
+  \<open>bin_sem Op_Xor w x v y = Bit_Operations.xor x y\<close>
+  \<open>bin_sem Op_Nand w x v y = 2 ^ w - 1 - Bit_Operations.and x y\<close>
+  \<open>bin_sem Op_Nor w x v y = 2 ^ w - 1 - Bit_Operations.or x y\<close>
+  \<open>bin_sem Op_Xnor w x v y = 2 ^ w - 1 - Bit_Operations.xor x y\<close>
+  \<open>bin_sem Op_Comp w x v y = of_bool (x = y)\<close>
+  \<open>bin_sem Op_Add w x v y = (x + y) mod 2 ^ w\<close>
+  \<open>bin_sem Op_Sub w x v y = (x + (2 ^ w - y)) mod 2 ^ w\<close>
+  \<open>bin_sem Op_Mul w x v y = (x * y) mod 2 ^ w\<close>
+  \<open>bin_sem Op_Udiv w x v y = (if y = 0 then 2 ^ w - 1 else x div y)\<close>
+  \<open>bin_sem Op_Urem w x v y = (if y = 0 then x else x mod y)\<close>
+  \<open>bin_sem Op_Sdiv w x v y =
+       (if y = 0 then (if sint w x < 0 then 1 else 2 ^ w - 1)
+        else to_bv w (tdiv (sint w x) (sint w y)))\<close>
+  \<open>bin_sem Op_Srem w x v y = (if y = 0 then x else to_bv w (tmod (sint w x) (sint w y)))\<close>
+  \<open>bin_sem Op_Smod w x v y = (if y = 0 then x else to_bv w (sint w x mod sint w y))\<close>
+  \<open>bin_sem Op_Shl w x v y = (x * 2 ^ y) mod 2 ^ w\<close>
+  \<open>bin_sem Op_Lshr w x v y = x div 2 ^ y\<close>
+  \<open>bin_sem Op_Ashr w x v y = to_bv w (sint w x div 2 ^ y)\<close>
+  \<open>bin_sem Op_Concat w x v y = x * 2 ^ v + y\<close>
+  \<open>bin_sem Op_Eq w x v y = of_bool (x = y)\<close>
+  \<open>bin_sem Op_Distinct w x v y = of_bool (x \<noteq> y)\<close>
+  \<open>bin_sem Op_Ult w x v y = of_bool (x < y)\<close>
+  \<open>bin_sem Op_Ule w x v y = of_bool (x \<le> y)\<close>
+  \<open>bin_sem Op_Ugt w x v y = of_bool (y < x)\<close>
+  \<open>bin_sem Op_Uge w x v y = of_bool (y \<le> x)\<close>
+  \<open>bin_sem Op_Slt w x v y = of_bool (sint w x < sint w y)\<close>
+  \<open>bin_sem Op_Sle w x v y = of_bool (sint w x \<le> sint w y)\<close>
+  \<open>bin_sem Op_Sgt w x v y = of_bool (sint w y < sint w x)\<close>
+  \<open>bin_sem Op_Sge w x v y = of_bool (sint w y \<le> sint w x)\<close>
+  by (simp_all add: bin_sem_def)
 
 text \<open>The value of a term, given the widths \<open>ws\<close>, \<open>ds\<close> and the values \<open>vs\<close>, \<open>dv\<close> of the variables
   and the definitions. The unary and the indexed functions, with the text of SMT-LIB 2.6 (\<open>s\<close> or

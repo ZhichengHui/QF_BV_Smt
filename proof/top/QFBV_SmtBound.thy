@@ -157,18 +157,66 @@ proof -
 qed
 
 text \<open>The least number of arguments of a well-sorted application of \<open>op\<close>.\<close>
-fun sop_ar :: \<open>SmtOp \<Rightarrow> nat\<close> where
+definition sop_ar :: \<open>SmtOp \<Rightarrow> nat\<close> where
+  \<open>sop_ar op \<equiv>
+     (case op of
+        SmtOp_Not \<Rightarrow> 1
+      | SmtOp_Bvnot \<Rightarrow> 1
+      | SmtOp_Bvneg \<Rightarrow> 1
+      | SmtOp_Extract i j \<Rightarrow> 1
+      | SmtOp_Repeat i \<Rightarrow> 1
+      | SmtOp_ZeroExtend i \<Rightarrow> 1
+      | SmtOp_SignExtend i \<Rightarrow> 1
+      | SmtOp_RotateLeft i \<Rightarrow> 1
+      | SmtOp_RotateRight i \<Rightarrow> 1
+      | SmtOp_Ite \<Rightarrow> 3
+      | _ \<Rightarrow> 2)\<close>
+
+lemma sop_ar_simps [simp]:
   \<open>sop_ar SmtOp_Not = 1\<close>
-| \<open>sop_ar SmtOp_Bvnot = 1\<close>
-| \<open>sop_ar SmtOp_Bvneg = 1\<close>
-| \<open>sop_ar (SmtOp_Extract i j) = 1\<close>
-| \<open>sop_ar (SmtOp_Repeat i) = 1\<close>
-| \<open>sop_ar (SmtOp_ZeroExtend i) = 1\<close>
-| \<open>sop_ar (SmtOp_SignExtend i) = 1\<close>
-| \<open>sop_ar (SmtOp_RotateLeft i) = 1\<close>
-| \<open>sop_ar (SmtOp_RotateRight i) = 1\<close>
-| \<open>sop_ar SmtOp_Ite = 3\<close>
-| \<open>sop_ar _ = 2\<close>
+  \<open>sop_ar SmtOp_Bvnot = 1\<close>
+  \<open>sop_ar SmtOp_Bvneg = 1\<close>
+  \<open>sop_ar (SmtOp_Extract i j) = 1\<close>
+  \<open>sop_ar (SmtOp_Repeat i) = 1\<close>
+  \<open>sop_ar (SmtOp_ZeroExtend i) = 1\<close>
+  \<open>sop_ar (SmtOp_SignExtend i) = 1\<close>
+  \<open>sop_ar (SmtOp_RotateLeft i) = 1\<close>
+  \<open>sop_ar (SmtOp_RotateRight i) = 1\<close>
+  \<open>sop_ar SmtOp_Ite = 3\<close>
+  \<open>sop_ar SmtOp_And = 2\<close>
+  \<open>sop_ar SmtOp_Or = 2\<close>
+  \<open>sop_ar SmtOp_Xor = 2\<close>
+  \<open>sop_ar SmtOp_Implies = 2\<close>
+  \<open>sop_ar SmtOp_Eq = 2\<close>
+  \<open>sop_ar SmtOp_Distinct = 2\<close>
+  \<open>sop_ar SmtOp_Concat = 2\<close>
+  \<open>sop_ar SmtOp_Bvand = 2\<close>
+  \<open>sop_ar SmtOp_Bvor = 2\<close>
+  \<open>sop_ar SmtOp_Bvadd = 2\<close>
+  \<open>sop_ar SmtOp_Bvmul = 2\<close>
+  \<open>sop_ar SmtOp_Bvudiv = 2\<close>
+  \<open>sop_ar SmtOp_Bvurem = 2\<close>
+  \<open>sop_ar SmtOp_Bvshl = 2\<close>
+  \<open>sop_ar SmtOp_Bvlshr = 2\<close>
+  \<open>sop_ar SmtOp_Bvult = 2\<close>
+  \<open>sop_ar SmtOp_Bvnand = 2\<close>
+  \<open>sop_ar SmtOp_Bvnor = 2\<close>
+  \<open>sop_ar SmtOp_Bvxor = 2\<close>
+  \<open>sop_ar SmtOp_Bvxnor = 2\<close>
+  \<open>sop_ar SmtOp_Bvcomp = 2\<close>
+  \<open>sop_ar SmtOp_Bvsub = 2\<close>
+  \<open>sop_ar SmtOp_Bvsdiv = 2\<close>
+  \<open>sop_ar SmtOp_Bvsrem = 2\<close>
+  \<open>sop_ar SmtOp_Bvsmod = 2\<close>
+  \<open>sop_ar SmtOp_Bvashr = 2\<close>
+  \<open>sop_ar SmtOp_Bvule = 2\<close>
+  \<open>sop_ar SmtOp_Bvugt = 2\<close>
+  \<open>sop_ar SmtOp_Bvuge = 2\<close>
+  \<open>sop_ar SmtOp_Bvslt = 2\<close>
+  \<open>sop_ar SmtOp_Bvsle = 2\<close>
+  \<open>sop_ar SmtOp_Bvsgt = 2\<close>
+  \<open>sop_ar SmtOp_Bvsge = 2\<close>
+  by (simp_all add: sop_ar_def)
 
 lemma smt_bin_width_len: \<open>smt_bin_width ss \<noteq> None \<Longrightarrow> length ss = 2\<close>
   using smt_bin_width_Some by fastforce
@@ -651,7 +699,7 @@ lemma muldiv_args:
     \<open>op \<in> {SmtOp_Bvmul, SmtOp_Bvudiv, SmtOp_Bvurem, SmtOp_Bvsdiv, SmtOp_Bvsrem, SmtOp_Bvsmod}\<close> \<open>x \<in> set ss\<close>
   shows \<open>sort_width_m x = smt_width s\<close>
   using assms by (auto split: if_splits dest!: smt_bin_width_Some smt_same_width_Some)
-    (metis hd_in_set sort_width_m.simps(2) smt_width.simps(1))
+    (metis hd_in_set sort_width_m_simps(2) smt_width_simps(1))
 
 lemma leaf_bound: \<open>x \<le> 1048580 \<Longrightarrow> 1 \<le> N \<Longrightarrow> x + (bK1 + 1) \<le> bK * N\<close>
 proof -

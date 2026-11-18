@@ -605,40 +605,40 @@ fn clause_status(a: &Vec<Option<bool>>, c: &Vec<Lit>) -> Status {
     }
 }
 
-/// One pass of unit propagation over the clauses: `None` on a conflict, otherwise the new
-/// assignment and whether it differs from `a`.
-fn propagate_pass(a: Vec<Option<bool>>, cs: &Vec<Vec<Lit>>) -> Option<(Vec<Option<bool>>, bool)> {
+/// One pass of unit propagation over the clauses: assigns the literal of every unit clause in
+/// place and pushes it on the trail. The flag is false on a conflict, which ends the pass.
+fn propagate_pass(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>) -> (Vec<Option<bool>>, Vec<Lit>, bool) {
     let mut a = a;
-    let mut changed = false;
+    let mut trail = trail;
     let mut i: usize = 0;
     while i < cs.len() {
         match clause_status(&a, &cs[i]) {
-            Status::Conflict => return None,
+            Status::Conflict => return (a, trail, false),
             Status::Unit(l) => {
                 a[l.var] = Some(!l.neg);
-                changed = true;
+                trail.push(l);
             }
             Status::Satisfied => {}
             Status::Open => {}
         }
         i += 1;
     }
-    Some((a, changed))
+    (a, trail, true)
 }
 
-/// Unit propagation to a fixpoint: `None` on a conflict.
-fn propagate(a: Vec<Option<bool>>, cs: &Vec<Vec<Lit>>) -> Option<Vec<Option<bool>>> {
+/// Unit propagation to a fixpoint, from the current assignment and trail. The flag is false on a
+/// conflict.
+fn propagate(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>) -> (Vec<Option<bool>>, Vec<Lit>, bool) {
     let mut a = a;
+    let mut trail = trail;
     loop {
-        match propagate_pass(a, cs) {
-            None => return None,
-            Some((a1, changed)) => {
-                if !changed {
-                    return Some(a1);
-                }
-                a = a1;
-            }
+        let n = trail.len();
+        let (a1, t1, ok) = propagate_pass(cs, a, trail);
+        if !ok || t1.len() == n {
+            return (a1, t1, ok);
         }
+        a = a1;
+        trail = t1;
     }
 }
 
@@ -653,30 +653,18 @@ fn find_unassigned(a: &Vec<Option<bool>>) -> Option<usize> {
     None
 }
 
-/// A total assignment that extends `a` and satisfies the clauses, if there is one.
-fn dpll(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>) -> Option<Vec<Option<bool>>> {
-    match propagate(a, cs) {
-        None => None,
-        Some(a) => match find_unassigned(&a) {
-            None => Some(a),
-            Some(v) => {
-                let mut a1 = a.clone();
-                a1[v] = Some(true);
-                match dpll(cs, a1) {
-                    Some(r) => Some(r),
-                    None => {
-                        let mut a2 = a;
-                        a2[v] = Some(false);
-                        dpll(cs, a2)
-                    }
-                }
-            }
-        },
+/// Unassigns the variables of the trail from position `p` on, and removes them from the trail.
+fn backtrack(a: Vec<Option<bool>>, trail: Vec<Lit>, p: usize) -> (Vec<Option<bool>>, Vec<Lit>) {
+    let mut a = a;
+    let mut trail = trail;
+    while p < trail.len() {
+        match trail.pop() {
+            Some(l) => a[l.var] = None,
+            None => {}
+        }
     }
+    (a, trail)
 }
-
-// ---------------------------------------------------------------------------------------------
-// The solver
 
 fn read_bits(a: &Vec<Option<bool>>, ls: &Vec<Lit>) -> Vec<bool> {
     let mut r = Vec::new();
@@ -697,6 +685,48 @@ fn read_model(a: &Vec<Option<bool>>, vars: &Vec<Vec<Lit>>) -> Vec<Vec<bool>> {
     }
     m
 }
+
+/// A total assignment of the `n` variables that satisfies the clauses, if there is one.
+///
+/// The search assigns in place and records the true literals in order on the trail; `lim` holds
+/// the trail positions of the decisions, so that the decision level of an entry is the number of
+/// decisions at or before it. On a conflict the last decision is undone with every entry after it
+/// and its negation is pushed as an implied entry (chronological backtracking).
+fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
+    let mut a: Vec<Option<bool>> = vec![None; n];
+    let mut trail: Vec<Lit> = Vec::new();
+    let mut lim: Vec<usize> = Vec::new();
+    loop {
+        let (a1, t1, ok) = propagate(cs, a, trail);
+        a = a1;
+        trail = t1;
+        if ok {
+            match find_unassigned(&a) {
+                None => return Some(a),
+                Some(v) => {
+                    lim.push(trail.len());
+                    a[v] = Some(true);
+                    trail.push(Lit { var: v, neg: false });
+                }
+            }
+        } else {
+            match lim.pop() {
+                None => return None,
+                Some(p) => {
+                    let d = trail[p];
+                    let (a2, t2) = backtrack(a, trail, p);
+                    a = a2;
+                    trail = t2;
+                    a[d.var] = Some(d.neg);
+                    trail.push(lit_neg(d));
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The solver
 
 /// The CNF formula of the problem, and the literals of its variables.
 fn encode(p: &CoreProblem) -> (Cnf, Vec<Vec<Lit>>) {
@@ -728,7 +758,7 @@ fn encode(p: &CoreProblem) -> (Cnf, Vec<Vec<Lit>>) {
 
 fn solve_core(p: &CoreProblem) -> Answer {
     let (cnf, vars) = encode(p);
-    match dpll(&cnf.clauses, vec![None; cnf.num_vars]) {
+    match dpll(&cnf.clauses, cnf.num_vars) {
         None => Answer::Unsat,
         Some(a) => Answer::Sat(read_model(&a, &vars)),
     }

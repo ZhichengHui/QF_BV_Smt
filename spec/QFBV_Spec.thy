@@ -104,8 +104,8 @@ locale QFBV_heap =
   + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>(bool option) list\<close>
   + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>bool list\<close>
   + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool list) list\<close>
-  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>CoreTerm list\<close>
-  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>(64 word) list\<close>
+  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>(64 word) list\<close>
+  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>CoreTerm list\<close>
   + ref_13: reference_allocatable reference_types _ _ _ _ _ _ _ prism_13 \<comment> \<open>Lower\<close>
   + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term list\<close>
   + ref_15: reference_allocatable reference_types _ _ _ _ _ _ _ prism_15 \<comment> \<open>Term\<close>
@@ -122,8 +122,8 @@ locale QFBV_heap =
   and prism_8 :: \<open>('gv, (bool option) list) prism\<close>
   and prism_9 :: \<open>('gv, bool list) prism\<close>
   and prism_10 :: \<open>('gv, (bool list) list) prism\<close>
-  and prism_11 :: \<open>('gv, CoreTerm list) prism\<close>
-  and prism_12 :: \<open>('gv, (64 word) list) prism\<close>
+  and prism_11 :: \<open>('gv, (64 word) list) prism\<close>
+  and prism_12 :: \<open>('gv, CoreTerm list) prism\<close>
   and prism_13 :: \<open>('gv, Lower) prism\<close>
   and prism_14 :: \<open>('gv, Term list) prism\<close>
   and prism_15 :: \<open>('gv, Term) prism\<close>

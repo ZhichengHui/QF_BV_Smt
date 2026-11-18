@@ -1,5 +1,5 @@
-# Suite qfbv-frontier: a first, graded measure of the solver on SMT-LIB QF_BV (bench/run.sh reads
-# this file; see PLAN.md, Benchmarks).
+# Suite QF_BV_Smt-2026-11-18: a first, graded measure of the solver on SMT-LIB QF_BV (bench/run.sh
+# reads this file; see PLAN.md, Benchmarks).
 #
 # What it measures: how many of 101 small SMT-LIB QF_BV instances (all under 20 KB) the solver
 # answers correctly within the limits below, and how fast (PAR-2). Answers are checked against the

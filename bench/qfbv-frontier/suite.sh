@@ -1,0 +1,136 @@
+# Suite qfbv-frontier: a first, graded measure of the solver on SMT-LIB QF_BV (bench/run.sh reads
+# this file; see PLAN.md, Benchmarks).
+#
+# What it measures: how many of 101 small SMT-LIB QF_BV instances (all under 20 KB) the solver
+# answers correctly within the limits below, and how fast (PAR-2). Answers are checked against the
+# :status of each file, and every sat model is checked with z3.
+#
+# Instances: from the SMT-LIB 2025 release (non-incremental, QF_BV; Zenodo record 16740866), all
+# with a known status. z3 5.4.1 solved each within 5 s (27 s for all of them together), so the
+# suite is easy for a state-of-the-art solver. They are chosen from a seeded random sample of the
+# small files of 31 families, in two groups, measured on 2026-11-18 with a 10 s limit:
+#   - solved: 31 instances the solver answered, the slowest of each family (up to 8 s), spread over
+#     17 families;
+#   - open: 70 instances it did not answer within 10 s, the ones z3 found easiest in each family,
+#     over 19 families (bit-vector rewriting, symbolic execution, software verification,
+#     hardware, crafted).
+# The frontier: the solver bit-blasts into CNF and runs DPLL with chronological backtracking, which
+# handles small problems but not the arithmetic-heavy and larger ones that CDCL and word-level
+# rewriting solve at once.
+#
+# Worst case: 101 instances, 70 of them timing out, about 70 * 30 / JOBS s plus model checks,
+# about 10 minutes with 4 jobs and under 1 hour with 1 job.
+
+SOURCE_URL=https://zenodo.org/records/16740866/files/QF_BV.tar.zst
+SOURCE_FILE=QF_BV-2025.tar.zst
+SOURCE_MD5=9bb268ced812a004edfd9876aea025bb
+TIMEOUT=30
+MEM_GB=8
+JOBS=4
+
+# SHA256 STATUS PATH (a member of the archive)
+INSTANCES='
+# solved
+b44983caff3e7814f0e599275080ce11a667c904822e68c5aa7155eccbefe9fd sat non-incremental/QF_BV/20170531-Hansen-Check/division_by_zero.smt2
+45187be4d4107c1f8ff87eda574e1eaaba1b083800a394b033e715b93f912b8a sat non-incremental/QF_BV/2018-Goel-hwbench/QF_BV_bv8_bv_eq_sdp_v3_cc_ref_max.smt2
+3d2b104b8db7aa078a70b384164589e1f50a7e57dbac5faad1a44fdb1f171c3d unsat non-incremental/QF_BV/2018-Goel-hwbench/QF_BV_collision.1.prop1_cc_reg_to.smt2
+dbad83b36f8739d9e2dfbb640b074b5137231e3e6fb4f0010fe7e64ebfa8d6b1 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_1560.smt2
+36e438c9d1bcfa9edbe85b1b410ee4895b15bc152c364fccdc6419b2903409ee sat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_366.smt2
+aff2e549e2fd148720d56a68b7014a54f9379fa9f6ee55c408515a86ad705266 sat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_904.smt2
+1a54a178df60cfa54c7dd78b62d56808b3adefe0605cadfa5e4d60a069ada181 sat non-incremental/QF_BV/20210219-Sydr/symbolic_memory/bst/readelf/predicate_2077.smt2
+82c07af1ae96fa1fbae34f651ae2033cb520ffc314cdf6aa70f9e537e17bc9f8 sat non-incremental/QF_BV/20210219-Sydr/symbolic_memory/linear/readelf/predicate_152.smt2
+f0e15cad1058039d300e74241a5e2a10c807ed1ab158546841149261781c5392 sat non-incremental/QF_BV/bench_ab/a679test0060.smt2
+e271d9000381483872d5008d7a2b0eda04112da79d14323d196d9ab3ef2e19ba sat non-incremental/QF_BV/bench_ab/a680test0049.smt2
+30549797a4e215effc8c241468fc83a6154fe8629b64b9c220f33d371035e26e unsat non-incremental/QF_BV/bmc-bv-svcomp14/num_conversion_2_true.c.21.smt2
+d18c8b976559745743fd14a7beb8a72e15259a39b50341174fb9ea5bde2b2d36 sat non-incremental/QF_BV/bmc-bv/ex13.smt2
+79885ac841dfc1a0e1f6766c089bac85d7de928ae3bc0f14373d5ef0026bc25b unsat non-incremental/QF_BV/brummayerbiere/nextpoweroftwo016.smt2
+98f21a207d422d954fceb06f8cd9788114077d7b6a6f60b56ccb4a43fda9ca1f unsat non-incremental/QF_BV/brummayerbiere/nlzbe008.smt2
+1bd2644df2fd14b49174e5185e52e2ade3ab5727b69e769e1d65d49560864526 sat non-incremental/QF_BV/brummayerbiere2/smulov4bw0064.smt2
+13fbba32ea37425ba3f94b7fb6d7055999eb88e490f0541d9cf391530793b835 sat non-incremental/QF_BV/brummayerbiere3/icbrtorinvalidvc.smt2
+294f29feea75addc53f8934e04451c4943f3799bcdc63931eba354aa5b2eac44 sat non-incremental/QF_BV/calypto/problem_1.smt2
+ce1bd911292d57ba47a49c2e0d4e334d5a0c3e45cc408b2ab488599584cc3c8e sat non-incremental/QF_BV/check2/bigHex.smt2
+761836f656d76113372c3ead5e32212cda393ae85ba1a12ef778a455da576041 unsat non-incremental/QF_BV/crafted/bit-reversal.smt2
+bcfb7355a250c49055e48d01271910755e09e298221e23ea774f40e1721e5b80 sat non-incremental/QF_BV/crafted/bvlt.smt2
+367e3ba706ac0593bcbb2727583a068ef4a33be742f2648746db4db5370a640c unsat non-incremental/QF_BV/dwp_formulas/try5_small_noof_functions_dwp_printenv.quoting_options_from_style.il.dwp.smt2
+919772da4ba3ff3e9eb33a5e7ed5b0976c4a0f55251d35443e3693d00cd3a91e sat non-incremental/QF_BV/dwp_formulas/try5_small_noof_functions_flanagansaxe_expr.quoting_options_from_style.il.flanagansaxe.smt2
+e1901809a343807bf3e3b8743e5da6ce5b43b090826baa14b4db3b676cb592cb unsat non-incremental/QF_BV/sage/app1/bench_198.smt2
+feb033e916c5279560a8347aab863e30f7195c7cca5c431b380c2436028ed190 sat non-incremental/QF_BV/sage/app7/bench_1612.smt2
+7f88e2e6ed65351fef5a1d178e1d9e9f9bda9eb6174a455d9b58728e3108fecd sat non-incremental/QF_BV/sage/app7/bench_4187.smt2
+462d5b3c6d96c743d548ef043ec9164cca34967a32d8aecde3ccec67790b30ff sat non-incremental/QF_BV/sage/app9/bench_1311.smt2
+fc0972f0493a18cc933f53934c9abe1ba1f5dcfd0217c4a3a740a6a99a52beca unsat non-incremental/QF_BV/sage/app9/bench_2110.smt2
+b6aee943eb5aba9454c92ca4356862ca4096162c9e15c1dc108033fb882c5b78 unsat non-incremental/QF_BV/stp_samples/run_00000.trace.Alloc_large__019220.smt2
+665e548aac02547a143515784de20fc5ae56236d37fa1c62f99bef1c7546ff31 sat non-incremental/QF_BV/stp_samples/run_03230.trace.cond_012217_0x4182b4_00.smt2
+9fdedf2aa7c1ac81b5209e5e98d659e450707130b196c3141b930fe9deadbd2c sat non-incremental/QF_BV/stp_samples/run_03230.trace.cond_012221_0x4182de_00.smt2
+e5a9791d481e9983f070e6101f2fa9256261d20e2d00f278b8bbbe7f77370da2 unsat non-incremental/QF_BV/wienand-cav2008/Commute/commute04.sf.smt2
+# open
+ec6875783c248135de9657a3bdeebd22eefa2bd6b972a8b7791c609ed269d190 unsat non-incremental/QF_BV/2018-Goel-hwbench/QF_BV_bv8_bv_eq_sdp_v6_cc_reg_max.smt2
+2c792750ae926ac9dda9f6d64ee499aa36fd78f2cbdec4a62ce02cb1cc89c00a unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_1034.smt2
+bc6d67a867d6f768133119d32b90e003b5ffb286a47297190c3ede6087629874 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_107.smt2
+d4ad3b899d5aacd01fa167906ab5bdfe70920d5d5fbe5378f570ca9ddc0820b1 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_115.smt2
+5f4c4a828e348b0fe643d9b9df53e5bce9404699432e7c551e950a9ecb7a08a3 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_118.smt2
+3705ee5deb8253ddc27434f6594baa407d410d459b714e46d99e986cb7040d38 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_12.smt2
+5a4679012a9ca67c102eff9731c305c5d1e3a68d59811c8d3555dec5fe70cbfa unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_361.smt2
+cfbcb0b6e92f8eb718cfc6d52be1bfc4f8ea32186dfe4157d811715a6120b4ec unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_580.smt2
+1ddf7f89d100fdf8be5466278cc199709954ce510c2422489b61326fa7b95a06 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_724.smt2
+6b9697c04c011ce2178463cd3df2928eb883487bfeb69ec1a748bc234ea65ad8 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_794.smt2
+973f037b52f8c370f153f325f49f15b4e8917473e2fbde95e2273e74d3ce9c09 unsat non-incremental/QF_BV/20190311-bv-term-small-rw-Noetzli/bv-term-small-rw_799.smt2
+9b5e814bdf5f3c7d2a911e05ece0fbcfe21bd67adbaae375f76be089c608fd2d unsat non-incremental/QF_BV/20190429-UltimateAutomizerSvcomp2019/byte_add_1_true-unreach-call_true-no-overflow_true-termination.i_0.smt2
+e0c9dcc4ac9453953f7df0e74d6432e1a4a8ce50d6a2bde424a150b34957b740 unsat non-incremental/QF_BV/20190429-UltimateAutomizerSvcomp2019/byte_add_1_true-unreach-call_true-no-overflow_true-termination.i_10.smt2
+4394c9e51b587ef3bd78a128f7175d907803d0a0e1f73ceab7cd476927cc420d unsat non-incremental/QF_BV/20190429-UltimateAutomizerSvcomp2019/byte_add_1_true-unreach-call_true-no-overflow_true-termination.i_11.smt2
+4390f5e8ea75cca2567c0566858b257cacf64b70e7f2182832e34edb72234dbe unsat non-incremental/QF_BV/20190429-UltimateAutomizerSvcomp2019/byte_add_1_true-unreach-call_true-no-overflow_true-termination.i_3.smt2
+de1e347afa34edf9f02ad4adb12050de1aa2ca7d97ab64d0d8b24cd158075848 unsat non-incremental/QF_BV/20190429-UltimateAutomizerSvcomp2019/byte_add_1_true-unreach-call_true-no-overflow_true-termination.i_7.smt2
+5dcd51dc653c3188fd6e05afeb7b7c8a424297b8d1167880fd9668fc2d01e934 unsat non-incremental/QF_BV/Sage2/bench_15263.smt2
+8f64c56813e75e7c64d89126e1bcb7cb800b88394ebe15f252ee164233c1fff8 unsat non-incremental/QF_BV/Sage2/bench_17677.smt2
+961cef60aed7ec90ecf6f0166b92efbad9cc6e7533ec3267d19bfb66268bb0e4 sat non-incremental/QF_BV/Sage2/bench_1784.smt2
+9f0f3f50344cf6d0ad843fe4804a37c16783cf143de927f70614fd6891e176ad sat non-incremental/QF_BV/Sage2/bench_2404.smt2
+29dff6e67613c7c7436734688a26ee218cbb1b36adcad41436dd8b521d2bf66a sat non-incremental/QF_BV/Sage2/bench_2443.smt2
+75ad9e34274565389f2aaae8fc548c2b0a83c2017cc787f3020fe210efcfbc9f unsat non-incremental/QF_BV/Sage2/bench_56.smt2
+b9efadcf9026643400b6d65d8be48b12b42ce5e627f063c97ebe2e83657aa0d8 unsat non-incremental/QF_BV/Sage2/bench_5712.smt2
+7cf220c93add221c54be05ff579898cdf5276ca7a904581b6c824862a3fae5b4 sat non-incremental/QF_BV/Sage2/bench_9019.smt2
+2d361a6bed25948d9d02cd467ebb1e4e6cc9963f722dbacf558b5c890c6bdc24 sat non-incremental/QF_BV/bmc-bv/inf5.smt2
+63442c82fc8553a52f874b81df00f88bb4d54bba7458381b826e668c140fbf1b unsat non-incremental/QF_BV/bmc-bv/inf8.smt2
+b7fb4fe229b3662dae52929784e1cd1bd6228429c37470d7d73145c5b3397b94 unsat non-incremental/QF_BV/brummayerbiere/bitrev0032.smt2
+b7a9f4c3537e64dfb6e182c7ce6434d23c4e83d8792569a1ef584b59cf8745ee unsat non-incremental/QF_BV/brummayerbiere/bitrev0064.smt2
+7c547c7d49decbb84070fb87687a9b7a68178e5bdd9a83464be5c9245793e120 unsat non-incremental/QF_BV/brummayerbiere/bitrev0128.smt2
+92d36659bda6ce5655f731470c74c4fb18d211d51a9e0e37f8d5805b6cd1a315 unsat non-incremental/QF_BV/brummayerbiere/bitrev0256.smt2
+e235ac8ecf4b906478e8da738ec2cce72c801337f057a8f36cd298608a09643e unsat non-incremental/QF_BV/brummayerbiere2/smulov2bw016.smt2
+403c2d4cfec31afcee778efa9cd4d5ab1dcf214f2abb50922973709b10393909 unsat non-incremental/QF_BV/brummayerbiere2/smulov3bw0032.smt2
+b9deb7e31cf0f6b6329aeead2d06fb32dd1fc18408bb52f52d94ebb0df561835 unsat non-incremental/QF_BV/brummayerbiere2/umulov2bw0032.smt2
+120871fd3d3b7284e7c23d5fbc82365f7716dcf3150f591847cdbcbae95c56ff unsat non-incremental/QF_BV/brummayerbiere3/maxandminor008.smt2
+b1a8e233a582d40fab3250155f95e3d15a62709f021cbfa72b31340c29f7bfb3 unsat non-incremental/QF_BV/brummayerbiere3/minand008.smt2
+3eecb691d1c48ae4c02cac0986511d0975f905c186129ba289e4a275c96ccb01 unsat non-incremental/QF_BV/brummayerbiere3/minor008.smt2
+cb885631542348dfafa58e4978785f56b8d0bc24f16db1712470fbbf00b702c0 sat non-incremental/QF_BV/brummayerbiere4/unconstrained06.smt2
+5f4ad44dddcee22dddc7b7d6116a78cb8f1ac9e1f3d843bdc49a8f2444630d54 sat non-incremental/QF_BV/brummayerbiere4/unconstrained07.smt2
+17cddc82681077f455946d06935b0f2a28b31590970969c67f7c49890fbe4deb sat non-incremental/QF_BV/brummayerbiere4/unconstrained10.smt2
+a8de8152393927d0cbff089326f28810249b2785e6613baef4636c58f9086a48 unsat non-incremental/QF_BV/bruttomesso/core/ext_con_004_004_0064.smt2
+c9c0d1ad2959d3f747a481af728f62da1f3fcd961da3f6ac332c0edf712cab01 unsat non-incremental/QF_BV/bruttomesso/core/ext_con_008_001_0016.smt2
+465ccb5239b61526e844187bf7a12a341c987ff28647b1a59144df0b777096f5 unsat non-incremental/QF_BV/bruttomesso/core/ext_con_008_004_0032.smt2
+904a6080cb419006dc5eef26283ca8f8c68f72a8c5b0bda0be759030f308b6fb unsat non-incremental/QF_BV/bruttomesso/core/ext_con_008_008_0032.smt2
+a8451750c80e8777ca0e4dec1943d2c8be0f498965f10259e1390fa0cf472bb0 unsat non-incremental/QF_BV/bruttomesso/core/ext_con_012_002_0016.smt2
+543b8217fa7d937d913c09a21783061e94515cbca9215360e1d8820ecbca35cf unsat non-incremental/QF_BV/bruttomesso/core/ext_con_016_004_0016.smt2
+2a541af1e72089997cedb0986ff52c4cf8846986458dce01db39f856fa27b87a unsat non-incremental/QF_BV/bruttomesso/core/ext_con_024_002_0016.smt2
+0efc4e04c08f991e6676a2f8830d0ec8ac12658bafcea0fc34ed93a4ecae205a unsat non-incremental/QF_BV/bruttomesso/core/ext_con_024_002_0032.smt2
+fe95a6aa2dc6beea3e3861a6a7b0b89dd999d84eaa80e8496c4e55a0cf6f4b68 unsat non-incremental/QF_BV/calypto/problem_15.smt2
+a5c3442227fc7450903feb565820d5d8860c0540048c0aa918a4e6a66948677a sat non-incremental/QF_BV/calypto/problem_9.smt2
+7ae79e320d3d97b4723cd1818fe519444898f8cf30a33cd21a730108f142302c unsat non-incremental/QF_BV/crafted/bitvec4.smt2
+cda45496dd97e3634794f9ec2807af0222a4d4bf9e7f89533081f4210d8523af unsat non-incremental/QF_BV/galois/iffyInterleavedModMult-4.smt2
+536c1dfdf2dd0bfcc43c26456584cab69019f4d1454f9ecd10d1ebfc57fb41b5 sat non-incremental/QF_BV/gulwani-pldi08/fig6.phx.smt2
+b3d1c6f5d9f4dbc79f7306731845bbb5eaa7427ce03dec46fd86428135632b9e sat non-incremental/QF_BV/pspace/ndist.b.20499.smt2
+65ea55157697ad81c2f1d391f3fcb1912a8f7149a7ad1494a7d55b907f7c6fdc sat non-incremental/QF_BV/pspace/ndist.b.20998.smt2
+a0aee0e94630254dab1fd6074661fd949d9700b8f59eadf725070b0ee7df71ec sat non-incremental/QF_BV/pspace/ndist.b.21497.smt2
+aacf6a44c303c286b9a24d68ceb88c705565a38093b557a4ce6e5107d2c322d9 sat non-incremental/QF_BV/pspace/ndist.b.22495.smt2
+4b7fca8fd13de174e4e1cf10c32faadd4e9caf45e6450e515f2b28ca437eb0e9 sat non-incremental/QF_BV/sage/app1/bench_1777.smt2
+8f839799c4aeadff373a41dc7b15111e9910e7cd7cc4e100044c2c2d7c298027 unsat non-incremental/QF_BV/sage/app12/bench_2594.smt2
+6fccac3d81b1c80590a331686551f67d1a91618a45368560570ce42000a98e37 unsat non-incremental/QF_BV/sage/app12/bench_4781.smt2
+c83a57646095295fa757289a446cc9f8f7c8b449a3801a3191a51bb958068d2a sat non-incremental/QF_BV/sage/app12/bench_817.smt2
+2bcda3e3498ecfe55c1401ddb2a0fc98d5d13445bcc1f06ebcb4d6f9d6a404b4 sat non-incremental/QF_BV/sage/app7/bench_7314.smt2
+d257ca6b2dd59bdfe312b8f7cfa4a0b77e1ee10bf539d8319e8b8677a813c693 unsat non-incremental/QF_BV/spear/cvs_v1.11.22/cvs_vc71402.smt2
+bc70709476a553d2d0fbde1afd1fefb3ac7d51de7b921a2c414c3f4c1bb1bc52 unsat non-incremental/QF_BV/spear/xinetd_v2.3.14/xinetd_xinetd_vc18132.smt2
+6483546086c6d188d6be2a46435ccc3cf01d8c1e1de36129e7fedeb8ebebaf65 unsat non-incremental/QF_BV/spear/xinetd_v2.3.14/xinetd_xinetd_vc18154.smt2
+4fd36afbf5156e857a75da420b4404eba1c8433f2e3bc46434f6df51186b2c9c sat non-incremental/QF_BV/spear/zebra_v0.95a/bgpd_bgpd_vc75770.smt2
+d8afd76401dcb584e9c888344069e0c656a158aaeae09fbcc27c72f08e8e0d21 sat non-incremental/QF_BV/spear/zebra_v0.95a/bgpd_bgpd_vc75771.smt2
+2e3a6b680ffe5650c95dec0de216cb9feabca65766011190c36005ba2951c926 sat non-incremental/QF_BV/spear/zebra_v0.95a/bgpd_bgpd_vc75772.smt2
+12a79b575fb92d7841a86f9fd6db2e72f2b5b034870bf9360b92b636913671ec unsat non-incremental/QF_BV/uclid/tcas/tcas60_k_0.smt2
+1bb6c68ef02d45af09b0582270dcddddcd74bdbc877c686547deb5fa71e48abf unsat non-incremental/QF_BV/wienand-cav2008/Commute/commute64.sf.smt2
+89837b59ecf2b4d6eb76ee8dd21c263d13d950bfcefe5b03d873f574abd8bbdb unsat non-incremental/QF_BV/wienand-cav2008/Distrib/distrib64.sf.smt2
+'

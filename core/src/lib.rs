@@ -193,7 +193,7 @@ fn clause3(a: Lit, b: Lit, d: Lit) -> Vec<Lit> {
 }
 
 /// A fresh literal `x` with `x <-> a & b`.
-fn gate_and(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+fn tseitin_and(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
     let (cnf, x) = fresh(cnf);
     let cnf = add_clause(cnf, clause2(lit_neg(x), a));
     let cnf = add_clause(cnf, clause2(lit_neg(x), b));
@@ -201,14 +201,8 @@ fn gate_and(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
     (cnf, x)
 }
 
-/// A literal `x` with `x <-> a | b`.
-fn gate_or(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
-    let (cnf, x) = gate_and(cnf, lit_neg(a), lit_neg(b));
-    (cnf, lit_neg(x))
-}
-
 /// A fresh literal `x` with `x <-> a ^ b`.
-fn gate_xor(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+fn tseitin_xor(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
     let (cnf, x) = fresh(cnf);
     let cnf = add_clause(cnf, clause3(lit_neg(x), a, b));
     let cnf = add_clause(cnf, clause3(lit_neg(x), lit_neg(a), lit_neg(b)));
@@ -218,13 +212,69 @@ fn gate_xor(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
 }
 
 /// A fresh literal `x` with `x <-> (if c then a else b)`.
-fn gate_ite(cnf: Cnf, c: Lit, a: Lit, b: Lit) -> (Cnf, Lit) {
+fn tseitin_ite(cnf: Cnf, c: Lit, a: Lit, b: Lit) -> (Cnf, Lit) {
     let (cnf, x) = fresh(cnf);
     let cnf = add_clause(cnf, clause3(lit_neg(c), lit_neg(x), a));
     let cnf = add_clause(cnf, clause3(lit_neg(c), x, lit_neg(a)));
     let cnf = add_clause(cnf, clause3(c, lit_neg(x), b));
     let cnf = add_clause(cnf, clause3(c, x, lit_neg(b)));
     (cnf, x)
+}
+
+// The gates below simplify before they fall back to a Tseitin gate: variable 0 is the constant
+// (`lit_const`), so an input on variable 0 is a constant, and two inputs on the same variable are
+// equal or complementary.
+
+/// A literal `x` with `x <-> a & b`.
+fn gate_and(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+    if a.var == 0 {
+        if a.neg { (cnf, a) } else { (cnf, b) }
+    } else if b.var == 0 {
+        if b.neg { (cnf, b) } else { (cnf, a) }
+    } else if a.var == b.var {
+        if a.neg == b.neg { (cnf, a) } else { (cnf, lit_const(false)) }
+    } else {
+        tseitin_and(cnf, a, b)
+    }
+}
+
+/// A literal `x` with `x <-> a | b`.
+fn gate_or(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+    let (cnf, x) = gate_and(cnf, lit_neg(a), lit_neg(b));
+    (cnf, lit_neg(x))
+}
+
+/// A literal `x` with `x <-> a ^ b`.
+fn gate_xor(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+    if a.var == 0 {
+        if a.neg { (cnf, b) } else { (cnf, lit_neg(b)) }
+    } else if b.var == 0 {
+        if b.neg { (cnf, a) } else { (cnf, lit_neg(a)) }
+    } else if a.var == b.var {
+        if a.neg == b.neg { (cnf, lit_const(false)) } else { (cnf, lit_const(true)) }
+    } else {
+        tseitin_xor(cnf, a, b)
+    }
+}
+
+/// A literal `x` with `x <-> (if c then a else b)`.
+fn gate_ite(cnf: Cnf, c: Lit, a: Lit, b: Lit) -> (Cnf, Lit) {
+    if c.var == 0 {
+        if c.neg { (cnf, b) } else { (cnf, a) }
+    } else if a.var == b.var {
+        if a.neg == b.neg {
+            (cnf, a)
+        } else {
+            let (cnf, x) = gate_xor(cnf, c, a);
+            (cnf, lit_neg(x))
+        }
+    } else if a.var == 0 {
+        if a.neg { gate_and(cnf, lit_neg(c), b) } else { gate_or(cnf, c, b) }
+    } else if b.var == 0 {
+        if b.neg { gate_and(cnf, c, a) } else { gate_or(cnf, lit_neg(c), a) }
+    } else {
+        tseitin_ite(cnf, c, a, b)
+    }
 }
 
 /// `gate_and`, `gate_or` or `gate_xor`, by the operator.

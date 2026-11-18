@@ -35,25 +35,54 @@ definition fresh_m :: \<open>st \<Rightarrow> st \<times> Lit\<close> where
 definition addc_m :: \<open>st \<Rightarrow> Lit list \<Rightarrow> st\<close> where
   \<open>addc_m s c \<equiv> (fst s, snd s @ [c])\<close>
 
-definition and_m :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
-  \<open>and_m s a b \<equiv>
+text \<open>The Tseitin gates: a fresh variable and its defining clauses.\<close>
+
+definition and_t :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
+  \<open>and_t s a b \<equiv>
      let (s1, x) = fresh_m s in
      (addc_m (addc_m (addc_m s1 [lneg x, a]) [lneg x, b]) [x, lneg a, lneg b], x)\<close>
+
+definition xor_t :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
+  \<open>xor_t s a b \<equiv>
+     let (s1, x) = fresh_m s in
+     (addc_m (addc_m (addc_m (addc_m s1 [lneg x, a, b]) [lneg x, lneg a, lneg b])
+        [x, lneg a, b]) [x, a, lneg b], x)\<close>
+
+definition ite_t :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
+  \<open>ite_t s c a b \<equiv>
+     let (s1, x) = fresh_m s in
+     (addc_m (addc_m (addc_m (addc_m s1 [lneg c, lneg x, a]) [lneg c, x, lneg a])
+        [c, lneg x, b]) [c, x, lneg b], x)\<close>
+
+text \<open>The gates simplify first: an input on variable 0 is a constant, and two inputs on the same
+  variable are equal or complementary.\<close>
+
+definition and_m :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
+  \<open>and_m s a b \<equiv>
+     if Lit_var a = 0 then (if Lit_neg a then (s, a) else (s, b))
+     else if Lit_var b = 0 then (if Lit_neg b then (s, b) else (s, a))
+     else if Lit_var a = Lit_var b then (if Lit_neg a = Lit_neg b then (s, a) else (s, lconst False))
+     else and_t s a b\<close>
 
 definition or_m :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
   \<open>or_m s a b \<equiv> let (s1, x) = and_m s (lneg a) (lneg b) in (s1, lneg x)\<close>
 
 definition xor_m :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
   \<open>xor_m s a b \<equiv>
-     let (s1, x) = fresh_m s in
-     (addc_m (addc_m (addc_m (addc_m s1 [lneg x, a, b]) [lneg x, lneg a, lneg b])
-        [x, lneg a, b]) [x, a, lneg b], x)\<close>
+     if Lit_var a = 0 then (if Lit_neg a then (s, b) else (s, lneg b))
+     else if Lit_var b = 0 then (if Lit_neg b then (s, a) else (s, lneg a))
+     else if Lit_var a = Lit_var b then
+       (if Lit_neg a = Lit_neg b then (s, lconst False) else (s, lconst True))
+     else xor_t s a b\<close>
 
 definition ite_m :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
   \<open>ite_m s c a b \<equiv>
-     let (s1, x) = fresh_m s in
-     (addc_m (addc_m (addc_m (addc_m s1 [lneg c, lneg x, a]) [lneg c, x, lneg a])
-        [c, lneg x, b]) [c, x, lneg b], x)\<close>
+     if Lit_var c = 0 then (if Lit_neg c then (s, b) else (s, a))
+     else if Lit_var a = Lit_var b then
+       (if Lit_neg a = Lit_neg b then (s, a) else let (s1, x) = xor_m s c a in (s1, lneg x))
+     else if Lit_var a = 0 then (if Lit_neg a then and_m s (lneg c) b else or_m s c b)
+     else if Lit_var b = 0 then (if Lit_neg b then and_m s c a else or_m s (lneg c) a)
+     else ite_t s c a b\<close>
 
 definition bitw_m :: \<open>BinOp \<Rightarrow> st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> st \<times> Lit\<close> where
   \<open>bitw_m op s a b \<equiv>

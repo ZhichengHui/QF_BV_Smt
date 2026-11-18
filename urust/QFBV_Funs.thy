@@ -63,9 +63,9 @@ definition "clause3" :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightar
     * c
   \<rbrakk>\<close>
 
-(* Rust: gate_and *)
-definition "gate_and" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>gate_and \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
+(* Rust: tseitin_and *)
+definition "tseitin_and" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>tseitin_and \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
     let destr_1 = fresh_fn(cnf);
     let cnf = destr_1.0;
     let x = destr_1.1;
@@ -73,6 +73,62 @@ definition "gate_and" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Righta
     let cnf = add_clause(cnf, clause2(lit_neg(x), b));
     let cnf = add_clause(cnf, clause3(x, lit_neg(a), lit_neg(b)));
     (cnf, x)
+  \<rbrakk>\<close>
+
+(* Rust: tseitin_xor *)
+definition "tseitin_xor" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>tseitin_xor \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
+    let destr_1 = fresh_fn(cnf);
+    let cnf = destr_1.0;
+    let x = destr_1.1;
+    let cnf = add_clause(cnf, clause3(lit_neg(x), a, b));
+    let cnf = add_clause(cnf, clause3(lit_neg(x), lit_neg(a), lit_neg(b)));
+    let cnf = add_clause(cnf, clause3(x, lit_neg(a), b));
+    let cnf = add_clause(cnf, clause3(x, a, lit_neg(b)));
+    (cnf, x)
+  \<rbrakk>\<close>
+
+(* Rust: tseitin_ite *)
+definition "tseitin_ite" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>tseitin_ite \<equiv> \<lambda>cnf c a b. FunctionBody \<lbrakk>
+    let destr_1 = fresh_fn(cnf);
+    let cnf = destr_1.0;
+    let x = destr_1.1;
+    let cnf = add_clause(cnf, clause3(lit_neg(c), lit_neg(x), a));
+    let cnf = add_clause(cnf, clause3(lit_neg(c), x, lit_neg(a)));
+    let cnf = add_clause(cnf, clause3(c, lit_neg(x), b));
+    let cnf = add_clause(cnf, clause3(c, x, lit_neg(b)));
+    (cnf, x)
+  \<rbrakk>\<close>
+
+(* Rust: gate_and *)
+definition "gate_and" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>gate_and \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
+    if (a.Lit_var) == 0_usize {
+      if a.Lit_neg {
+        (cnf, a)
+      } else {
+        (cnf, b)
+      }
+    } else {
+      if (b.Lit_var) == 0_usize {
+        if b.Lit_neg {
+          (cnf, b)
+        } else {
+          (cnf, a)
+        }
+      } else {
+        if (a.Lit_var) == (b.Lit_var) {
+          if (a.Lit_neg) == (b.Lit_neg) {
+            (cnf, a)
+          } else {
+            (cnf, lit_const(false))
+          }
+        } else {
+          tseitin_and(cnf, a, b)
+        }
+      }
+    }
   \<rbrakk>\<close>
 
 (* Rust: gate_or *)
@@ -87,27 +143,72 @@ definition "gate_or" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightar
 (* Rust: gate_xor *)
 definition "gate_xor" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>gate_xor \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
-    let destr_1 = fresh_fn(cnf);
-    let cnf = destr_1.0;
-    let x = destr_1.1;
-    let cnf = add_clause(cnf, clause3(lit_neg(x), a, b));
-    let cnf = add_clause(cnf, clause3(lit_neg(x), lit_neg(a), lit_neg(b)));
-    let cnf = add_clause(cnf, clause3(x, lit_neg(a), b));
-    let cnf = add_clause(cnf, clause3(x, a, lit_neg(b)));
-    (cnf, x)
+    if (a.Lit_var) == 0_usize {
+      if a.Lit_neg {
+        (cnf, b)
+      } else {
+        (cnf, lit_neg(b))
+      }
+    } else {
+      if (b.Lit_var) == 0_usize {
+        if b.Lit_neg {
+          (cnf, a)
+        } else {
+          (cnf, lit_neg(a))
+        }
+      } else {
+        if (a.Lit_var) == (b.Lit_var) {
+          if (a.Lit_neg) == (b.Lit_neg) {
+            (cnf, lit_const(false))
+          } else {
+            (cnf, lit_const(true))
+          }
+        } else {
+          tseitin_xor(cnf, a, b)
+        }
+      }
+    }
   \<rbrakk>\<close>
 
 (* Rust: gate_ite *)
 definition "gate_ite" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>gate_ite \<equiv> \<lambda>cnf c a b. FunctionBody \<lbrakk>
-    let destr_1 = fresh_fn(cnf);
-    let cnf = destr_1.0;
-    let x = destr_1.1;
-    let cnf = add_clause(cnf, clause3(lit_neg(c), lit_neg(x), a));
-    let cnf = add_clause(cnf, clause3(lit_neg(c), x, lit_neg(a)));
-    let cnf = add_clause(cnf, clause3(c, lit_neg(x), b));
-    let cnf = add_clause(cnf, clause3(c, x, lit_neg(b)));
-    (cnf, x)
+    if (c.Lit_var) == 0_usize {
+      if c.Lit_neg {
+        (cnf, b)
+      } else {
+        (cnf, a)
+      }
+    } else {
+      if (a.Lit_var) == (b.Lit_var) {
+        if (a.Lit_neg) == (b.Lit_neg) {
+          (cnf, a)
+        } else {
+          let destr_1 = gate_xor(cnf, c, a);
+          let cnf = destr_1.0;
+          let x = destr_1.1;
+          (cnf, lit_neg(x))
+        }
+      } else {
+        if (a.Lit_var) == 0_usize {
+          if a.Lit_neg {
+            gate_and(cnf, lit_neg(c), b)
+          } else {
+            gate_or(cnf, c, b)
+          }
+        } else {
+          if (b.Lit_var) == 0_usize {
+            if b.Lit_neg {
+              gate_and(cnf, c, a)
+            } else {
+              gate_or(cnf, lit_neg(c), a)
+            }
+          } else {
+            tseitin_ite(cnf, c, a, b)
+          }
+        }
+      }
+    }
   \<rbrakk>\<close>
 
 (* Rust: gate_bitwise *)

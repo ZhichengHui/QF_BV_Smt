@@ -234,49 +234,39 @@ proof (intro conjI)
   show \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> lit_sem \<sigma> x = g \<sigma>\<close> using sound s' by simp
 qed
 
-lemma and_m_eq:
-  \<open>and_m s a b =
+subsection \<open>The Tseitin gates\<close>
+
+lemma and_t_eq:
+  \<open>and_t s a b =
     (let x = make_Lit (word_of_nat (fst s)) False in
      ((Suc (fst s), snd s @ [[lneg x, a], [lneg x, b], [x, lneg a, lneg b]]), x))\<close>
-  by (simp add: and_m_def fresh_m_def addc_m_def Let_def)
+  by (simp add: and_t_def fresh_m_def addc_m_def Let_def)
 
-lemma xor_m_eq:
-  \<open>xor_m s a b =
+lemma xor_t_eq:
+  \<open>xor_t s a b =
     (let x = make_Lit (word_of_nat (fst s)) False in
      ((Suc (fst s), snd s @ [[lneg x, a, b], [lneg x, lneg a, lneg b], [x, lneg a, b], [x, a, lneg b]]), x))\<close>
-  by (simp add: xor_m_def fresh_m_def addc_m_def Let_def)
+  by (simp add: xor_t_def fresh_m_def addc_m_def Let_def)
 
-lemma ite_m_eq:
-  \<open>ite_m s c a b =
+lemma ite_t_eq:
+  \<open>ite_t s c a b =
     (let x = make_Lit (word_of_nat (fst s)) False in
      ((Suc (fst s), snd s @ [[lneg c, lneg x, a], [lneg c, x, lneg a], [c, lneg x, b], [c, x, lneg b]]), x))\<close>
-  by (simp add: ite_m_def fresh_m_def addc_m_def Let_def)
-
-lemma and_fst [simp]: \<open>fst (fst (and_m s a b)) = Suc (fst s)\<close>
-  by (simp add: and_m_eq Let_def)
-
-lemma xor_fst [simp]: \<open>fst (fst (xor_m s a b)) = Suc (fst s)\<close>
-  by (simp add: xor_m_eq Let_def)
-
-lemma ite_fst [simp]: \<open>fst (fst (ite_m s c a b)) = Suc (fst s)\<close>
-  by (simp add: ite_m_eq Let_def)
-
-lemma or_fst [simp]: \<open>fst (fst (or_m s a b)) = Suc (fst s)\<close>
-  by (simp add: or_m_def split_def Let_def)
+  by (simp add: ite_t_def fresh_m_def addc_m_def Let_def)
 
 lemma lit_sem_upd:
   \<open>lit_sem (\<sigma>(n := v)) l = (if unat (Lit_var l) = n then v \<noteq> Lit_neg l else lit_sem \<sigma> l)\<close>
   by (simp add: lit_sem_def)
 
-lemma and_ok:
+lemma and_t_ok:
   assumes wf: \<open>wf_st s\<close> and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
-    and d: \<open>and_m s a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
+    and d: \<open>and_t s a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
   shows \<open>wf_st s' \<and> ext s s' \<and> unat (Lit_var x) < fst s' \<and>
          (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> lit_sem \<sigma> x = (lit_sem \<sigma> a \<and> lit_sem \<sigma> b))\<close>
 proof -
   let ?x = \<open>make_Lit (word_of_nat (fst s)) False\<close>
   have e: \<open>s' = (Suc (fst s), snd s @ [[lneg ?x, a], [lneg ?x, b], [?x, lneg a, lneg b]])\<close> \<open>x = ?x\<close>
-    using d by (auto simp: and_m_eq Let_def)
+    using d by (auto simp: and_t_eq Let_def)
   have n: \<open>fst s < 2 ^ 64\<close> using lt e(1) by simp
   have vx: \<open>unat (word_of_nat (fst s) :: 64 word) = fst s\<close> using n by simp
   note ne = less_imp_neq[OF a] less_imp_neq[OF b]
@@ -285,16 +275,16 @@ proof -
       (use a b vx ne in \<open>auto simp: lit_sem_upd\<close>)
 qed
 
-lemma xor_ok:
+lemma xor_t_ok:
   assumes wf: \<open>wf_st s\<close> and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
-    and d: \<open>xor_m s a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
+    and d: \<open>xor_t s a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
   shows \<open>wf_st s' \<and> ext s s' \<and> unat (Lit_var x) < fst s' \<and>
          (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> lit_sem \<sigma> x = (lit_sem \<sigma> a \<noteq> lit_sem \<sigma> b))\<close>
 proof -
   let ?x = \<open>make_Lit (word_of_nat (fst s)) False\<close>
   have e: \<open>s' = (Suc (fst s), snd s @ [[lneg ?x, a, b], [lneg ?x, lneg a, lneg b], [?x, lneg a, b], [?x, a, lneg b]])\<close>
     \<open>x = ?x\<close>
-    using d by (auto simp: xor_m_eq Let_def)
+    using d by (auto simp: xor_t_eq Let_def)
   have n: \<open>fst s < 2 ^ 64\<close> using lt e(1) by simp
   have vx: \<open>unat (word_of_nat (fst s) :: 64 word) = fst s\<close> using n by simp
   note ne = less_imp_neq[OF a] less_imp_neq[OF b]
@@ -303,10 +293,10 @@ proof -
       (use a b vx ne in \<open>auto simp: lit_sem_upd\<close>)
 qed
 
-lemma ite_ok:
+lemma ite_t_ok:
   assumes wf: \<open>wf_st s\<close> and c: \<open>unat (Lit_var c) < fst s\<close>
     and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
-    and d: \<open>ite_m s c a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
+    and d: \<open>ite_t s c a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
   shows \<open>wf_st s' \<and> ext s s' \<and> unat (Lit_var x) < fst s' \<and>
          (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow>
             lit_sem \<sigma> x = (if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b))\<close>
@@ -314,7 +304,7 @@ proof -
   let ?x = \<open>make_Lit (word_of_nat (fst s)) False\<close>
   have e: \<open>s' = (Suc (fst s), snd s @ [[lneg c, lneg ?x, a], [lneg c, ?x, lneg a], [c, lneg ?x, b], [c, ?x, lneg b]])\<close>
     \<open>x = ?x\<close>
-    using d by (auto simp: ite_m_eq Let_def)
+    using d by (auto simp: ite_t_eq Let_def)
   have n: \<open>fst s < 2 ^ 64\<close> using lt e(1) by simp
   have vx: \<open>unat (word_of_nat (fst s) :: 64 word) = fst s\<close> using n by simp
   note ne = less_imp_neq[OF a] less_imp_neq[OF b] less_imp_neq[OF c]
@@ -322,6 +312,67 @@ proof -
     by (rule gate_lemma[OF wf e(1), where f = \<open>\<lambda>\<sigma>. if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b\<close>])
       (use a b c vx ne in \<open>auto simp: lit_sem_upd\<close>)
 qed
+
+subsection \<open>The simplifying gates\<close>
+
+lemma keep_ok:
+  assumes \<open>wf_st s\<close> \<open>unat (Lit_var x) < fst s\<close> \<open>\<And>\<sigma>. cnf_sem \<sigma> (snd s) \<Longrightarrow> lit_sem \<sigma> x = f \<sigma>\<close>
+  shows \<open>wf_st s \<and> ext s s \<and> unat (Lit_var x) < fst s \<and> (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> lit_sem \<sigma> x = f \<sigma>)\<close>
+  using assms ext_refl by blast
+
+lemma lit_sem_var0:
+  \<open>wf_st s \<Longrightarrow> cnf_sem \<sigma> (snd s) \<Longrightarrow> Lit_var l = 0 \<Longrightarrow> lit_sem \<sigma> l = (\<not> Lit_neg l)\<close>
+  using lit_sem_lconst[of s \<sigma> True] by (simp add: lit_sem_def lconst_def)
+
+lemma lit_sem_same_var:
+  \<open>Lit_var a = Lit_var b \<Longrightarrow> lit_sem \<sigma> a = (if Lit_neg a = Lit_neg b then lit_sem \<sigma> b else \<not> lit_sem \<sigma> b)\<close>
+  by (auto simp: lit_sem_def)
+
+lemma and_ok:
+  assumes wf: \<open>wf_st s\<close> and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
+    and d: \<open>and_m s a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
+  shows \<open>wf_st s' \<and> ext s s' \<and> unat (Lit_var x) < fst s' \<and>
+         (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> lit_sem \<sigma> x = (lit_sem \<sigma> a \<and> lit_sem \<sigma> b))\<close>
+proof (cases \<open>Lit_var a = 0 \<or> Lit_var b = 0 \<or> Lit_var a = Lit_var b\<close>)
+  case True
+  have e: \<open>s' = s\<close> \<open>x = a \<or> x = b \<or> x = lconst False\<close> using d True by (auto simp: and_m_def split: if_splits)
+  have \<open>lit_sem \<sigma> x = (lit_sem \<sigma> a \<and> lit_sem \<sigma> b)\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> for \<sigma>
+    using d True lit_sem_var0[OF wf that] lit_sem_lconst[OF wf that] lit_sem_same_var[of a b \<sigma>]
+    by (auto simp: and_m_def split: if_splits)
+  then show ?thesis unfolding e(1) using e(2) a b wf_st_pos[OF wf] by (intro keep_ok[OF wf]) auto
+next
+  case False
+  then have \<open>and_t s a b = (s', x)\<close> using d by (simp add: and_m_def)
+  then show ?thesis by (rule and_t_ok[OF wf a b _ lt])
+qed
+
+lemma and_fst [simp]: \<open>fst s \<le> fst (fst (and_m s a b))\<close>
+  by (simp add: and_m_def and_t_eq Let_def)
+
+lemma or_fst [simp]: \<open>fst s \<le> fst (fst (or_m s a b))\<close>
+  using and_fst[of s \<open>lneg a\<close> \<open>lneg b\<close>] by (simp add: or_m_def split_def Let_def)
+
+lemma xor_ok:
+  assumes wf: \<open>wf_st s\<close> and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
+    and d: \<open>xor_m s a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
+  shows \<open>wf_st s' \<and> ext s s' \<and> unat (Lit_var x) < fst s' \<and>
+         (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> lit_sem \<sigma> x = (lit_sem \<sigma> a \<noteq> lit_sem \<sigma> b))\<close>
+proof (cases \<open>Lit_var a = 0 \<or> Lit_var b = 0 \<or> Lit_var a = Lit_var b\<close>)
+  case True
+  have e: \<open>s' = s\<close> \<open>Lit_var x = Lit_var a \<or> Lit_var x = Lit_var b \<or> Lit_var x = 0\<close>
+    using d True by (auto simp: xor_m_def split: if_splits)
+  have \<open>lit_sem \<sigma> x = (lit_sem \<sigma> a \<noteq> lit_sem \<sigma> b)\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> for \<sigma>
+    using d True lit_sem_var0[OF wf that] lit_sem_lconst[OF wf that] lit_sem_same_var[of a b \<sigma>]
+    by (auto simp: xor_m_def split: if_splits)
+  then show ?thesis unfolding e(1) using e(2) a b wf_st_pos[OF wf] by (intro keep_ok[OF wf]) auto
+next
+  case False
+  then have \<open>xor_t s a b = (s', x)\<close> using d by (simp add: xor_m_def)
+  then show ?thesis by (rule xor_t_ok[OF wf a b _ lt])
+qed
+
+lemma xor_fst [simp]: \<open>fst s \<le> fst (fst (xor_m s a b))\<close>
+  by (simp add: xor_m_def xor_t_eq Let_def)
 
 lemma or_ok:
   assumes wf: \<open>wf_st s\<close> and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
@@ -334,10 +385,117 @@ proof -
   show ?thesis using and_ok[of s \<open>lneg a\<close> \<open>lneg b\<close> s1 y] wf a b d1 lt e by auto
 qed
 
+
+lemma ite_ok:
+  assumes wf: \<open>wf_st s\<close> and c: \<open>unat (Lit_var c) < fst s\<close>
+    and a: \<open>unat (Lit_var a) < fst s\<close> and b: \<open>unat (Lit_var b) < fst s\<close>
+    and d: \<open>ite_m s c a b = (s', x)\<close> and lt: \<open>fst s' < 2 ^ 64\<close>
+  shows \<open>wf_st s' \<and> ext s s' \<and> unat (Lit_var x) < fst s' \<and>
+         (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow>
+            lit_sem \<sigma> x = (if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b))\<close>
+proof -
+  have z: \<open>lit_sem \<sigma> l = (\<not> Lit_neg l)\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> \<open>Lit_var l = 0\<close> for \<sigma> l
+    using lit_sem_var0[OF wf that] .
+  have nc: \<open>unat (Lit_var (lneg c)) < fst s\<close> using c by simp
+  show ?thesis
+  proof (cases \<open>Lit_var c = 0\<close>)
+    case True
+    have e: \<open>s' = s\<close> \<open>x = (if Lit_neg c then b else a)\<close> using d True by (auto simp: ite_m_def split: if_splits)
+    show ?thesis unfolding e(1) using e(2) a b z[of _ c] True by (intro keep_ok[OF wf]) auto
+  next
+    case c0: False
+    show ?thesis
+    proof (cases \<open>Lit_var a = Lit_var b\<close>)
+      case ab: True
+      show ?thesis
+      proof (cases \<open>Lit_neg a = Lit_neg b\<close>)
+        case True
+        have e: \<open>s' = s\<close> \<open>x = a\<close> using d c0 ab True by (auto simp: ite_m_def)
+        show ?thesis unfolding e using a ab True lit_sem_same_var[of a b] by (intro keep_ok[OF wf]) auto
+      next
+        case False
+        obtain s1 y where 1: \<open>xor_m s c a = (s1, y)\<close> by (cases \<open>xor_m s c a\<close>)
+        have e: \<open>s' = s1\<close> \<open>x = lneg y\<close> using d c0 ab False 1 by (auto simp: ite_m_def)
+        show ?thesis using xor_ok[OF wf c a 1] lt e ab False lit_sem_same_var[of a b] by auto
+      qed
+    next
+      case ab: False
+      show ?thesis
+      proof (cases \<open>Lit_var a = 0\<close>)
+        case a0: True
+        have sa: \<open>lit_sem \<sigma> a = (\<not> Lit_neg a)\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> for \<sigma> using z[OF that a0] .
+        show ?thesis
+        proof (cases \<open>Lit_neg a\<close>)
+          case True
+          then have d1: \<open>and_m s (lneg c) b = (s', x)\<close> using d c0 ab a0 by (simp add: ite_m_def)
+          show ?thesis
+          proof -
+            note A = and_ok[OF wf nc b d1 lt]
+            have S: \<open>lit_sem \<sigma> x = (if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b)\<close>
+              if \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
+              using A sa[OF ext_cnf_sem[OF _ that]] True that by auto
+            show ?thesis using A S by blast
+          qed
+        next
+          case False
+          then have d1: \<open>or_m s c b = (s', x)\<close> using d c0 ab a0 by (simp add: ite_m_def)
+          show ?thesis
+          proof -
+            note A = or_ok[OF wf c b d1 lt]
+            have S: \<open>lit_sem \<sigma> x = (if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b)\<close>
+              if \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
+              using A sa[OF ext_cnf_sem[OF _ that]] False that by auto
+            show ?thesis using A S by blast
+          qed
+        qed
+      next
+        case a0: False
+        show ?thesis
+        proof (cases \<open>Lit_var b = 0\<close>)
+          case b0: True
+          have sb: \<open>lit_sem \<sigma> b = (\<not> Lit_neg b)\<close> if \<open>cnf_sem \<sigma> (snd s)\<close> for \<sigma> using z[OF that b0] .
+          show ?thesis
+          proof (cases \<open>Lit_neg b\<close>)
+            case True
+            then have d1: \<open>and_m s c a = (s', x)\<close> using d c0 ab a0 b0 by (simp add: ite_m_def)
+            show ?thesis
+            proof -
+              note A = and_ok[OF wf c a d1 lt]
+              have S: \<open>lit_sem \<sigma> x = (if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b)\<close>
+                if \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
+                using A sb[OF ext_cnf_sem[OF _ that]] True that by auto
+              show ?thesis using A S by blast
+            qed
+          next
+            case False
+            then have d1: \<open>or_m s (lneg c) a = (s', x)\<close> using d c0 ab a0 b0 by (simp add: ite_m_def)
+            show ?thesis
+            proof -
+              note A = or_ok[OF wf nc a d1 lt]
+              have S: \<open>lit_sem \<sigma> x = (if lit_sem \<sigma> c then lit_sem \<sigma> a else lit_sem \<sigma> b)\<close>
+                if \<open>cnf_sem \<sigma> (snd s')\<close> for \<sigma>
+                using A sb[OF ext_cnf_sem[OF _ that]] False that by auto
+              show ?thesis using A S by blast
+            qed
+          qed
+        next
+          case b0: False
+          then have \<open>ite_t s c a b = (s', x)\<close> using d c0 ab a0 by (simp add: ite_m_def)
+          then show ?thesis by (rule ite_t_ok[OF wf c a b _ lt])
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma ite_fst [simp]: \<open>fst s \<le> fst (fst (ite_m s c a b))\<close>
+  using and_fst[of s] or_fst[of s] xor_fst[of s]
+  by (auto simp: ite_m_def ite_t_eq Let_def split_def intro: order_trans)
+
 definition bop :: \<open>BinOp \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> bool\<close> where
   \<open>bop op p q = (case op of BinOp_And \<Rightarrow> p \<and> q | BinOp_Or \<Rightarrow> p \<or> q | _ \<Rightarrow> p \<noteq> q)\<close>
 
-lemma bitw_fst [simp]: \<open>fst (fst (bitw_m op s a b)) = Suc (fst s)\<close>
+lemma bitw_fst [simp]: \<open>fst s \<le> fst (fst (bitw_m op s a b))\<close>
   by (cases op) (simp_all add: bitw_m_def)
 
 lemma bitw_ok:
@@ -572,8 +730,8 @@ lemma ite_vec_m_mono: \<open>fst s \<le> fst (fst (ite_vec_m s c a b))\<close>
 
 subsection \<open>Addition\<close>
 
-lemma add_step_fst [simp]: \<open>fst (fst (add_step a b x i)) = fst (fst x) + 3\<close>
-  by (cases x) (simp add: add_step_def split_def Let_def)
+lemma add_step_fst [simp]: \<open>fst (fst x) \<le> fst (fst (add_step a b x i))\<close>
+  by (cases x) (simp add: add_step_def split_def Let_def, meson order_trans xor_fst ite_fst)
 
 lemma full_add_arith:
   \<open>of_bool ((p \<noteq> q) \<noteq> c) + 2 * of_bool (if p \<noteq> q then c else p) = of_bool p + of_bool q + (of_bool c :: nat)\<close>
@@ -591,18 +749,22 @@ proof -
   obtain s2 x where 2: \<open>xor_m s1 t c = (s2, x)\<close> by (cases \<open>xor_m s1 t c\<close>)
   obtain s3 c1 where 3: \<open>ite_m s2 t c (a ! i) = (s3, c1)\<close> by (cases \<open>ite_m s2 t c (a ! i)\<close>)
   have e: \<open>s' = s3\<close> \<open>r' = r @ [x]\<close> \<open>c' = c1\<close> using d 1 2 3 by (simp_all add: add_step_def)
-  have f: \<open>fst s1 = Suc (fst s)\<close> \<open>fst s2 = Suc (fst s1)\<close> \<open>fst s3 = Suc (fst s2)\<close>
+  have f: \<open>fst s \<le> fst s1\<close> \<open>fst s1 \<le> fst s2\<close> \<open>fst s2 \<le> fst s3\<close>
     using 1 2 3 xor_fst[of s \<open>a ! i\<close> \<open>b ! i\<close>] xor_fst[of s1 t c] ite_fst[of s2 t c \<open>a ! i\<close>] by simp_all
-  have l: \<open>fst s1 < 2 ^ 64\<close> \<open>fst s2 < 2 ^ 64\<close> \<open>fst s3 < 2 ^ 64\<close> using lt e f by simp_all
+  have l3: \<open>fst s3 < 2 ^ 64\<close> using lt e(1) by simp
+  have l2: \<open>fst s2 < 2 ^ 64\<close> using le_less_trans[OF f(3) l3] .
+  have l1: \<open>fst s1 < 2 ^ 64\<close> using le_less_trans[OF f(2) l2] .
+  note l = l1 l2 l3
   have G1: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>unat (Lit_var t) < fst s1\<close>
     \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow> lit_sem \<sigma> t = (lit_sem \<sigma> (a ! i) \<noteq> lit_sem \<sigma> (b ! i))\<close>
     using xor_ok[OF wf a b 1 l(1)] by auto
-  have c1': \<open>unat (Lit_var c) < fst s1\<close> using c f by simp
+  have c1': \<open>unat (Lit_var c) < fst s1\<close> using less_le_trans[OF c f(1)] .
   have G2: \<open>wf_st s2\<close> \<open>ext s1 s2\<close> \<open>unat (Lit_var x) < fst s2\<close>
     \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> lit_sem \<sigma> x = (lit_sem \<sigma> t \<noteq> lit_sem \<sigma> c)\<close>
     using xor_ok[OF G1(1) G1(3) c1' 2 l(2)] by auto
   have v2: \<open>unat (Lit_var t) < fst s2\<close> \<open>unat (Lit_var c) < fst s2\<close> \<open>unat (Lit_var (a ! i)) < fst s2\<close>
-    using G1(3) c a f by simp_all
+    using less_le_trans[OF G1(3) f(2)] less_le_trans[OF c1' f(2)] less_le_trans[OF less_le_trans[OF a f(1)] f(2)]
+    by simp_all
   have G3: \<open>wf_st s3\<close> \<open>ext s2 s3\<close> \<open>unat (Lit_var c1) < fst s3\<close>
     \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow> lit_sem \<sigma> c1 = (if lit_sem \<sigma> t then lit_sem \<sigma> c else lit_sem \<sigma> (a ! i))\<close>
     using ite_ok[OF G2(1) v2 3 l(3)] by auto
@@ -618,7 +780,7 @@ proof -
     ultimately show ?thesis using full_add_arith by simp
   qed
   have \<open>ext s s3\<close> using ext_trans[OF ext_trans[OF G1(2) G2(2)] G3(2)] .
-  then show ?thesis using e G3 S G2(3) f by auto
+  then show ?thesis using e G3 S less_le_trans[OF G2(3) f(3)] by auto
 qed
 
 lemma add_inv_arith:
@@ -656,7 +818,7 @@ proof -
     fix i x assume i: \<open>i < length a\<close> and P: \<open>?P i x\<close>
     obtain s1 r1 c1 where x: \<open>x = (s1, r1, c1)\<close> by (metis prod_cases3)
     obtain s2 r2 c2 where st: \<open>add_step a b (s1, r1, c1) i = (s2, r2, c2)\<close> by (metis prod_cases3)
-    have f: \<open>fst s2 = fst s1 + 3\<close> using add_step_fst[of a b \<open>(s1, r1, c1)\<close> i] st by simp
+    have f: \<open>fst s1 \<le> fst s2\<close> using add_step_fst[of \<open>(s1, r1, c1)\<close> a b i] st by simp
     have B: \<open>wf_st s2 \<and> ext s s2 \<and> lits_lt (fst s2) r2 \<and> unat (Lit_var c2) < fst s2 \<and> length r2 = Suc i \<and>
      (\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> val \<sigma> r2 + 2 ^ Suc i * of_bool (lit_sem \<sigma> c2) =
         val \<sigma> (take (Suc i) a) + val \<sigma> (take (Suc i) b) + of_bool (lit_sem \<sigma> cin))\<close>
@@ -665,7 +827,7 @@ proof -
       have I: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>lits_lt (fst s1) r1\<close> \<open>unat (Lit_var c1) < fst s1\<close> \<open>length r1 = i\<close>
         \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow> val \<sigma> r1 + 2 ^ i * of_bool (lit_sem \<sigma> c1) =
           val \<sigma> (take i a) + val \<sigma> (take i b) + of_bool (lit_sem \<sigma> cin)\<close>
-        using P x f lt2 by auto
+        using P x le_less_trans[OF f lt2] by auto
       have le: \<open>fst s \<le> fst s1\<close> using ext_fst[OF I(2)] .
       have ai: \<open>unat (Lit_var (a ! i)) < fst s1\<close> using lits_lt_nth[OF la i] le by simp
       have bi: \<open>unat (Lit_var (b ! i)) < fst s1\<close> using lits_lt_nth[OF lb] i len le by fastforce
@@ -741,8 +903,8 @@ qed
 
 subsection \<open>Equality\<close>
 
-lemma eq_step_fst [simp]: \<open>fst (fst (eq_step a b x i)) = fst (fst x) + 2\<close>
-  by (cases x) (simp add: eq_step_def split_def Let_def)
+lemma eq_step_fst [simp]: \<open>fst (fst x) \<le> fst (fst (eq_step a b x i))\<close>
+  by (cases x) (simp add: eq_step_def split_def Let_def, meson order_trans xor_fst and_fst)
 
 lemma eq_m_mono: \<open>fst s \<le> fst (fst (eq_m s a b))\<close>
   unfolding eq_m_def by (rule foldl_mono) simp
@@ -765,7 +927,7 @@ proof -
     obtain s2 y where 1: \<open>xor_m s1 (a ! i) (b ! i) = (s2, y)\<close> by (cases \<open>xor_m s1 (a ! i) (b ! i)\<close>)
     obtain s3 r' where 2: \<open>and_m s2 r (lneg y) = (s3, r')\<close> by (cases \<open>and_m s2 r (lneg y)\<close>)
     have st: \<open>eq_step a b x i = (s3, r')\<close> using x 1 2 by (simp add: eq_step_def)
-    have f: \<open>fst s2 = Suc (fst s1)\<close> \<open>fst s3 = Suc (fst s2)\<close>
+    have f: \<open>fst s1 \<le> fst s2\<close> \<open>fst s2 \<le> fst s3\<close>
       using 1 2 xor_fst[of s1 \<open>a ! i\<close> \<open>b ! i\<close>] and_fst[of s2 r \<open>lneg y\<close>] by simp_all
     have B: \<open>wf_st s3 \<and> ext s s3 \<and> unat (Lit_var r') < fst s3 \<and>
      (\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow> lit_sem \<sigma> r' = (\<forall>j<Suc i. lit_sem \<sigma> (a ! j) = lit_sem \<sigma> (b ! j)))\<close>
@@ -773,14 +935,15 @@ proof -
     proof -
       have I: \<open>wf_st s1\<close> \<open>ext s s1\<close> \<open>unat (Lit_var r) < fst s1\<close>
         \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s1) \<longrightarrow> lit_sem \<sigma> r = (\<forall>j<i. lit_sem \<sigma> (a ! j) = lit_sem \<sigma> (b ! j))\<close>
-        using P x f lt3 by auto
+        using P x f lt3 by (auto simp: le_less_trans)
       have le: \<open>fst s \<le> fst s1\<close> using ext_fst[OF I(2)] .
       have ai: \<open>unat (Lit_var (a ! i)) < fst s1\<close> using lits_lt_nth[OF la i] le by simp
       have bi: \<open>unat (Lit_var (b ! i)) < fst s1\<close> using lits_lt_nth[OF lb] i len le by fastforce
       have G1: \<open>wf_st s2\<close> \<open>ext s1 s2\<close> \<open>unat (Lit_var y) < fst s2\<close>
         \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s2) \<longrightarrow> lit_sem \<sigma> y = (lit_sem \<sigma> (a ! i) \<noteq> lit_sem \<sigma> (b ! i))\<close>
-        using xor_ok[OF I(1) ai bi 1] lt3 f by auto
-      have rr: \<open>unat (Lit_var r) < fst s2\<close> \<open>unat (Lit_var (lneg y)) < fst s2\<close> using I(3) G1(3) f by simp_all
+        using xor_ok[OF I(1) ai bi 1 le_less_trans[OF f(2) lt3]] by auto
+      have rr: \<open>unat (Lit_var r) < fst s2\<close> \<open>unat (Lit_var (lneg y)) < fst s2\<close>
+        using less_le_trans[OF I(3) f(1)] G1(3) by simp_all
       have G2: \<open>wf_st s3\<close> \<open>ext s2 s3\<close> \<open>unat (Lit_var r') < fst s3\<close>
         \<open>\<forall>\<sigma>. cnf_sem \<sigma> (snd s3) \<longrightarrow> lit_sem \<sigma> r' = (lit_sem \<sigma> r \<and> lit_sem \<sigma> (lneg y))\<close>
         using and_ok[OF G1(1) rr 2 lt3] by auto
@@ -1049,7 +1212,7 @@ proof -
       by (simp add: shift_step_def split_def Let_def)
   next
     case False
-    then show ?thesis using x by (simp add: shift_step_def split_def Let_def or_m_def and_m_def fresh_m_def addc_m_def)
+    then show ?thesis using x or_fst[of s] by (simp add: shift_step_def split_def Let_def)
   qed
 qed
 
@@ -1160,7 +1323,7 @@ proof -
       have km: \<open>m \<le> k\<close> using stage False by (meson not_less)
       have np: \<open>?n \<le> p1\<close> if \<open>fst s1 < 2 ^ 64\<close> using P x False that by simp
       obtain s3 h where 2: \<open>or_m s1 g1 (b ! k) = (s3, h)\<close> by (cases \<open>or_m s1 g1 (b ! k)\<close>)
-      have m2: \<open>fst s1 \<le> fst s3\<close> using 2 by (auto simp: or_m_def and_m_def fresh_m_def addc_m_def split_def Let_def)
+      have m2: \<open>fst s1 \<le> fst s3\<close> using 2 or_fst[of s1 g1 \<open>b ! k\<close>] by simp
       have st: \<open>shift_step a b left x k = (s3, r1, h, p1)\<close> if \<open>fst s1 < 2 ^ 64\<close>
         using x 2 np[OF that] by (simp add: shift_step_def)
       have st': \<open>\<not> p1 < ?n\<close> if \<open>fst s1 < 2 ^ 64\<close> using np[OF that] by simp
@@ -1455,13 +1618,13 @@ proof -
   have m3: \<open>fst s2 \<le> fst s3\<close> using eq_m_mono[of s2 b \<open>replicate w (lconst False)\<close>] 3 by simp
   have m4: \<open>fst s3 \<le> fst s4\<close> using eq_m_mono[of s3 q1 \<open>replicate w (lconst True)\<close>] 4 by simp
   have m5: \<open>fst s4 \<le> fst s5\<close> using eq_m_mono[of s4 r1 a] 5 by simp
-  have m6: \<open>fst s6 = Suc (fst s5)\<close> using and_fst[of s5 qo ra] 6 by simp
+  have m6: \<open>fst s5 \<le> fst s6\<close> using and_fst[of s5 qo ra] 6 by simp
   have m7: \<open>fst s6 \<le> fst s7\<close> using mul_m_mono[of s6 \<open>zext_m q1 (w + w)\<close> \<open>zext_m b (w + w)\<close>] 7 by simp
   have m8: \<open>fst s7 \<le> fst s8\<close> using add_m_mono[of s7 pr \<open>zext_m r1 (w + w)\<close> \<open>lconst False\<close>] 8 by simp
   have m9: \<open>fst s8 \<le> fst s9\<close> using eq_m_mono[of s8 sm \<open>zext_m a (w + w)\<close>] 9 by simp
   have m10: \<open>fst s9 \<le> fst s10\<close> using ult_m_mono[of s9 r1 b] 10 by simp
-  have m11: \<open>fst s11 = Suc (fst s10)\<close> using and_fst[of s10 sa rl] 11 by simp
-  have m12: \<open>fst s12 = Suc (fst s11)\<close> using ite_fst[of s11 bz cz cn] 12 by simp
+  have m11: \<open>fst s10 \<le> fst s11\<close> using and_fst[of s10 sa rl] 11 by simp
+  have m12: \<open>fst s11 \<le> fst s12\<close> using ite_fst[of s11 bz cz cn] 12 by simp
   have l12: \<open>fst s12 < 2 ^ 64\<close> using lt e(1) by simp
   have l11: \<open>fst s11 < 2 ^ 64\<close> using l12 m12 by simp
   have l10: \<open>fst s10 < 2 ^ 64\<close> using l11 m11 by simp

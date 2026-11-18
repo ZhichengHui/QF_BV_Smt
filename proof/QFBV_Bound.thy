@@ -79,16 +79,23 @@ lemma addc_grows: \<open>length c \<le> 4 \<Longrightarrow> grows 1 s (addc_m s 
   by (simp add: addc_m_def grows_def cl4_def)
 
 lemma and_grows: \<open>grows 4 s (fst (and_m s a b))\<close>
-  by (simp add: and_m_def fresh_m_def addc_m_def grows_def cl4_def split_def Let_def)
+  by (simp add: and_m_def and_t_def fresh_m_def addc_m_def grows_def cl4_def split_def Let_def)
 
 lemma or_grows: \<open>grows 4 s (fst (or_m s a b))\<close>
   using and_grows[of s \<open>lneg a\<close> \<open>lneg b\<close>] by (simp add: or_m_def split_def Let_def)
 
 lemma xor_grows: \<open>grows 5 s (fst (xor_m s a b))\<close>
-  by (simp add: xor_m_def fresh_m_def addc_m_def grows_def cl4_def split_def Let_def)
+  by (simp add: xor_m_def xor_t_def fresh_m_def addc_m_def grows_def cl4_def split_def Let_def)
 
 lemma ite_grows: \<open>grows 5 s (fst (ite_m s c a b))\<close>
-  by (simp add: ite_m_def fresh_m_def addc_m_def grows_def cl4_def split_def Let_def)
+proof -
+  have \<open>grows 5 s (fst (ite_t s c a b))\<close>
+    by (simp add: ite_t_def fresh_m_def addc_m_def grows_def cl4_def split_def Let_def)
+  moreover have \<open>grows 5 s (fst (and_m s c' b'))\<close> \<open>grows 5 s (fst (or_m s c' b'))\<close> for c' b'
+    using grows_mono[OF and_grows] grows_mono[OF or_grows] by simp_all
+  ultimately show ?thesis
+    using xor_grows[of s c a] grows_any[of 5 s] by (simp add: ite_m_def split_def Let_def)
+qed
 
 lemma bitw_grows: \<open>grows 5 s (fst (bitw_m op s a b))\<close>
 proof -

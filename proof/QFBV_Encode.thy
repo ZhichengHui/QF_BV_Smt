@@ -33,13 +33,13 @@ lemma addc_m_simps [simp]:
   by (simp_all add: addc_m_def)
 
 lemma and_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (and_m s a b))\<close>
-  by (simp add: and_m_def fresh_m_def split_def Let_def)
+  by (erule order_trans[OF _ and_fst])
 
 lemma xor_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (xor_m s a b))\<close>
-  by (simp add: xor_m_def fresh_m_def split_def Let_def)
+  by (erule order_trans[OF _ xor_fst])
 
 lemma ite_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (ite_m s c a b))\<close>
-  by (simp add: ite_m_def fresh_m_def split_def Let_def)
+  by (erule order_trans[OF _ ite_fst])
 
 lemma or_m_mono: \<open>n \<le> fst s \<Longrightarrow> n \<le> fst (fst (or_m s a b))\<close>
   by (simp add: or_m_def split_def Let_def and_m_mono)

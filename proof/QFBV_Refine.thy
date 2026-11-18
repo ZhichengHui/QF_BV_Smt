@@ -104,14 +104,14 @@ lemma fresh_m_snd [simp]: \<open>snd (fresh_m s) = make_Lit (word_of_nat (fst s)
 lemma addc_m_simps [simp]: \<open>fst (addc_m s c) = fst s\<close> \<open>snd (addc_m s c) = snd s @ [c]\<close>
   by (simp_all add: addc_m_def)
 
-lemma and_m_count [simp]: \<open>fst (fst (and_m s a b)) = Suc (fst s)\<close>
-  by (simp add: and_m_def fresh_m_def)
+lemma and_t_count [simp]: \<open>fst (fst (and_t s a b)) = Suc (fst s)\<close>
+  by (simp add: and_t_def fresh_m_def)
 
-lemma xor_m_count [simp]: \<open>fst (fst (xor_m s a b)) = Suc (fst s)\<close>
-  by (simp add: xor_m_def fresh_m_def)
+lemma xor_t_count [simp]: \<open>fst (fst (xor_t s a b)) = Suc (fst s)\<close>
+  by (simp add: xor_t_def fresh_m_def)
 
-lemma ite_m_count [simp]: \<open>fst (fst (ite_m s c a b)) = Suc (fst s)\<close>
-  by (simp add: ite_m_def fresh_m_def)
+lemma ite_t_count [simp]: \<open>fst (fst (ite_t s c a b)) = Suc (fst s)\<close>
+  by (simp add: ite_t_def fresh_m_def)
 
 lemma or_m_fst [simp]: \<open>fst (or_m s a b) = fst (and_m s (lneg a) (lneg b))\<close>
   by (simp add: or_m_def split_def Let_def)
@@ -119,8 +119,45 @@ lemma or_m_fst [simp]: \<open>fst (or_m s a b) = fst (and_m s (lneg a) (lneg b))
 lemma or_m_snd [simp]: \<open>snd (or_m s a b) = lneg (snd (and_m s (lneg a) (lneg b)))\<close>
   by (simp add: or_m_def split_def Let_def)
 
-lemma bitw_m_count [simp]: \<open>fst (fst (bitw_m op s a b)) = Suc (fst s)\<close>
+text \<open>The gates do not decrease the number of variables.\<close>
+
+lemma and_m_count [simp]: \<open>fst s \<le> fst (fst (and_m s a b))\<close>
+  by (simp add: and_m_def)
+
+lemma xor_m_count [simp]: \<open>fst s \<le> fst (fst (xor_m s a b))\<close>
+  by (simp add: xor_m_def)
+
+lemma ite_m_count [simp]: \<open>fst s \<le> fst (fst (ite_m s c a b))\<close>
+  using and_m_count[of s] xor_m_count[of s] by (auto simp: ite_m_def split_def Let_def intro: order_trans)
+
+lemma bitw_m_count [simp]: \<open>fst s \<le> fst (fst (bitw_m op s a b))\<close>
   by (cases op) (simp_all add: bitw_m_def)
+
+text \<open>A loop whose steps do not decrease the number of variables.\<close>
+
+lemma foldl_count_mono:
+  fixes f :: \<open>st \<times> 'b \<Rightarrow> 'c \<Rightarrow> st \<times> 'b\<close>
+  assumes \<open>\<And>X k. fst (fst X) \<le> fst (fst (f X k))\<close>
+  shows \<open>fst (fst X) \<le> fst (fst (foldl f X xs))\<close>
+proof (induction xs arbitrary: X)
+  case (Cons y ys)
+  show ?case using order_trans[OF assms[of X y] Cons.IH[of \<open>f X y\<close>]] by simp
+qed simp
+
+lemma foldl_upt_count_mono:
+  fixes f :: \<open>st \<times> 'b \<Rightarrow> nat \<Rightarrow> st \<times> 'b\<close>
+  assumes \<open>\<And>X k. fst (fst X) \<le> fst (fst (f X k))\<close> \<open>i \<le> j\<close>
+  shows \<open>fst (fst (foldl f X [0..<i])) \<le> fst (fst (foldl f X [0..<j]))\<close>
+  using assms(2)
+proof (induction j)
+  case (Suc j)
+  show ?case
+  proof (cases \<open>i = Suc j\<close>)
+    case False
+    then have \<open>i \<le> j\<close> using Suc.prems by simp
+    then show ?thesis using order_trans[OF Suc.IH assms(1)[of \<open>foldl f X [0..<j]\<close> j]] by simp
+  qed simp
+qed simp
 
 subsection \<open>Circuits: the loops as folds of named steps\<close>
 
@@ -175,15 +212,24 @@ proof -
   then show ?thesis by (simp add: bitwise_m_def)
 qed
 
+lemma bitwise_step_count: \<open>fst (fst X) \<le> fst (fst (bitwise_step op a b X i))\<close>
+  by (simp add: bitwise_step_def)
+
 lemma bitwise_fold_count:
-  \<open>fst (fst (foldl (bitwise_step op a b) X [0..<n])) = fst (fst X) + n\<close>
   \<open>length (snd (foldl (bitwise_step op a b) X [0..<n])) = length (snd X) + n\<close>
   by (induction n) (simp_all add: bitwise_step_def)
 
 lemma bitwise_m_count [simp]:
-  \<open>fst (fst (bitwise_m op s a b)) = fst s + length a\<close>
+  \<open>fst s \<le> fst (fst (bitwise_m op s a b))\<close>
   \<open>length (snd (bitwise_m op s a b)) = length a\<close>
+  using foldl_count_mono[OF bitwise_step_count, where X = \<open>(s, [])\<close>]
   by (simp_all add: bitwise_m_foldl bitwise_fold_count)
+
+lemma bitwise_step_lt:
+  \<open>k < length a \<Longrightarrow> fst (fst (foldl (bitwise_step op a b) (s, []) [0..<length a])) < 18446744073709551616 \<Longrightarrow>
+   fst (fst (bitw_m op (fst (foldl (bitwise_step op a b) (s, []) [0..<k])) (a ! k) (b ! k))) < 18446744073709551616\<close>
+  using foldl_upt_count_mono[where f = \<open>bitwise_step op a b\<close> and i = \<open>Suc k\<close> and j = \<open>length a\<close> and X = \<open>(s, [])\<close>, OF bitwise_step_count]
+  by (simp add: bitwise_step_def)
 
 text \<open>\<^const>\<open>add_m\<close>\<close>
 
@@ -199,15 +245,34 @@ lemma add_step_eq:
             (snd (xor_m (fst X) (a ! i) (b ! i))) (snd (snd X)) (a ! i)))\<close>
   by (simp add: add_step_def split_def Let_def)
 
+lemma add_step_count: \<open>fst (fst X) \<le> fst (fst (add_step a b X i))\<close>
+  unfolding add_step_eq fst_conv by (meson order_trans xor_m_count ite_m_count)
+
 lemma add_fold_count:
-  \<open>fst (fst (foldl (add_step a b) X [0..<n])) = fst (fst X) + 3 * n\<close>
   \<open>length (fst (snd (foldl (add_step a b) X [0..<n]))) = length (fst (snd X)) + n\<close>
   by (induction n) (simp_all add: add_step_eq)
 
 lemma add_m_count [simp]:
-  \<open>fst (fst (add_m s a b c)) = fst s + 3 * length a\<close>
+  \<open>fst s \<le> fst (fst (add_m s a b c))\<close>
   \<open>length (fst (snd (add_m s a b c))) = length a\<close>
+  using foldl_count_mono[OF add_step_count, where X = \<open>(s, [], c)\<close>]
   by (simp_all add: add_m_def add_fold_count)
+
+lemma add_step_lt:
+  assumes \<open>k < length a\<close> \<open>fst (fst (foldl (add_step a b) (s, [], c) [0..<length a])) < 18446744073709551616\<close>
+  shows \<open>fst (fst (ite_m (fst (xor_m (fst (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (snd (foldl (add_step a b) (s, [], c) [0..<k]))))) (snd (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (snd (foldl (add_step a b) (s, [], c) [0..<k]))) (a ! k))) < 18446744073709551616\<close>
+    \<open>fst (fst (xor_m (fst (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (snd (foldl (add_step a b) (s, [], c) [0..<k]))))) < 18446744073709551616\<close>
+    \<open>fst (fst (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) < 18446744073709551616\<close>
+proof -
+  have \<open>fst (fst (add_step a b (foldl (add_step a b) (s, [], c) [0..<k]) k)) < 18446744073709551616\<close>
+    using foldl_upt_count_mono[where f = \<open>add_step a b\<close> and i = \<open>Suc k\<close> and j = \<open>length a\<close>
+        and X = \<open>(s, [], c)\<close>, OF add_step_count] assms
+    by simp
+  then show c3: \<open>fst (fst (ite_m (fst (xor_m (fst (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (snd (foldl (add_step a b) (s, [], c) [0..<k]))))) (snd (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (snd (foldl (add_step a b) (s, [], c) [0..<k]))) (a ! k))) < 18446744073709551616\<close>
+    by (simp add: add_step_eq)
+  show c2: \<open>fst (fst (xor_m (fst (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) (snd (snd (foldl (add_step a b) (s, [], c) [0..<k]))))) < 18446744073709551616\<close> using le_less_trans[OF ite_m_count c3] .
+  show \<open>fst (fst (xor_m (fst (foldl (add_step a b) (s, [], c) [0..<k])) (a ! k) (b ! k))) < 18446744073709551616\<close> using le_less_trans[OF xor_m_count c2] .
+qed
 
 text \<open>\<^const>\<open>partial_m\<close>\<close>
 
@@ -224,18 +289,28 @@ proof -
   then show ?thesis by (simp add: partial_m_def)
 qed
 
+lemma partial_step_count: \<open>fst (fst X) \<le> fst (fst (partial_step a bi i X j))\<close>
+  by (simp add: partial_step_def)
+
 lemma partial_fold_count:
-  \<open>fst (fst (foldl (partial_step a bi i) X [0..<n])) = fst (fst X) + (n - i)\<close>
   \<open>length (snd (foldl (partial_step a bi i) X [0..<n])) = length (snd X) + n\<close>
-  by (induction n) (auto simp add: partial_step_def Suc_diff_le)
+  by (induction n) (auto simp add: partial_step_def)
 
 lemma partial_m_count [simp]:
-  \<open>fst (fst (partial_m s a bi i)) = fst s + (length a - i)\<close>
+  \<open>fst s \<le> fst (fst (partial_m s a bi i))\<close>
   \<open>length (snd (partial_m s a bi i)) = length a\<close>
+  using foldl_count_mono[OF partial_step_count, where X = \<open>(s, [])\<close>]
   by (simp_all add: partial_m_foldl partial_fold_count)
 
-text \<open>\<^const>\<open>mul_m\<close>. \<open>mulc n m\<close> counts the variables of the first \<open>m\<close> steps, \<open>mulr n m\<close> those of
-  the remaining steps.\<close>
+lemma partial_step_lt:
+  assumes \<open>k < length a\<close> \<open>\<not> k < i\<close>
+    \<open>fst (fst (foldl (partial_step a bi i) (s, []) [0..<length a])) < 18446744073709551616\<close>
+  shows \<open>fst (fst (and_m (fst (foldl (partial_step a bi i) (s, []) [0..<k])) (a ! (k - i)) bi)) < 18446744073709551616\<close>
+  using foldl_upt_count_mono[where f = \<open>partial_step a bi i\<close> and i = \<open>Suc k\<close> and j = \<open>length a\<close>
+      and X = \<open>(s, [])\<close>, OF partial_step_count] assms
+  by (simp add: partial_step_def)
+
+text \<open>\<^const>\<open>mul_m\<close>\<close>
 
 lemma mul_step_eq:
   \<open>mul_step a b X i =
@@ -244,39 +319,41 @@ lemma mul_step_eq:
              (lconst False))))\<close>
   by (simp add: mul_step_def split_def Let_def)
 
-definition mulc :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
-  \<open>mulc n m \<equiv> (\<Sum>i<m. n - i + 3 * n)\<close>
-
-definition mulr :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
-  \<open>mulr n m \<equiv> (\<Sum>i\<in>{m..<n}. n - i + 3 * n)\<close>
-
-lemma mulc_Suc [simp]: \<open>mulc n (Suc m) = mulc n m + (n - m + 3 * n)\<close>
-  by (simp add: mulc_def)
-
-lemma mulc_0 [simp]: \<open>mulc n 0 = 0\<close>
-  by (simp add: mulc_def)
-
-lemma mulr_0 [simp]: \<open>mulr n 0 = mulc n n\<close>
-  by (simp add: mulr_def mulc_def atLeast0LessThan)
-
-lemma mulr_less [simp]: \<open>m < n \<Longrightarrow> mulr n m = n - m + 3 * n + mulr n (Suc m)\<close>
-  by (simp add: mulr_def sum.atLeast_Suc_lessThan)
+lemma mul_step_count: \<open>fst (fst X) \<le> fst (fst (mul_step a b X i))\<close>
+  unfolding mul_step_eq fst_conv by (meson order_trans partial_m_count(1) add_m_count(1))
 
 lemma mul_fold_count:
   assumes \<open>length (snd X) = length a\<close>
-  shows \<open>fst (fst (foldl (mul_step a b) X [0..<m])) = fst (fst X) + mulc (length a) m \<and>
-         length (snd (foldl (mul_step a b) X [0..<m])) = length a\<close>
+  shows \<open>length (snd (foldl (mul_step a b) X [0..<m])) = length a\<close>
   by (induction m) (simp_all add: mul_step_eq assms)
 
 lemma mul_fold_count' [simp]:
-  \<open>fst (fst (foldl (mul_step a b) (s, replicate (length a) x) [0..<m])) = fst s + mulc (length a) m\<close>
   \<open>length (snd (foldl (mul_step a b) (s, replicate (length a) x) [0..<m])) = length a\<close>
   using mul_fold_count[of \<open>(s, replicate (length a) x)\<close> a b m] by simp_all
 
 lemma mul_m_count [simp]:
-  \<open>fst (fst (mul_m s a b)) = fst s + mulc (length a) (length a)\<close>
+  \<open>fst s \<le> fst (fst (mul_m s a b))\<close>
   \<open>length (snd (mul_m s a b)) = length a\<close>
+  using foldl_count_mono[OF mul_step_count, where X = \<open>(s, replicate (length a) (lconst False))\<close>]
   by (simp_all add: mul_m_def)
+
+lemma mul_m_fold:
+  \<open>foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<length a] = mul_m s a b\<close>
+  by (simp add: mul_m_def)
+
+lemma mul_step_lt:
+  assumes \<open>k < length a\<close> \<open>fst (fst (mul_m s a b)) < 18446744073709551616\<close>
+  shows \<open>fst (fst (add_m (fst (partial_m (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) a (b ! k) k)) (snd (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) (snd (partial_m (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) a (b ! k) k)) (lconst False))) < 18446744073709551616\<close>
+    \<open>fst (fst (partial_m (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) a (b ! k) k)) < 18446744073709551616\<close>
+proof -
+  have \<open>fst (fst (mul_step a b (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k]) k)) < 18446744073709551616\<close>
+    using foldl_upt_count_mono[where f = \<open>mul_step a b\<close> and i = \<open>Suc k\<close> and j = \<open>length a\<close>
+        and X = \<open>(s, replicate (length a) (lconst False))\<close>, OF mul_step_count] assms
+    by (simp add: mul_m_def)
+  then show c2: \<open>fst (fst (add_m (fst (partial_m (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) a (b ! k) k)) (snd (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) (snd (partial_m (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) a (b ! k) k)) (lconst False))) < 18446744073709551616\<close>
+    by (simp add: mul_step_eq)
+  show \<open>fst (fst (partial_m (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<k])) a (b ! k) k)) < 18446744073709551616\<close> using le_less_trans[OF add_m_count(1) c2] .
+qed
 
 text \<open>\<^const>\<open>eq_m\<close>, \<^const>\<open>ult_m\<close>\<close>
 
@@ -285,11 +362,25 @@ lemma eq_step_eq:
      and_m (fst (xor_m (fst X) (a ! i) (b ! i))) (snd X) (lneg (snd (xor_m (fst X) (a ! i) (b ! i))))\<close>
   by (simp add: eq_step_def split_def Let_def)
 
-lemma eq_fold_count: \<open>fst (fst (foldl (eq_step a b) X [0..<n])) = fst (fst X) + 2 * n\<close>
-  by (induction n) (simp_all add: eq_step_eq)
+lemma eq_step_count: \<open>fst (fst X) \<le> fst (fst (eq_step a b X i))\<close>
+  unfolding eq_step_eq by (meson order_trans xor_m_count and_m_count)
 
-lemma eq_m_count [simp]: \<open>fst (fst (eq_m s a b)) = fst s + 2 * length a\<close>
-  by (simp add: eq_m_def eq_fold_count)
+lemma eq_m_count [simp]: \<open>fst s \<le> fst (fst (eq_m s a b))\<close>
+  using foldl_count_mono[OF eq_step_count, where X = \<open>(s, lconst True)\<close>] by (simp add: eq_m_def)
+
+lemma eq_step_lt:
+  assumes \<open>k < length a\<close> \<open>fst (fst (foldl (eq_step a b) (s, lconst True) [0..<length a])) < 18446744073709551616\<close>
+  shows \<open>fst (fst (and_m (fst (xor_m (fst (foldl (eq_step a b) (s, lconst True) [0..<k])) (a ! k) (b ! k))) (snd (foldl (eq_step a b) (s, lconst True) [0..<k])) (lneg (snd (xor_m (fst (foldl (eq_step a b) (s, lconst True) [0..<k])) (a ! k) (b ! k)))))) < 18446744073709551616\<close>
+    \<open>fst (fst (xor_m (fst (foldl (eq_step a b) (s, lconst True) [0..<k])) (a ! k) (b ! k))) < 18446744073709551616\<close>
+proof -
+  have \<open>fst (fst (eq_step a b (foldl (eq_step a b) (s, lconst True) [0..<k]) k)) < 18446744073709551616\<close>
+    using foldl_upt_count_mono[where f = \<open>eq_step a b\<close> and i = \<open>Suc k\<close> and j = \<open>length a\<close>
+        and X = \<open>(s, lconst True)\<close>, OF eq_step_count] assms
+    by simp
+  then show c2: \<open>fst (fst (and_m (fst (xor_m (fst (foldl (eq_step a b) (s, lconst True) [0..<k])) (a ! k) (b ! k))) (snd (foldl (eq_step a b) (s, lconst True) [0..<k])) (lneg (snd (xor_m (fst (foldl (eq_step a b) (s, lconst True) [0..<k])) (a ! k) (b ! k)))))) < 18446744073709551616\<close>
+    by (simp add: eq_step_eq)
+  show \<open>fst (fst (xor_m (fst (foldl (eq_step a b) (s, lconst True) [0..<k])) (a ! k) (b ! k))) < 18446744073709551616\<close> using le_less_trans[OF and_m_count c2] .
+qed
 
 lemma ult_m_fst [simp]: \<open>fst (ult_m s a b) = fst (add_m s a (not_m b) (lconst True))\<close>
   by (simp add: ult_m_def split_def Let_def)
@@ -310,15 +401,24 @@ proof -
   then show ?thesis by (simp add: ite_vec_m_def)
 qed
 
+lemma ite_step_count: \<open>fst (fst X) \<le> fst (fst (ite_step c a b X i))\<close>
+  by (simp add: ite_step_def)
+
 lemma ite_fold_count:
-  \<open>fst (fst (foldl (ite_step c a b) X [0..<n])) = fst (fst X) + n\<close>
   \<open>length (snd (foldl (ite_step c a b) X [0..<n])) = length (snd X) + n\<close>
   by (induction n) (simp_all add: ite_step_def)
 
 lemma ite_vec_m_count [simp]:
-  \<open>fst (fst (ite_vec_m s c a b)) = fst s + length a\<close>
+  \<open>fst s \<le> fst (fst (ite_vec_m s c a b))\<close>
   \<open>length (snd (ite_vec_m s c a b)) = length a\<close>
+  using foldl_count_mono[OF ite_step_count, where X = \<open>(s, [])\<close>]
   by (simp_all add: ite_vec_m_foldl ite_fold_count)
+
+lemma ite_step_lt:
+  \<open>k < length a \<Longrightarrow> fst (fst (foldl (ite_step c a b) (s, []) [0..<length a])) < 18446744073709551616 \<Longrightarrow>
+   fst (fst (ite_m (fst (foldl (ite_step c a b) (s, []) [0..<k])) c (a ! k) (b ! k))) < 18446744073709551616\<close>
+  using foldl_upt_count_mono[where f = \<open>ite_step c a b\<close> and i = \<open>Suc k\<close> and j = \<open>length a\<close> and X = \<open>(s, [])\<close>, OF ite_step_count]
+  by (simp add: ite_step_def)
 
 text \<open>\<^const>\<open>shift_m\<close>. \<open>shF s i\<close>: the state after the first \<open>i\<close> stages.\<close>
 
@@ -348,7 +448,9 @@ lemma shift_m_shF: \<open>shift_m s a b left =
   by (simp add: shift_m_def shF_def split_def Let_def)
 
 lemma shF_le_final: \<open>i \<le> length b \<Longrightarrow> fst (fst (shF a b left s i)) \<le> fst (fst (shift_m s a b left))\<close>
-  using shF_mono[of i \<open>length b\<close> a b left s] by (simp add: shift_m_shF)
+  using order_trans[OF shF_mono[of i \<open>length b\<close> a b left s]
+      ite_vec_m_count(1)[of \<open>fst (shF a b left s (length b))\<close>]]
+  by (simp add: shift_m_shF)
 
 lemma shF_step_le_final:
   \<open>i < length b \<Longrightarrow> fst (fst (shift_step a b left (shF a b left s i) i)) \<le> fst (fst (shift_m s a b left))\<close>
@@ -396,7 +498,8 @@ lemma shF_count_stage:
 
 lemma shF_count_or:
   \<open>i < length b \<Longrightarrow> \<not> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
-   Suc (fst (fst (shF a b left s i))) \<le> fst (fst (shift_m s a b left))\<close>
+   fst (fst (and_m (fst (shF a b left s i)) (lneg (fst (snd (snd (shF a b left s i))))) (lneg (b ! i))))
+   \<le> fst (fst (shift_m s a b left))\<close>
   using shF_le_final[of \<open>Suc i\<close> b a left s] by (simp add: shF_Suc_or)
 
 lemma unat_len_sub: \<open>unat p < n \<Longrightarrow> n < 2 ^ 64 \<Longrightarrow> unat (word_of_nat n - (p :: 64 word)) = n - unat p\<close>
@@ -407,13 +510,20 @@ lemma unat_double_p: \<open>unat p \<le> n - unat p \<Longrightarrow> n < 2 ^ 64
 
 lemma shF_or_lt:
   \<open>i < length b \<Longrightarrow> \<not> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
-   fst (fst (shift_m s a b left)) < 2 ^ 64 \<Longrightarrow> fst (fst (shF a b left s i)) < 18446744073709551615\<close>
-  using shF_count_or[of i b a left s] by simp
+   fst (fst (ite_vec_m (fst (shF a b left s (length b))) (fst (snd (snd (shF a b left s (length b)))))
+     (replicate (length a) (lconst False)) (fst (snd (shF a b left s (length b)))))) < 18446744073709551616 \<Longrightarrow>
+   fst (fst (and_m (fst (shF a b left s i)) (lneg (fst (snd (snd (shF a b left s i))))) (lneg (b ! i))))
+   < 18446744073709551616\<close>
+  using shF_count_or[of i b a left s] by (simp add: shift_m_shF)
 
 lemma shF_stage_lt:
   \<open>i < length b \<Longrightarrow> snd (snd (snd (shF a b left s i))) < length a \<Longrightarrow>
-   fst (fst (shift_m s a b left)) < 2 ^ 64 \<Longrightarrow> fst (fst (shF a b left s i)) + length a < 2 ^ 64\<close>
-  using shF_count_stage[of i b a left s] by (simp add: shF_len)
+   fst (fst (ite_vec_m (fst (shF a b left s (length b))) (fst (snd (snd (shF a b left s (length b)))))
+     (replicate (length a) (lconst False)) (fst (snd (shF a b left s (length b)))))) < 18446744073709551616 \<Longrightarrow>
+   fst (fst (ite_vec_m (fst (shF a b left s i)) (b ! i)
+            (shift_const_m (fst (snd (shF a b left s i))) (snd (snd (snd (shF a b left s i)))) left)
+            (fst (snd (shF a b left s i))))) < 18446744073709551616\<close>
+  using shF_count_stage[of i b a left s] by (simp add: shift_m_shF)
 
 lemma shift_m_ge [simp]: \<open>fst s \<le> fst (fst (shift_m s a b left))\<close>
   using shF_le_final[of 0 b a left s] by simp
@@ -422,13 +532,6 @@ lemma shift_m_len [simp]: \<open>length (snd (shift_m s a b left)) = length a\<c
   by (simp add: shift_m_shF)
 
 text \<open>\<^const>\<open>divrem_m\<close>\<close>
-
-lemma divrem_m_count [simp]:
-  \<open>fst (fst (divrem_m s a b)) =
-     fst s + 19 * length a + 2 * length b + 3 + mulc (length a + length a) (length a + length a)\<close>
-  \<open>length (fst (snd (divrem_m s a b))) = length a\<close>
-  \<open>length (snd (snd (divrem_m s a b))) = length a\<close>
-  by (simp_all add: divrem_m_def Let_def split_def)
 
 text \<open>The intermediate states of \<^const>\<open>divrem_m\<close>, named so that the terms in the proof of
   \<^verbatim>\<open>bv_divrem\<close> stay small.\<close>
@@ -462,19 +565,21 @@ lemmas dr_fold = dr3_def[symmetric] dr4_def[symmetric] dr5_def[symmetric] dr6_de
   dr12_def[symmetric]
 
 lemma dr_counts [simp]:
-  \<open>fst (fst (dr3 s a b)) = fst s + length a + length a + 2 * length b\<close>
-  \<open>fst (fst (dr4 s a b)) = fst (fst (dr3 s a b)) + 2 * length a\<close>
-  \<open>fst (fst (dr5 s a b)) = fst (fst (dr4 s a b)) + 2 * length a\<close>
-  \<open>fst (fst (dr6 s a b)) = Suc (fst (fst (dr5 s a b)))\<close>
-  \<open>fst (fst (dr7 s a b)) = fst (fst (dr6 s a b)) + mulc (length a + length a) (length a + length a)\<close>
+  \<open>fst s + length a + length a \<le> fst (fst (dr3 s a b))\<close>
+  \<open>fst (fst (dr3 s a b)) \<le> fst (fst (dr4 s a b))\<close>
+  \<open>fst (fst (dr4 s a b)) \<le> fst (fst (dr5 s a b))\<close>
+  \<open>fst (fst (dr5 s a b)) \<le> fst (fst (dr6 s a b))\<close>
+  \<open>fst (fst (dr6 s a b)) \<le> fst (fst (dr7 s a b))\<close>
   \<open>length (snd (dr7 s a b)) = length a + length a\<close>
-  \<open>fst (fst (dr8 s a b)) = fst (fst (dr7 s a b)) + 3 * (length a + length a)\<close>
+  \<open>fst (fst (dr7 s a b)) \<le> fst (fst (dr8 s a b))\<close>
   \<open>length (fst (snd (dr8 s a b))) = length a + length a\<close>
-  \<open>fst (fst (dr9 s a b)) = fst (fst (dr8 s a b)) + 2 * (length a + length a)\<close>
-  \<open>fst (fst (dr10 s a b)) = fst (fst (dr9 s a b)) + 3 * length a\<close>
-  \<open>fst (fst (dr11 s a b)) = Suc (fst (fst (dr10 s a b)))\<close>
-  \<open>fst (fst (dr12 s a b)) = Suc (fst (fst (dr11 s a b)))\<close>
-  by (simp_all add: dr3_def dr4_def dr5_def dr6_def dr7_def dr8_def dr9_def dr10_def dr11_def dr12_def)
+  \<open>fst (fst (dr8 s a b)) \<le> fst (fst (dr9 s a b))\<close>
+  \<open>fst (fst (dr9 s a b)) \<le> fst (fst (dr10 s a b))\<close>
+  \<open>fst (fst (dr10 s a b)) \<le> fst (fst (dr11 s a b))\<close>
+  \<open>fst (fst (dr11 s a b)) \<le> fst (fst (dr12 s a b))\<close>
+  using eq_m_count[of \<open>(fst s + length a + length a, snd s)\<close>]
+  by (simp_all add: dr3_def dr4_def dr5_def dr6_def dr7_def dr8_def dr9_def dr10_def dr11_def dr12_def
+      split_def)
 
 lemma divrem_m_dr:
   \<open>divrem_m s a b =
@@ -482,6 +587,32 @@ lemma divrem_m_dr:
       snd (fresh_vec_m (fst s + length a, snd s) (length a)))\<close>
   by (simp add: divrem_m_def Let_def split_def dr3_def dr4_def dr5_def dr6_def dr7_def dr8_def dr9_def
       dr10_def dr11_def dr12_def)
+
+lemma divrem_m_count [simp]:
+  \<open>fst (fst (divrem_m s a b)) = fst (fst (dr12 s a b))\<close>
+  \<open>length (fst (snd (divrem_m s a b))) = length a\<close>
+  \<open>length (snd (snd (divrem_m s a b))) = length a\<close>
+  by (simp_all add: divrem_m_dr addc_m_def)
+
+lemma dr12_ge [simp]: \<open>fst s \<le> fst (fst (dr12 s a b))\<close>
+  using dr_counts[of s a b] by linarith
+
+text \<open>The bound on the number of variables of \<^const>\<open>divrem_m\<close> bounds its intermediate states.\<close>
+
+lemma dr_lt:
+  assumes \<open>fst (fst (dr12 s a b)) < 18446744073709551616\<close>
+  shows \<open>fst s + length a < 18446744073709551616\<close>
+    \<open>fst s + length a + length a < 18446744073709551616\<close>
+    \<open>fst (fst (dr3 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr4 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr5 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr6 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr7 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr8 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr9 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr10 s a b)) < 18446744073709551616\<close>
+    \<open>fst (fst (dr11 s a b)) < 18446744073709551616\<close>
+  using assms dr_counts[of s a b] by linarith+
 
 context QFBV_ctx
 begin
@@ -554,17 +685,6 @@ lemma clause2_spec [crush_specs]:
   apply (crush_base inline: vec_push_def)
   done
 
-definition gate_and_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
-  [crush_contracts]: \<open>gate_and_contract s a b \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (and_m s a b)), snd (and_m s a b), TNil)\<rangle>)\<close>
-
-lemma gate_and_spec [crush_specs]:
-  shows \<open>\<Gamma>; gate_and (cnf_of s) a b \<Turnstile>\<^sub>F gate_and_contract s a b\<close>
-  apply (crush_boot f: gate_and_def contract: gate_and_contract_def)
-  apply (crush_base simp add: and_m_def fresh_m_def addc_m_def)
-  done
-
 definition clause1_contract :: \<open>Lit \<Rightarrow> ('s, Lit list, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>clause1_contract a \<equiv>
      make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>r = [a]\<rangle>)\<close>
@@ -575,9 +695,53 @@ lemma clause1_spec [crush_specs]:
   apply (crush_base inline: vec_push_def)
   done
 
+definition tseitin_and_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>tseitin_and_contract s a b \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (and_t s a b)), snd (and_t s a b), TNil)\<rangle>)\<close>
+
+lemma tseitin_and_spec [crush_specs]:
+  shows \<open>\<Gamma>; tseitin_and (cnf_of s) a b \<Turnstile>\<^sub>F tseitin_and_contract s a b\<close>
+  apply (crush_boot f: tseitin_and_def contract: tseitin_and_contract_def)
+  apply (crush_base simp add: and_t_def fresh_m_def addc_m_def)
+  done
+
+definition tseitin_xor_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>tseitin_xor_contract s a b \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (xor_t s a b)), snd (xor_t s a b), TNil)\<rangle>)\<close>
+
+lemma tseitin_xor_spec [crush_specs]:
+  shows \<open>\<Gamma>; tseitin_xor (cnf_of s) a b \<Turnstile>\<^sub>F tseitin_xor_contract s a b\<close>
+  apply (crush_boot f: tseitin_xor_def contract: tseitin_xor_contract_def)
+  apply (crush_base simp add: xor_t_def fresh_m_def addc_m_def)
+  done
+
+definition tseitin_ite_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>tseitin_ite_contract s c a b \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (ite_t s c a b)), snd (ite_t s c a b), TNil)\<rangle>)\<close>
+
+lemma tseitin_ite_spec [crush_specs]:
+  shows \<open>\<Gamma>; tseitin_ite (cnf_of s) c a b \<Turnstile>\<^sub>F tseitin_ite_contract s c a b\<close>
+  apply (crush_boot f: tseitin_ite_def contract: tseitin_ite_contract_def)
+  apply (crush_base simp add: ite_t_def fresh_m_def addc_m_def)
+  done
+
+definition gate_and_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>gate_and_contract s a b \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>fst (fst (and_m s a b)) < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (and_m s a b)), snd (and_m s a b), TNil)\<rangle>)\<close>
+
+lemma gate_and_spec [crush_specs]:
+  shows \<open>\<Gamma>; gate_and (cnf_of s) a b \<Turnstile>\<^sub>F gate_and_contract s a b\<close>
+  apply (crush_boot f: gate_and_def contract: gate_and_contract_def)
+  apply (crush_base simp add: and_m_def lconst_def)
+  done
+
 definition gate_or_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>gate_or_contract s a b \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>fst (fst (or_m s a b)) < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (or_m s a b)), snd (or_m s a b), TNil)\<rangle>)\<close>
 
 lemma gate_or_spec [crush_specs]:
@@ -588,29 +752,29 @@ lemma gate_or_spec [crush_specs]:
 
 definition gate_xor_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>gate_xor_contract s a b \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>fst (fst (xor_m s a b)) < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (xor_m s a b)), snd (xor_m s a b), TNil)\<rangle>)\<close>
 
 lemma gate_xor_spec [crush_specs]:
   shows \<open>\<Gamma>; gate_xor (cnf_of s) a b \<Turnstile>\<^sub>F gate_xor_contract s a b\<close>
   apply (crush_boot f: gate_xor_def contract: gate_xor_contract_def)
-  apply (crush_base simp add: xor_m_def fresh_m_def addc_m_def)
+  apply (crush_base simp add: xor_m_def lconst_def)
   done
 
 definition gate_ite_contract :: \<open>st \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>gate_ite_contract s c a b \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>fst (fst (ite_m s c a b)) < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (ite_m s c a b)), snd (ite_m s c a b), TNil)\<rangle>)\<close>
 
 lemma gate_ite_spec [crush_specs]:
   shows \<open>\<Gamma>; gate_ite (cnf_of s) c a b \<Turnstile>\<^sub>F gate_ite_contract s c a b\<close>
   apply (crush_boot f: gate_ite_def contract: gate_ite_contract_def)
-  apply (crush_base simp add: ite_m_def fresh_m_def addc_m_def)
+  apply (crush_base simp add: ite_m_def split_def)
   done
 
 definition gate_bitwise_contract :: \<open>st \<Rightarrow> BinOp \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>gate_bitwise_contract s op a b \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst s) < 2 ^ 64\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>fst (fst (bitw_m op s a b)) < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (bitw_m op s a b)), snd (bitw_m op s a b), TNil)\<rangle>)\<close>
 
 lemma gate_bitwise_spec [crush_specs]:
@@ -863,7 +1027,7 @@ lemma bv_bitwise_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv bitwise_m_foldl bitwise_fold_count bitwise_step_def)
+        antisym_conv bitwise_m_foldl bitwise_fold_count bitwise_step_def bitwise_step_lt)
     done
   done
 
@@ -899,7 +1063,7 @@ lemma bv_add_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv add_m_def add_fold_count add_step_eq)
+        antisym_conv add_m_def add_fold_count add_step_eq add_step_lt)
     done
   done
 
@@ -932,7 +1096,7 @@ lemma bv_partial_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv partial_m_foldl partial_fold_count partial_step_def unat_sub_not_less word_le_nat_alt)
+        antisym_conv partial_m_foldl partial_fold_count partial_step_def partial_step_lt unat_sub_not_less word_le_nat_alt)
     done
   done
 
@@ -957,20 +1121,20 @@ lemma bv_mul_spec [crush_specs]:
                \<langle>unat i \<le> length a \<and>
                 c = cnf_of (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<unat i])) \<and>
                 r = snd (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<unat i]) \<and>
-                fst s + mulc (length a) (unat i) + mulr (length a) (unat i) < 2 ^ 64 \<and>
+                fst (fst (mul_m s a b)) < 2 ^ 64 \<and>
                 length a - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gc c gr r gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> acc_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
                \<langle>unat i < length a \<and>
                 c = cnf_of (fst (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<unat i])) \<and>
                 r = snd (foldl (mul_step a b) (s, replicate (length a) (lconst False)) [0..<unat i]) \<and>
-                fst s + mulc (length a) (unat i) + mulr (length a) (unat i) < 2 ^ 64 \<and>
+                fst (fst (mul_m s a b)) < 2 ^ 64 \<and>
                 length a - unat i \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = (cnf_of (fst (mul_m s a b)), snd (mul_m s a b), TNil)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv mul_m_def mul_step_eq)
+        antisym_conv mul_step_eq mul_step_lt mul_m_fold)
     done
   done
 
@@ -1002,7 +1166,7 @@ lemma bv_eq_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv eq_m_def eq_fold_count eq_step_eq)
+        antisym_conv eq_m_def eq_step_eq eq_step_lt)
     done
   done
 
@@ -1050,7 +1214,7 @@ lemma bv_ite_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv ite_vec_m_foldl ite_fold_count ite_step_def)
+        antisym_conv ite_vec_m_foldl ite_fold_count ite_step_def ite_step_lt)
     done
   done
 
@@ -1087,8 +1251,9 @@ lemma bv_shift_spec [crush_specs]:
     apply (crush_base inline: len_def vec_from_elem_def simp add: word_less_nat_alt word_le_nat_alt unat_of_nat_eq
         unat_of_nat_64 unat_word_Suc_simp shF_len shF_Suc_stage shF_Suc_or unat_len_sub)
     apply (auto intro: shF_or_lt shF_stage_lt simp: unat_double_p)
-    apply (simp_all add: shift_m_shF)
-    apply (rule le_less_trans[rotated], assumption, simp add: shF_mono)
+    apply ((simp_all add: shift_m_shF)?)
+    apply ((rule le_less_trans[rotated], assumption, simp add: shF_mono)+)?
+    apply (all \<open>(rule shF_or_lt shF_stage_lt; assumption)?\<close>)
     done
   done
 
@@ -1106,7 +1271,7 @@ lemma bv_divrem_spec [crush_specs]:
   shows \<open>\<Gamma>; bv_divrem (cnf_of s) a b \<Turnstile>\<^sub>F bv_divrem_contract s a b\<close>
   apply (crush_boot f: bv_divrem_def contract: bv_divrem_contract_def)
   apply (crush_base inline: len_def vec_from_elem_def
-      simp add: unat_of_nat_eq unat_of_nat_64 unat_double unat_double2 divrem_m_dr dr_fold)
+      simp add: unat_of_nat_eq unat_of_nat_64 unat_double unat_double2 divrem_m_dr dr_fold dr_lt)
   done
 
 end
@@ -1222,8 +1387,9 @@ primrec bok :: \<open>nat \<Rightarrow> Lit list list \<Rightarrow> Lit list lis
       length (snd (blast_m vs dl (fst (blast_m vs dl s c)) a)) < 2 ^ 64 \<and>
       length (snd (blast_m vs dl (fst (blast_m vs dl s c)) a)) \<le>
         length (snd (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b)) \<and>
-      fst (fst (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b)) +
-        length (snd (blast_m vs dl (fst (blast_m vs dl s c)) a)) < 2 ^ 64)\<close>
+      fst (fst (ite_vec_m (fst (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b))
+        (snd (blast_m vs dl s c) ! 0) (snd (blast_m vs dl (fst (blast_m vs dl s c)) a))
+        (snd (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b)))) < 2 ^ 64)\<close>
 
 lemma bok_intro:
   assumes \<open>cwt (map length vs) (map length dl) t\<close>
@@ -1297,9 +1463,10 @@ next
   let ?s1 = \<open>fst (blast_m vs dl s c)\<close>
   let ?s2 = \<open>fst (blast_m vs dl ?s1 a)\<close>
   let ?s3 = \<open>fst (blast_m vs dl ?s2 b)\<close>
-  have fin: \<open>fst ?s3 + length (snd (blast_m vs dl ?s1 a)) < 2 ^ 64\<close>
-    using CoreTerm_Ite.prems(5) by simp
-  have m3: \<open>fst ?s3 < 2 ^ 64\<close> using fin by simp
+  have fin: \<open>fst (fst (ite_vec_m ?s3 (snd (blast_m vs dl s c) ! 0) (snd (blast_m vs dl ?s1 a))
+      (snd (blast_m vs dl ?s2 b)))) < 2 ^ 64\<close>
+    using CoreTerm_Ite.prems(5) by (simp add: split_def Let_def)
+  have m3: \<open>fst ?s3 < 2 ^ 64\<close> using le_less_trans[OF ite_vec_m_count(1) fin] .
   have m2: \<open>fst ?s2 < 2 ^ 64\<close> using le_less_trans[OF blast_m_mono m3] .
   have m1: \<open>fst ?s1 < 2 ^ 64\<close> using le_less_trans[OF blast_m_mono m2] .
   have cwt: \<open>cwt ?W ?D c\<close> \<open>cwt ?W ?D a\<close> \<open>cwt ?W ?D b\<close> \<open>cwidth ?W ?D c = 1\<close> \<open>cwidth ?W ?D a = cwidth ?W ?D b\<close>

@@ -716,19 +716,19 @@ definition "clause_status" :: \<open>((bool option) list) \<Rightarrow> (Lit lis
   \<rbrakk>\<close>
 
 (* Rust: propagate_pass *)
-definition "propagate_pass" :: \<open>((bool option) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> ('s, (((bool option) list) \<times> bool \<times> tnil) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>propagate_pass \<equiv> \<lambda>a cs. FunctionBody \<lbrakk>
+definition "propagate_pass" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>propagate_pass \<equiv> \<lambda>cs a trail. FunctionBody \<lbrakk>
     let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-    let mut changed = false;
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(cs) {
       match clause_status(* a, cs[* i]) {
         Status_Conflict \<Rightarrow> {
-          return None;
+          return (* a, * trail, false);
         },
         Status_Unit(l) \<Rightarrow> {
           * (a[l.Lit_var]) = Some(!(l.Lit_neg));
-          * changed = true;
+          vec_push(trail, l);
         },
         Status_Satisfied \<Rightarrow> {
           ()
@@ -739,25 +739,25 @@ definition "propagate_pass" :: \<open>((bool option) list) \<Rightarrow> ((Lit l
       };
       * i += 1_usize;
     };
-    Some((* a, * changed))
+    (* a, * trail, true)
   \<rbrakk>\<close>
 
 (* Rust: propagate *)
-definition "propagate" :: \<open>((bool option) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>propagate \<equiv> \<lambda>a cs. FunctionBody \<lbrakk>
+definition "propagate" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>propagate \<equiv> \<lambda>cs a trail. FunctionBody \<lbrakk>
     let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
-      match propagate_pass(* a, cs) {
-        None \<Rightarrow> {
-          return None;
-        },
-        Some((a1, changed)) \<Rightarrow> {
-          if !changed {
-            return Some(a1);
-          };
-          * a = a1;
-        }
-      }
+      let n = len(* trail);
+      let destr_3 = propagate_pass(cs, * a, * trail);
+      let a1 = destr_3.0;
+      let t1 = destr_3.1;
+      let ok_v = destr_3.2;
+      if (!ok_v) || (len(t1) == n) {
+        return (a1, t1, ok_v);
+      };
+      * a = a1;
+      * trail = t1;
     };
     panic!("unreachable: diverging expression completed")
   \<rbrakk>\<close>
@@ -775,41 +775,23 @@ definition "find_unassigned" :: \<open>((bool option) list) \<Rightarrow> ('s, (
     None
   \<rbrakk>\<close>
 
-text \<open>Recursive group dpll: defined by iterating dpll_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
-
-definition "dpll_rec_step" :: \<open>((((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
-  \<open>dpll_rec_step \<equiv> \<lambda>rec_dpll. (\<lambda>cs a. FunctionBody \<lbrakk>
-    match propagate(a, cs) {
-      None \<Rightarrow> {
-        None
-      },
-      Some(a) \<Rightarrow> {
-        match find_unassigned(a) {
-          None \<Rightarrow> {
-            Some(a)
-          },
-          Some(v) \<Rightarrow> {
-            let mut a1 = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-            * (a1[v]) = Some(true);
-            match \<epsilon>\<open>rec_dpll\<close>(cs, * a1) {
-              Some(r) \<Rightarrow> {
-                Some(r)
-              },
-              None \<Rightarrow> {
-                let mut a2 = { let init_2 = a; \<llangle>init_2 :: (bool option) list\<rrangle> };
-                * (a2[v]) = Some(false);
-                \<epsilon>\<open>rec_dpll\<close>(cs, * a2)
-              }
-            }
-          }
+(* Rust: backtrack *)
+definition "backtrack" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>backtrack \<equiv> \<lambda>a trail p. FunctionBody \<lbrakk>
+    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while p < len(* trail) {
+      match vec_pop(trail) {
+        Some(l) \<Rightarrow> {
+          * (a[l.Lit_var]) = None
+        },
+        None \<Rightarrow> {
+          ()
         }
       }
-    }
-  \<rbrakk>)\<close>
-
-(* Rust: dpll *)
-definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>dpll \<equiv> ((dpll_rec_step ^^ urust_fuel) (\<lambda>cs a. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+    };
+    (* a, * trail)
+  \<rbrakk>\<close>
 
 (* Rust: read_bits *)
 definition "read_bits" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
@@ -833,6 +815,51 @@ definition "read_model" :: \<open>((bool option) list) \<Rightarrow> ((Lit list)
       * i += 1_usize;
     };
     * m
+  \<rbrakk>\<close>
+
+(* Rust: dpll *)
+definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>dpll \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>
+    let mut a = { let init_1 = vec_from_elem(None, n); \<llangle>init_1 :: (bool option) list\<rrangle> };
+    let mut trail = { let init_3 = { let res_2 = []; \<llangle>res_2 :: Lit list\<rrangle> }; \<llangle>init_3 :: Lit list\<rrangle> };
+    let mut lim = { let init_5 = { let res_4 = []; \<llangle>res_4 :: (64 word) list\<rrangle> }; \<llangle>init_5 :: (64 word) list\<rrangle> };
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
+      let destr_6 = propagate(cs, * a, * trail);
+      let a1 = destr_6.0;
+      let t1 = destr_6.1;
+      let ok_v = destr_6.2;
+      * a = a1;
+      * trail = t1;
+      if ok_v {
+        match find_unassigned(* a) {
+          None \<Rightarrow> {
+            return Some(* a);
+          },
+          Some(v) \<Rightarrow> {
+            vec_push(lim, len(* trail));
+            * (a[v]) = Some(true);
+            vec_push(trail, Lit_mk { Lit_var: v, Lit_neg: false });
+          }
+        }
+      } else {
+        match vec_pop(lim) {
+          None \<Rightarrow> {
+            return None;
+          },
+          Some(p) \<Rightarrow> {
+            let d = (* trail)[p];
+            let destr_7 = backtrack(* a, * trail, p);
+            let a2 = destr_7.0;
+            let t2 = destr_7.1;
+            * a = a2;
+            * trail = t2;
+            * (a[d.Lit_var]) = Some(d.Lit_neg);
+            vec_push(trail, lit_neg(d));
+          }
+        }
+      }
+    };
+    panic!("unreachable: diverging expression completed")
   \<rbrakk>\<close>
 
 (* Rust: encode *)
@@ -876,7 +903,7 @@ definition "solve_core" :: \<open>CoreProblem \<Rightarrow> ('s, Answer, 'abort,
     let destr_1 = encode(p);
     let cnf = destr_1.0;
     let vars = destr_1.1;
-    match dpll(cnf.Cnf_clauses, vec_from_elem(None, cnf.Cnf_num_vars)) {
+    match dpll(cnf.Cnf_clauses, cnf.Cnf_num_vars) {
       None \<Rightarrow> {
         Answer_Unsat
       },

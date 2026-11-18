@@ -1013,6 +1013,11 @@ proof -
     using encode_sound[OF assms(1-3) assms(6)] by simp
 qed
 
+text \<open>The fuel of the search loop of \<^verbatim>\<open>dpll\<close> on the CNF formula of \<open>p\<close>: each of its iterations
+  increases a number below \<open>3 ^ n\<close>, \<open>n\<close> the number of variables (\<^const>\<open>meas\<close>).\<close>
+definition dpll_fuel :: \<open>CoreProblem \<Rightarrow> nat\<close> where
+  \<open>dpll_fuel p \<equiv> 3 ^ fst (fst (encode_m p))\<close>
+
 context QFBV_ctx
 begin
 
@@ -1024,7 +1029,7 @@ text \<open>The theorem: \<^const>\<open>csolve_contract\<close> holds whenever 
   \<^const>\<open>fuel_bound\<close> (\<open>fuel_bound_le\<close>), which the proof uses; a problem that is not well-sorted
   makes the precondition of the contract false.\<close>
 theorem solve_core_spec:
-  assumes \<open>csize_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
+  assumes \<open>csize_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>dpll_fuel p < urust_fuel\<close>
   shows \<open>\<Gamma>; solve_core p \<Turnstile>\<^sub>F csolve_contract p\<close>
 proof (cases \<open>cproblem_wt p\<close>)
   case True
@@ -1038,10 +1043,14 @@ proof (cases \<open>cproblem_wt p\<close>)
   have nv: \<open>unat (word_of_nat (fst s) :: 64 word) = fst s\<close>
     using s64 by (simp add: unat_of_nat_eq)
   have dpll_pre: \<open>cproblem_wt p \<Longrightarrow>
-      (\<forall>c \<in> set (snd s). lits_lt (fst s) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64) \<and>
+      dpll_cs_ok (snd s) (fst s) \<and>
       length (snd s) + 2 \<le> urust_fuel \<and> length (snd s) < 2 ^ 64 \<and>
-      fst s + 2 \<le> urust_fuel \<and> fst s < 2 ^ 64\<close>
-    using encode_wf[OF _ e s64] fb assms2 by fastforce
+      fst s + 2 \<le> urust_fuel \<and> 3 ^ fst s < urust_fuel\<close>
+    using encode_wf[OF _ e s64] fb assms2 assms(3) e
+    by (fastforce simp: dpll_cs_ok_def dpll_fuel_def)
+  have unsat': \<open>\<not> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)) \<Longrightarrow> \<forall>m. cis_assignment p m \<longrightarrow> \<not> csatisfies p m\<close>
+    if \<open>cproblem_wt p\<close>
+    using unsat_answer[OF that e s64] by blast
   have rm_pre: \<open>cproblem_wt p \<Longrightarrow>
       (\<forall>ls \<in> set vs. lits_lt (fst s) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 64) \<and>
       length vs + 2 \<le> urust_fuel \<and> length vs < 2 ^ 64\<close>
@@ -1061,7 +1070,7 @@ proof (cases \<open>cproblem_wt p\<close>)
         contracts add: encode_contract_def dpll_top_contract_def read_model_contract_def
         split: option.splits
         simp add: e assms2 nv Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
-    using assms2 dpll_pre rm_pre unsat_answer[OF _ e s64] sat_answer[OF _ e s64]
+    using assms2 dpll_pre rm_pre unsat' sat_answer[OF _ e s64]
     by (auto simp: cis_model_def split: option.splits)
 next
   case False
@@ -1197,7 +1206,7 @@ definition lower_problem_contract :: \<open>Problem \<Rightarrow> ('s, CoreProbl
 
 text \<open>The rewriting of a problem only calls \<^const>\<open>lower\<close> and builds references with \<^const>\<open>cref\<close>;
   narrow the automation to those two specifications so the loop proofs stay fast.\<close>
-declare dpll_lit_value_spec dpll_clause_status_spec dpll_propagate_pass_spec dpll_propagate_spec dpll_find_unassigned_spec dpll_top_spec dpll_read_bits_spec read_model_spec push_def_spec cnot_spec cbin_spec cite_spec cextract_spec cone_spec cneg_spec cmsb_spec cabs_spec cslt_spec csle_spec lower_bin_spec lit_const_spec lit_neg_spec fresh_fn_spec add_clause_spec clause3_spec clause2_spec gate_and_spec clause1_spec gate_or_spec gate_xor_spec gate_ite_spec gate_bitwise_spec bv_not_spec bv_const_spec bv_of_nat_spec bv_shift_const_spec bv_zext_spec bv_extract_spec bv_concat_spec bv_fresh_spec bv_bitwise_spec bv_add_spec bv_partial_spec bv_mul_spec bv_eq_spec bv_ult_spec bv_ite_spec bv_shift_spec bv_divrem_spec blast_bin_spec blast_spec encode_spec [crush_specs del]
+declare dpll_lit_value_spec dpll_clause_status_spec dpll_propagate_pass_spec dpll_propagate_spec dpll_find_unassigned_spec dpll_backtrack_spec dpll_top_spec dpll_read_bits_spec read_model_spec push_def_spec cnot_spec cbin_spec cite_spec cextract_spec cone_spec cneg_spec cmsb_spec cabs_spec cslt_spec csle_spec lower_bin_spec lit_const_spec lit_neg_spec fresh_fn_spec add_clause_spec clause3_spec clause2_spec gate_and_spec clause1_spec gate_or_spec gate_xor_spec gate_ite_spec gate_bitwise_spec bv_not_spec bv_const_spec bv_of_nat_spec bv_shift_const_spec bv_zext_spec bv_extract_spec bv_concat_spec bv_fresh_spec bv_bitwise_spec bv_add_spec bv_partial_spec bv_mul_spec bv_eq_spec bv_ult_spec bv_ite_spec bv_shift_spec bv_divrem_spec blast_bin_spec blast_spec encode_spec [crush_specs del]
 
 lemma lower_problem_spec [crush_specs]:
   shows \<open>\<Gamma>; lower_problem p \<Turnstile>\<^sub>F lower_problem_contract p\<close>
@@ -1275,13 +1284,14 @@ subsection \<open>\<^verbatim>\<open>solve\<close> meets the specification's con
 
 text \<open>The top-level theorem: \<^const>\<open>solve\<close> meets \<^const>\<open>solve_contract\<close> of the specification (Sat yields a
   model, Unsat rules out every model, well-sortedness as precondition) whenever the translation's
-  fuel covers \<^const>\<open>size_bound\<close>, which is expressed on the problem alone.\<close>
+  fuel covers \<^const>\<open>size_bound\<close>, which is expressed on the problem alone, and exceeds
+  \<^const>\<open>dpll_fuel\<close> of the rewritten problem, the bound of the search loop of \<^verbatim>\<open>dpll\<close>.\<close>
 text \<open>\<^const>\<open>solve\<close> only calls \<^const>\<open>lower_problem\<close> and \<^const>\<open>solve_core\<close>; narrow the
   automation's specification set to those so its proof stays fast.\<close>
 declare lower_spec cref_spec lower_problem_spec [crush_specs del]
 
 theorem solve_spec:
-  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close>
+  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>dpll_fuel (lower_problem_m p) < urust_fuel\<close>
   shows \<open>\<Gamma>; solve p \<Turnstile>\<^sub>F solve_contract p\<close>
 proof (cases \<open>problem_wt p\<close>)
   case True
@@ -1291,11 +1301,12 @@ proof (cases \<open>problem_wt p\<close>)
   obtain q where q: \<open>lower_problem_m p = q\<close> by blast
   have sz: \<open>csize_bound q \<le> urust_fuel\<close> using lower_size_bound[OF True bnd] assms(1) q by simp
   have sz2: \<open>fuel_bound q < 2 ^ 64\<close> using lower_fuel_lt[OF True assms(2)] q by simp
+  have df: \<open>dpll_fuel q < urust_fuel\<close> using assms(3) q by simp
   have cwt: \<open>cproblem_wt q\<close> using lower_problem_correct(1)[OF True bnd] q by simp
   have cm: \<open>cis_model q m = is_model p m\<close> for m using lower_problem_correct(2)[OF True bnd] q by simp
   show ?thesis
     apply (crush_boot f: solve_def contract: solve_contract_def)
-    apply (crush_base specs add: lower_problem_spec solve_core_spec[OF sz sz2]
+    apply (crush_base specs add: lower_problem_spec solve_core_spec[OF sz sz2 df]
         contracts add: lower_problem_contract_def csolve_contract_def
         simp add: lp_pre_def True assms q cwt)
     using cm assms by (auto split: Answer.splits)
@@ -1325,18 +1336,19 @@ lemma QFBV_ctxI:
   by intro_locales
 
 text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>QFBV_Spec\<close>. The bound on
-  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close>, which \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close>
-  supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
+  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close> plus \<^const>\<open>dpll_fuel\<close> of the rewritten problem, which
+  \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close> supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
 theorem solve_correct:
   shows \<open>solve_correct \<Gamma>\<close>
 proof (unfold solve_correct_def, intro allI impI)
   fix p :: Problem
   assume \<open>problem_wt p \<and> sizes_ok p\<close>
   then have ov: \<open>sizes_ok p\<close> by simp
-  have \<open>\<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close> if \<open>size_bound p \<le> fuel\<close> for fuel
-    by (rule QFBV_ctx.solve_spec[OF QFBV_ctxI that ov])
+  have \<open>\<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
+    if \<open>size_bound p + Suc (dpll_fuel (lower_problem_m p)) \<le> fuel\<close> for fuel
+    by (rule QFBV_ctx.solve_spec[OF QFBV_ctxI _ ov]) (use that in simp_all)
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
-    by (intro exI[of _ \<open>size_bound p\<close>]) simp
+    by (intro exI[of _ \<open>size_bound p + Suc (dpll_fuel (lower_problem_m p))\<close>]) simp
 qed
 
 end

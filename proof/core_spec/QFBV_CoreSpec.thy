@@ -626,7 +626,9 @@ end
 
 subsection \<open>The overflow condition\<close>
 
-text \<open>\<^const>\<open>size_bound\<close> bounds the fuel; it may be large. The counters of the solver (of type
+text \<open>\<^const>\<open>size_bound\<close> bounds the fuel of the solver except the search loop of the SAT
+  solver (whose bound, exponential in the number of CNF variables, is \<open>dpll_fuel\<close> in
+  \<^verbatim>\<open>QFBV_Proof\<close>); it may be large. The counters of the solver (of type
   \<^verbatim>\<open>usize\<close>) are bounded by the following linear measures instead.\<close>
 
 text \<open>The weight of a term for the counters of the rewriting: one plus the width of each subterm.\<close>

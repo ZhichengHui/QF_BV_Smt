@@ -676,22 +676,6 @@ fn propagate_pass(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>) -> 
     (a, trail, true)
 }
 
-/// Unit propagation to a fixpoint, from the current assignment and trail. The flag is false on a
-/// conflict.
-fn propagate(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>) -> (Vec<Option<bool>>, Vec<Lit>, bool) {
-    let mut a = a;
-    let mut trail = trail;
-    loop {
-        let n = trail.len();
-        let (a1, t1, ok) = propagate_pass(cs, a, trail);
-        if !ok || t1.len() == n {
-            return (a1, t1, ok);
-        }
-        a = a1;
-        trail = t1;
-    }
-}
-
 fn find_unassigned(a: &Vec<Option<bool>>) -> Option<usize> {
     let mut i: usize = 0;
     while i < a.len() {
@@ -739,8 +723,8 @@ fn read_model(a: &Vec<Option<bool>>, vars: &Vec<Vec<Lit>>) -> Vec<Vec<bool>> {
 // Watched literals. Each clause of at least two literals watches two of them; slot `2c + k` is
 // the watch `k` of clause `c`. `pos[s]` is the position in its clause of the literal that slot `s`
 // watches, `next[s]` the next slot in the list of the same literal, and `head[lit_index(l)]` the
-// first slot of the list of literal `l`. A link at or above `next.len()` ends a list. The watches
-// only guide propagation: every unit or conflict they point to is confirmed by `clause_status`.
+// first slot of the list of literal `l`. A link at or above `next.len()` ends a list. Every unit or
+// conflict the watches point to is also confirmed by `clause_status`.
 
 fn lit_index(l: Lit) -> usize {
     if l.neg {
@@ -906,7 +890,9 @@ fn wpropagate(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<u
 /// decisions at or before it. A pass over the clauses first assigns the unit clauses; then the
 /// watches propagate the trail entries from position `q` on. On a conflict the last decision is
 /// undone with every entry after it and its negation is pushed as an implied entry (chronological
-/// backtracking). A total assignment is checked against every clause before it is returned.
+/// backtracking). The watches are complete (every clause of at least two literals that is not
+/// satisfied watches two literals that are not false, or its unit literal is still to be
+/// propagated), so a total assignment reached without a conflict satisfies every clause.
 fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let (pos0, next0, head0) = watch_init(cs, n);
     let mut pos = pos0;
@@ -928,18 +914,9 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         a = a1;
         trail = t1;
         q = q1;
-        let mut conflict = !ok;
         if ok {
             match find_unassigned(&a) {
-                None => {
-                    let (a2, t2, ok2) = propagate(cs, a, trail);
-                    if ok2 {
-                        return Some(a2);
-                    }
-                    a = a2;
-                    trail = t2;
-                    conflict = true;
-                }
+                None => return Some(a),
                 Some(v) => {
                     lim.push(trail.len());
                     a[v] = Some(true);
@@ -947,7 +924,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 }
             }
         }
-        if conflict {
+        if !ok {
             match lim.pop() {
                 None => return None,
                 Some(p) => {

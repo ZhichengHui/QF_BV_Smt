@@ -1330,8 +1330,8 @@ proof (cases \<open>problem_wt p\<close>)
     apply (crush_boot f: solve_def contract: solve_contract_def)
     apply (crush_base specs add: lower_problem_spec elim_spec solve_core_spec[OF sz2 EF(4) df] reconstruct_spec
         contracts add: lower_problem_contract_def elim_contract_def csolve_contract_def reconstruct_contract_def
-        simp add: lp_pre_def True assms q cwt fq EF(1) e split: Answer.splits)
-    sorry
+        simp add: lp_pre_def True assms q cwt fq EF(1) EF(2) e)
+    using unsat sat by (auto split: Answer.splits)
 next
   case False
   then have F: \<open>problem_wt p = False\<close> by simp

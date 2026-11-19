@@ -1652,28 +1652,6 @@ lemma settle_spec [crush_specs]:
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: word_le_nat_alt Suc_diff_le nth_map unat_small split_def unat_inc_le)
     done
-  subgoal for dv_ref m_ref j_ref v_ref i_ref
-    apply (ucincl_discharge\<open>
-      rule_tac
-        INV=\<open>\<lambda>c. \<Squnion>gd dvv gm mv gj j gv vv gi i. dv_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dvv \<star> m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star>
-               j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>vv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> Suc (unat k) \<and>
-                settle_m D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv =
-                  settle_m D (map unat kind) dv2 (Suc (unat k)) dv m (unat k) v \<and>
-                spre urust_fuel D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv \<and>
-                Suc (unat k) - unat i \<le> c\<rangle>\<close> and
-        INV'=\<open>\<lambda>c. \<Squnion>gd dvv gm mv gj j gv vv gi i. dv_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dvv \<star> m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star>
-               j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>vv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> unat k \<and>
-                settle_m D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv =
-                  settle_m D (map unat kind) dv2 (Suc (unat k)) dv m (unat k) v \<and>
-                spre urust_fuel D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv \<and>
-                Suc (unat k) - unat i \<le> Suc c\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>(fst r, fst (snd r)) = settle_m D (map unat kind) dv2 (Suc (unat k)) dv m (unat k) v\<rangle>\<close> and
-        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
-      in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_le_nat_alt Suc_diff_le nth_map unat_small split_def unat_inc_le)
-    done
   done
 
 end
@@ -1721,20 +1699,39 @@ proof (cases \<open>recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2
   have RA: \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k = 0 \<Longrightarrow>
       Suc (size (?D ! k)) \<le> urust_fuel \<and> eok urust_fuel (snd (?S k)) (fst (?S k)) (?D ! k)\<close> for k
     using RP[of k] NM[of k] by (auto simp: rstep_pre_def split_def unat_small)
+  have ME: \<open>k < length ?D \<Longrightarrow> (?M ! k = 1) = (mark ! k = 1)\<close> \<open>k < length ?D \<Longrightarrow> (?M ! k = 2) = (mark ! k = 2)\<close>
+    \<open>k < length ?D \<Longrightarrow> (?K ! k = 0) = (kind ! k = 0)\<close> for k
+    using NM[of k] by (simp_all add: unat_small unat_eq_zero)
   have RC: \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k \<noteq> 0 \<Longrightarrow>
       k < length ?dv2 \<and> length (?dv2 ! k) < 18446744073709551616 \<and>
       settle_pre urust_fuel ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k
         (if mark ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k)\<close> for k
-    using RP[of k] NM[of k] by (auto simp: rstep_pre_def split_def unat_small settle_pre_def simp del: spre.simps)
+  proof -
+    assume k: \<open>k < length ?D\<close> and m1: \<open>mark ! k \<noteq> 1\<close> and k0: \<open>kind ! k \<noteq> 0\<close>
+    have R: \<open>rstep_pre urust_fuel ?D ?K ?M ?dv2 (?S k) k\<close> using RP[OF k] .
+    have \<open>?M ! k \<noteq> 1\<close> \<open>?K ! k \<noteq> 0\<close> using ME[OF k] m1 k0 by simp_all
+    then have \<open>k < length ?dv2 \<and> length (?dv2 ! k) < 2 ^ 64 \<and>
+      spre urust_fuel ?D ?K ?dv2 (Suc k) (fst (?S k) @ [[]]) (snd (?S k)) k
+        (if ?M ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k)\<close>
+      using R unfolding rstep_pre_def split_def by (simp only: prod.case) blast
+    then show ?thesis unfolding settle_pre_def ME(2)[OF k] by (simp del: spre.simps)
+  qed
+  have RC2: \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k \<noteq> 0 \<Longrightarrow> mark ! k = 2 \<Longrightarrow>
+      settle_pre urust_fuel ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k (bits_one_m (length (?dv2 ! k)))\<close>
+    \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k \<noteq> 0 \<Longrightarrow> mark ! k \<noteq> 2 \<Longrightarrow>
+      settle_pre urust_fuel ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k (?dv2 ! k)\<close> for k
+    using RC[of k] by simp_all
   have SS: \<open>k < length ?D \<Longrightarrow> ?S (Suc k) =
     (if mark ! k = 1 then (fst (?S k) @ [[]], snd (?S k))
      else if kind ! k = 0 then (fst (?S k) @ [eval_m (snd (?S k)) (fst (?S k)) (?D ! k)], snd (?S k))
      else settle_res ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k
             (if mark ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k))\<close> for k
-    using rec_st_Suc[of ?D ?K ?M ?dv2 m2 k] NM[of k] by (simp add: unat_small del: settle_m.simps)
+    using rec_st_Suc[of ?D ?K ?M ?dv2 m2 k] ME[of k] by (simp only:)
   have N64: \<open>length ?D < 18446744073709551615\<close> \<open>length ?D \<le> urust_fuel\<close> \<open>length ?D < 18446744073709551616\<close>
     using P(4,5) by simp_all
-  have N65: \<open>unat r < length ?D \<Longrightarrow> unat r < 18446744073709551615\<close> for r :: \<open>64 word\<close> using N64(1) by simp
+  have N65: \<open>unat r < length ?D \<Longrightarrow> unat r < 18446744073709551615\<close> \<open>unat r < length ?D \<Longrightarrow> unat r < urust_fuel\<close>
+    for r :: \<open>64 word\<close> using N64(1,2) by simp_all
+  have PE: \<open>((a, b) = p) = (a = fst p \<and> b = snd p)\<close> for a b and p :: \<open>'x \<times> 'y\<close> by auto
   have UK: \<open>unat r < length ?D \<Longrightarrow> unat (r + 1) = Suc (unat r)\<close> for r :: \<open>64 word\<close>
     using N64(1) by (intro unat_plus_one_of_less_bound[of _ \<open>length ?D\<close>]) simp_all
   have RES: \<open>snd (?S (length ?D)) = reconstruct_m q ?K ?M q2 m2\<close>
@@ -1754,7 +1751,7 @@ proof (cases \<open>recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2
           \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
       apply (crush_base inline: vec_push_def len_def
-          simp add: P N64 N65 UK RA RC SS RES rec_st_0 word_less_nat_alt unat_of_nat_eq unat_small)
+          simp add: P N64 N65 UK RA RC RC2 SS RES PE rec_st_0 word_less_nat_alt unat_of_nat_eq unat_small)
       done
     done
 next

@@ -2267,4 +2267,193 @@ qed
 
 end
 
+subsection \<open>The reconstructed assignment is a model\<close>
+
+locale recon_prob = elim_prob +
+  fixes m2 :: \<open>bool list list\<close>
+  assumes ml2: \<open>map length m2 = ews\<close>
+begin
+
+definition \<open>dv2 = eval_defs_m q2 m2\<close>
+
+lemma dv2P: \<open>map length dv2 = eds\<close> \<open>length dv2 = en\<close> \<open>j < en \<Longrightarrow> dv2 ! j = eval_m m2 dv2 (D2 ! j)\<close>
+proof -
+  note E = eval_defs_props[OF conjunct1[OF D2_defs] ml2[symmetric]]
+  show \<open>map length dv2 = eds\<close> using E(1) D2_defs by (simp add: dv2_def eval_defs_m_def q2_parts)
+  then show \<open>length dv2 = en\<close> using len_eds by (metis length_map)
+  show \<open>j < en \<Longrightarrow> dv2 ! j = eval_m m2 dv2 (D2 ! j)\<close> using E(2) D2(1) by (simp add: dv2_def eval_defs_m_def q2_parts)
+qed
+
+definition target :: \<open>nat \<Rightarrow> bool list\<close> where
+  \<open>target j = (if mk ! j = 2 then bits_one_m (length (dv2 ! j)) else dv2 ! j)\<close>
+
+lemma target_len: \<open>j < en \<Longrightarrow> length (target j) = eds ! j\<close>
+  using dv2P(1,2) bits_one(1) by (auto simp: target_def) (metis nth_map)+
+
+lemma lvar_var: \<open>j < en \<Longrightarrow> kd ! j \<noteq> 0 \<Longrightarrow> \<exists>i. eD ! leaf j = CoreTerm_Var i \<and> lvar j = unat i \<and> unat i < length ews\<close>
+  using leaf_props[of j] kd_1[of \<open>leaf j\<close>] by (auto simp: lvar_def var_index_m_def)
+
+lemma lvar_only:
+  assumes \<open>j < en\<close> \<open>kd ! j \<noteq> 0\<close> \<open>i < en\<close> \<open>u \<in> set (csubterms (eD ! i))\<close> \<open>is_var (lvar j) u\<close>
+  shows \<open>i = leaf j\<close>
+proof -
+  obtain x where x: \<open>eD ! leaf j = CoreTerm_Var x\<close> \<open>lvar j = unat x\<close> using lvar_var[OF assms(1,2)] by blast
+  note L = leaf_props[OF assms(1,2)]
+  have \<open>is_var (lvar j) (eD ! leaf j)\<close> using x by (simp add: is_var_def)
+  then show ?thesis using leaf_var_unique[of \<open>leaf j\<close> \<open>lvar j\<close> i u] L assms by simp
+qed
+
+lemma settle_ok:
+  assumes \<open>j < en\<close> \<open>kd ! j \<noteq> 0\<close> \<open>j < f\<close> \<open>length v = eds ! j\<close> \<open>length dv = N\<close> \<open>j < N\<close> \<open>N \<le> en\<close>
+    \<open>map length m = ews\<close>
+    \<open>\<forall>i<N. tp i < tp j \<longrightarrow> dv ! i = eval_m m dv (eD ! i) \<and> length (dv ! i) = eds ! i\<close>
+    \<open>\<forall>i<N. tp i < tp j \<and> tp i = i \<and> mk ! i = 2 \<longrightarrow> dv ! i = bits_one_m (eds ! i)\<close>
+  shows \<open>case settle_m eD kd dv2 f dv m j v of (dv', m') \<Rightarrow>
+    length dv' = N \<and> map length m' = ews \<and>
+    (\<forall>i<N. \<not> below j i \<longrightarrow> dv' ! i = dv ! i) \<and> (\<forall>x. x \<noteq> lvar j \<longrightarrow> m' ! x = m ! x) \<and> dv' ! j = v \<and>
+    (\<forall>i<N. below j i \<longrightarrow> dv' ! i = eval_m m' dv' (eD ! i) \<and> length (dv' ! i) = eds ! i)\<close>
+  using assms
+proof (induction f arbitrary: j v dv m)
+  case 0
+  then show ?case by simp
+next
+  case (Suc g)
+  note j = Suc.prems(1) and k0 = Suc.prems(2) and jf = Suc.prems(3) and lv = Suc.prems(4) and ld = Suc.prems(5)
+    and jN = Suc.prems(6) and Ne = Suc.prems(7) and ml = Suc.prems(8) and S = Suc.prems(9) and T = Suc.prems(10)
+  let ?dv1 = \<open>dv[j := v]\<close>
+  show ?case
+  proof (cases \<open>kd ! j = 1\<close>)
+    case True
+    obtain i where i: \<open>eD ! j = CoreTerm_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF j True] by blast
+    have lf: \<open>leaf j = j\<close> using leaf_stop j True by simp
+    have lvj: \<open>lvar j = unat i\<close> by (simp add: lvar_def lf i var_index_m_def)
+    have st: \<open>settle_m eD kd dv2 (Suc g) dv m j v = (?dv1, m[unat i := v])\<close> using True i by (simp add: var_index_m_def)
+    have w: \<open>ews ! unat i = eds ! j\<close> using eds_nth[OF j] i by simp
+    have bl: \<open>below j i' \<longleftrightarrow> i' = j\<close> for i' using below_stop True by simp
+    have lm: \<open>length m = length ews\<close> using ml by (metis length_map)
+    have ue: \<open>ews[unat i := eds ! j] = ews\<close> using w by (metis list_update_id)
+    have ml': \<open>map length (m[unat i := v]) = ews\<close> using ml lv ue by (simp add: map_update)
+    have ev: \<open>eval_m (m[unat i := v]) ?dv1 (eD ! j) = v\<close> using i lm by simp
+    show ?thesis using st ld jN ml' lvj bl ev lv by (auto simp: nth_list_update)
+  next
+    case False
+    then have k2: \<open>2 \<le> kd ! j\<close> using k0 by simp
+    obtain c va where inv: \<open>invert_m (eD ! j) (kd ! j) v m ?dv1 dv2 = (c, va)\<close> by force
+    have st: \<open>settle_m eD kd dv2 (Suc g) dv m j v = settle_m eD kd dv2 g ?dv1 m c va\<close> using False inv by simp
+    have cj: \<open>cons j < j\<close> \<open>kd ! cons j \<noteq> 0\<close> using kd_cons[OF j k2] by simp_all
+    have tj: \<open>j \<le> tp j\<close> using tp_props[OF j] by simp
+    have tc: \<open>tp (cons j) = tp j\<close> using tp_par[of \<open>cons j\<close>] mk_cons par_cons j k2 cj by simp
+    have lvc: \<open>lvar (cons j) = lvar j\<close> using leaf_step[OF j k2] by (simp add: lvar_def)
+    have lj: \<open>leaf j < j\<close> using leaf_step[OF j k2] leaf_props[of \<open>cons j\<close>] cj j by simp
+    have pre: \<open>invpre j v m ?dv1 m'' dv'' dv2\<close>
+      if F: \<open>length dv'' = N\<close> \<open>map length m'' = ews\<close> \<open>\<forall>i<N. \<not> below (cons j) i \<longrightarrow> dv'' ! i = ?dv1 ! i\<close>
+        \<open>\<forall>x. x \<noteq> lvar j \<longrightarrow> m'' ! x = m ! x\<close> for m'' dv''
+    proof -
+      have c1: \<open>\<forall>u \<in> set (csubterms (eD ! j)). \<forall>x. is_ref x u \<and> x \<noteq> cons j \<longrightarrow>
+        x < length ?dv1 \<and> x < length dv'' \<and> dv'' ! x = ?dv1 ! x \<and> length (?dv1 ! x) = eds ! x \<and>
+        ?dv1 ! x = eval_m m ?dv1 (eD ! x)\<close>
+      proof (intro ballI allI impI)
+        fix u x assume u: \<open>u \<in> set (csubterms (eD ! j))\<close> and rx: \<open>is_ref x u \<and> x \<noteq> cons j\<close>
+        have x: \<open>x < j\<close> using ref_lt_D[OF j u] rx by simp
+        have xm: \<open>mk ! x \<noteq> 1\<close>
+        proof
+          assume mx: \<open>mk ! x = 1\<close>
+          then have \<open>j = par x\<close> using member_ref[of x j u] x j u rx by simp
+          then show False using par[of x] mx x j rx by auto
+        qed
+        have tx: \<open>tp x = x\<close> using tp_non[of x] xm x j by simp
+        have xN: \<open>x < N\<close> using x jN by simp
+        have tlt: \<open>tp x < tp j\<close> using tx x tj by simp
+        have Sx: \<open>dv ! x = eval_m m dv (eD ! x)\<close> \<open>length (dv ! x) = eds ! x\<close> using S xN tlt by blast+
+        have e1: \<open>eval_m m ?dv1 (eD ! x) = eval_m m dv (eD ! x)\<close>
+          by (rule eval_m_cong) (use ref_lt_D[of x] x j in fastforce)+
+        have nb: \<open>\<not> below (cons j) x\<close> using below_props[of \<open>cons j\<close> x] cj j tc tx x tj by auto
+        have d1x: \<open>?dv1 ! x = dv ! x\<close> using x by simp
+        show \<open>x < length ?dv1 \<and> x < length dv'' \<and> dv'' ! x = ?dv1 ! x \<and> length (?dv1 ! x) = eds ! x \<and>
+            ?dv1 ! x = eval_m m ?dv1 (eD ! x)\<close>
+          using Sx e1 nb F(1,3) xN ld d1x by simp
+      qed
+      have c2: \<open>\<forall>u \<in> set (csubterms (eD ! j)). \<forall>y. is_var y u \<longrightarrow> m'' ! y = m ! y\<close>
+      proof (intro ballI allI impI)
+        fix u y assume u: \<open>u \<in> set (csubterms (eD ! j))\<close> and y: \<open>is_var y u\<close>
+        have \<open>y \<noteq> lvar j\<close> using lvar_only[OF j k0 j u] y lj by auto
+        then show \<open>m'' ! y = m ! y\<close> using F(4) by simp
+      qed
+      have c3: \<open>kd ! j = 4 \<longrightarrow> ?dv1 ! sec j = bits_one_m (eds ! sec j)\<close>
+      proof
+        assume k4: \<open>kd ! j = 4\<close>
+        have sj: \<open>sec j < j\<close> \<open>mk ! sec j = 2\<close> using kd_sec[OF j k4] mk_char(2)[of \<open>sec j\<close>] j k4 by auto
+        have ts: \<open>tp (sec j) = sec j\<close> using tp_non[of \<open>sec j\<close>] sj j by simp
+        have \<open>sec j < N\<close> \<open>tp (sec j) < tp j\<close> using sj ts tj jN by simp_all
+        then have \<open>dv ! sec j = bits_one_m (eds ! sec j)\<close> using T ts sj by blast
+        then show \<open>?dv1 ! sec j = bits_one_m (eds ! sec j)\<close> using sj by simp
+      qed
+      have c0: \<open>cons j < length dv''\<close> using cj jN F(1) by simp
+      show ?thesis unfolding invpre_def by (intro conjI lv ml F(2) dv2P(1) c0 c1 c2 c3)
+    qed
+    have pre0: \<open>invpre j v m ?dv1 m ?dv1 dv2\<close> by (rule pre) (use ld ml in simp_all)
+    note I0 = inv_def[OF j k2 pre0]
+    have cv: \<open>c = cons j\<close> \<open>length va = eds ! cons j\<close> using I0 inv by simp_all
+    have S': \<open>\<forall>i<N. tp i < tp (cons j) \<longrightarrow> ?dv1 ! i = eval_m m ?dv1 (eD ! i) \<and> length (?dv1 ! i) = eds ! i\<close>
+    proof (intro allI impI)
+      fix i assume i: \<open>i < N\<close> \<open>tp i < tp (cons j)\<close>
+      have ij: \<open>i \<noteq> j\<close> using i tc by auto
+      have il: \<open>i < en\<close> using i Ne by simp
+      have nr: \<open>\<not> is_ref j u\<close> if u: \<open>u \<in> set (csubterms (eD ! i))\<close> for u
+      proof
+        assume r: \<open>is_ref j u\<close>
+        show False
+        proof (cases \<open>mk ! j = 1\<close>)
+          case True
+          then have \<open>i = par j\<close> using member_ref[OF j True il u r] by simp
+          then show False using tp_par[OF j True] i tc by simp
+        next
+          case False
+          then have \<open>tp j = j\<close> using tp_non j by simp
+          moreover have \<open>j < i\<close> using ref_lt_D[OF il u r] .
+          ultimately show False using tp_props[OF il] i tc by simp
+        qed
+      qed
+      have rr: \<open>\<forall>u \<in> set (csubterms (eD ! i)). \<forall>x. is_ref x u \<longrightarrow> ?dv1 ! x = dv ! x\<close>
+      proof (intro ballI allI impI)
+        fix u x assume u: \<open>u \<in> set (csubterms (eD ! i))\<close> and r: \<open>is_ref x u\<close>
+        have \<open>x \<noteq> j\<close> using nr[OF u] r by auto
+        then show \<open>?dv1 ! x = dv ! x\<close> by simp
+      qed
+      have e: \<open>eval_m m ?dv1 (eD ! i) = eval_m m dv (eD ! i)\<close> by (rule eval_m_cong) (use rr in simp_all)
+      have tl: \<open>tp i < tp j\<close> using i tc by simp
+      have Si: \<open>dv ! i = eval_m m dv (eD ! i)\<close> \<open>length (dv ! i) = eds ! i\<close> using S i(1) tl by blast+
+      show \<open>?dv1 ! i = eval_m m ?dv1 (eD ! i) \<and> length (?dv1 ! i) = eds ! i\<close> using Si e ij by simp
+    qed
+    have T': \<open>\<forall>i<N. tp i < tp (cons j) \<and> tp i = i \<and> mk ! i = 2 \<longrightarrow> ?dv1 ! i = bits_one_m (eds ! i)\<close>
+    proof (intro allI impI)
+      fix i assume i: \<open>i < N\<close> \<open>tp i < tp (cons j) \<and> tp i = i \<and> mk ! i = 2\<close>
+      then have ij: \<open>i \<noteq> j\<close> using tc by auto
+      have \<open>dv ! i = bits_one_m (eds ! i)\<close> using T i tc by simp
+      then show \<open>?dv1 ! i = bits_one_m (eds ! i)\<close> using ij by simp
+    qed
+    have cen: \<open>cons j < en\<close> \<open>cons j < g\<close> \<open>length ?dv1 = N\<close> \<open>cons j < N\<close> using cj j jf ld jN by simp_all
+    note IH' = Suc.IH[OF cen(1) cj(2) cen(2) cv(2) cen(3) cen(4) Ne ml S' T']
+    obtain dv' m' where r: \<open>settle_m eD kd dv2 g ?dv1 m (cons j) va = (dv', m')\<close> by force
+    have R0: \<open>length dv' = N \<and> map length m' = ews \<and>
+      (\<forall>i<N. \<not> below (cons j) i \<longrightarrow> dv' ! i = ?dv1 ! i) \<and> (\<forall>x. x \<noteq> lvar (cons j) \<longrightarrow> m' ! x = m ! x) \<and> dv' ! cons j = va \<and>
+      (\<forall>i<N. below (cons j) i \<longrightarrow> dv' ! i = eval_m m' dv' (eD ! i) \<and> length (dv' ! i) = eds ! i)\<close>
+      using IH' unfolding r by (simp only: prod.case) blast
+    have R: \<open>length dv' = N\<close> \<open>map length m' = ews\<close> \<open>\<forall>i<N. \<not> below (cons j) i \<longrightarrow> dv' ! i = ?dv1 ! i\<close>
+      \<open>\<forall>x. x \<noteq> lvar j \<longrightarrow> m' ! x = m ! x\<close> \<open>dv' ! cons j = va\<close>
+      \<open>\<forall>i<N. below (cons j) i \<longrightarrow> dv' ! i = eval_m m' dv' (eD ! i) \<and> length (dv' ! i) = eds ! i\<close>
+      using R0 lvc by auto
+    have nbj: \<open>\<not> below (cons j) j\<close> using below_props[of \<open>cons j\<close> j] cj j by auto
+    have dj: \<open>dv' ! j = v\<close> using R(3) nbj jN ld by simp
+    have ej: \<open>eval_m m' dv' (eD ! j) = v\<close> using inv_def[OF j k2 pre[OF R(1-4)]] inv cv R(5) by simp
+    have below_j: \<open>below j i \<longleftrightarrow> i = j \<or> below (cons j) i\<close> for i using below_step[OF j k2] .
+    show ?thesis
+      unfolding st cv(1) r
+      using R dj ej lv below_j ld
+      by (auto simp: nth_list_update)
+  qed
+qed
+
+end
+
 end

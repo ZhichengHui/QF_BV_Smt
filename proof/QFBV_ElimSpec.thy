@@ -57,6 +57,23 @@ text \<open>The constants of \<open>t\<close> have fewer than \<open>2 ^ 64\<clo
 definition cfit :: \<open>CoreTerm \<Rightarrow> bool\<close> where
   \<open>cfit t \<equiv> \<forall>bs. t = CoreTerm_Const bs \<longrightarrow> length bs < 2 ^ 64\<close>
 
+lemma dce_steps:
+  assumes \<open>\<forall>x \<in> set xs. d \<le> x\<close> \<open>length L = length Ds\<close>
+  shows \<open>length (fst (foldl (dce_step DW) (L, Ds) xs)) = length L \<and> length (snd (foldl (dce_step DW) (L, Ds) xs)) = length Ds \<and>
+    (\<forall>j<d. snd (foldl (dce_step DW) (L, Ds) xs) ! j = Ds ! j)\<close>
+  using assms
+proof (induction xs arbitrary: L Ds)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  obtain L1 Ds1 where st: \<open>dce_step DW (L, Ds) x = (L1, Ds1)\<close> by force
+  have P: \<open>length L1 = length L\<close> \<open>length Ds1 = length Ds\<close> \<open>\<forall>j<d. Ds1 ! j = Ds ! j\<close>
+    using st Cons.prems(1) by (auto simp: dce_step_def split: if_splits)
+  have \<open>length L1 = length Ds1\<close> using P Cons.prems(2) by simp
+  then show ?case using Cons.IH[of L1 Ds1] Cons.prems(1) P st by simp
+qed
+
 subsection \<open>Preconditions of the reconstruction\<close>
 
 text \<open>What the body of \<^verbatim>\<open>invert\<close> needs: indices in bounds, the operand it evaluates within
@@ -221,6 +238,61 @@ proof -
        (eds ! cons k \<noteq> eds ! k \<longrightarrow> 1 \<le> eds ! k)\<close>
     using cons_lt[OF k] kd_sec[OF k] kd_width[OF k] k by fastforce
   show ?thesis using E lM wt wf sz var fk c eds_nth[OF k] by simp
+qed
+
+end
+
+text \<open>The marks after the definition \<open>t\<close> of kind \<open>c\<close> (the loop of \<^const>\<open>elim_step\<close>).\<close>
+definition mark_upd :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list\<close> where
+  \<open>mark_upd t c n mark \<equiv>
+     if 2 \<le> c then
+       (let mark1 = mark[consumed_m t c n := 1] in if c = 4 then mark1[second_m t n := 2] else mark1)
+     else mark\<close>
+
+definition ana_st :: \<open>CoreProblem \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat list \<times> CoreTerm list\<close> where
+  \<open>ana_st q k \<equiv> foldl (elim_step (cvar_widths q) (CoreProblem_defs q) (fst (occ_res q)) (snd (occ_res q)))
+     ([], [], replicate (length (CoreProblem_defs q)) 0, []) [0..<k]\<close>
+
+lemma ana_st_0: \<open>ana_st q 0 = ([], [], replicate (length (CoreProblem_defs q)) 0, [])\<close>
+  by (simp add: ana_st_def)
+
+lemma ana_st_Suc: \<open>ana_st q (Suc k) =
+    elim_step (cvar_widths q) (CoreProblem_defs q) (fst (occ_res q)) (snd (occ_res q)) (ana_st q k) k\<close>
+  by (simp add: ana_st_def)
+
+lemma ana_st_res: \<open>ana_st q (length (CoreProblem_defs q)) = ana_res q\<close>
+  by (simp add: ana_st_def ana_res_def Let_def)
+
+lemma elim_step_eq:
+  \<open>elim_step ws D vc rc (dw, kind, mark, defs) k =
+    (dw @ [cwidth ws dw (D ! k)], kind @ [free_kind_m D dw vc rc kind (D ! k)],
+     mark_upd (D ! k) (free_kind_m D dw vc rc kind (D ! k)) (length D) mark,
+     defs @ [if 2 \<le> free_kind_m D dw vc rc kind (D ! k)
+             then rewrite_m dw (consumed_m (D ! k) (free_kind_m D dw vc rc kind (D ! k)) (length D)) (cwidth ws dw (D ! k))
+             else D ! k])\<close>
+  by (simp add: elim_step_def mark_upd_def Let_def)
+
+context elim_fuel
+begin
+
+lemma cfit_D: \<open>d \<in> set eD \<Longrightarrow> cfit d\<close>
+  using tb[of d] tbound_mem[OF csubterms_self[of d], of ews eds] by (auto simp: cfit_def)
+
+lemma ana_pre:
+  assumes k: \<open>k < en\<close> and F: \<open>ana_st q k = (DWa, KDa, MKa, DSa)\<close>
+  shows \<open>length DWa = k \<and> length KDa = k \<and> length MKa = en \<and> length DSa = k \<and>
+    Suc (size (eD ! k)) \<le> N \<and> cwt ews DWa (eD ! k) \<and> wfit ews DWa (eD ! k) \<and> cwidth ews DWa (eD ! k) = eds ! k \<and>
+    (\<forall>i. eD ! k = CoreTerm_Var i \<longrightarrow> unat i < length ews) \<and>
+    free_kind_m eD DWa evc erc KDa (eD ! k) = kd ! k \<and>
+    (2 \<le> kd ! k \<longrightarrow> cons k < en \<and> cons k < k \<and> (kd ! k = 4 \<longrightarrow> sec k < en) \<and>
+       (DWa ! cons k \<noteq> eds ! k \<longrightarrow> 1 \<le> eds ! k)) \<and> eds ! k < 2 ^ 64\<close>
+proof -
+  have F': \<open>foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<k] = (DWa, KDa, MKa, DSa)\<close>
+    using F by (simp add: ana_st_def ews_def eD_def evc_def erc_def en_def)
+  note A = ana_step_pre[OF k F']
+  have l: \<open>length DWa = k\<close> \<open>length KDa = k\<close> \<open>length DSa = k\<close> using A k len_eds ana(2,4) by auto
+  have c: \<open>2 \<le> kd ! k \<Longrightarrow> DWa ! cons k = eds ! cons k\<close> using A cons_lt[OF k] by simp
+  show ?thesis using A l c eds_fb[OF k] by auto
 qed
 
 end
@@ -1024,7 +1096,23 @@ definition count_terms_contract :: \<open>64 word list \<Rightarrow> 64 word lis
 
 lemma count_terms_spec [crush_specs]:
   shows \<open>\<Gamma>; count_terms vc rc ts \<Turnstile>\<^sub>F count_terms_contract vc rc ts\<close>
-  sorry
+  apply (crush_boot f: count_terms_def contract: count_terms_contract_def)
+  apply (crush_base inline: len_def)
+  subgoal for vc_ref rc_ref i_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>k. \<Squnion>gv v gr r gi i. vc_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> rc_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i \<le> length ts \<and> (map unat v, map unat r) = foldl count_occ_m (map unat vc, map unat rc) (take (unat i) ts) \<and>
+                length v = length vc \<and> length r = length rc \<and> length ts - unat i \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gv v gr r gi i. vc_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> rc_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i < length ts \<and> (map unat v, map unat r) = foldl count_occ_m (map unat vc, map unat rc) (take (unat i) ts) \<and>
+                length v = length vc \<and> length r = length rc \<and> length ts - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len antisym_conv take_Suc_conv_app_nth)
+    done
+  done
 
 definition free_kind_contract :: \<open>CoreTerm list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow>
     CoreTerm \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
@@ -1036,14 +1124,52 @@ definition free_kind_contract :: \<open>CoreTerm list \<Rightarrow> 64 word list
 
 lemma free_kind_spec [crush_specs]:
   shows \<open>\<Gamma>; free_kind D dw vc rc kind t \<Turnstile>\<^sub>F free_kind_contract D dw vc rc kind t\<close>
-  sorry
-
-text \<open>The marks after the definition \<open>t\<close> of kind \<open>c\<close> (the loop of \<^const>\<open>elim_step\<close>).\<close>
-definition mark_upd :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list\<close> where
-  \<open>mark_upd t c n mark \<equiv>
-     if 2 \<le> c then
-       (let mark1 = mark[consumed_m t c n := 1] in if c = 4 then mark1[second_m t n := 2] else mark1)
-     else mark\<close>
+proof (cases t)
+  case (CoreTerm_Var i)
+  show ?thesis unfolding CoreTerm_Var
+    apply (crush_boot f: free_kind_def contract: free_kind_contract_def)
+    apply (crush_base inline: len_def simp add: free_kind_m_def unat_small nth_map)
+    done
+next
+  case (CoreTerm_Not a)
+  show ?thesis unfolding CoreTerm_Not
+    apply (crush_boot f: free_kind_def contract: free_kind_contract_def)
+    apply (crush_base inline: len_def simp add: free_kind_m_def unat_small nth_map unat_of_nat_eq)
+    done
+next
+  case (CoreTerm_Const bs)
+  show ?thesis unfolding CoreTerm_Const
+    apply (crush_boot f: free_kind_def contract: free_kind_contract_def)
+    apply (crush_base inline: len_def simp add: free_kind_m_def)
+    done
+next
+  case (CoreTerm_Ref i)
+  show ?thesis unfolding CoreTerm_Ref
+    apply (crush_boot f: free_kind_def contract: free_kind_contract_def)
+    apply (crush_base inline: len_def simp add: free_kind_m_def)
+    done
+next
+  case (CoreTerm_Bin op a b)
+  show ?thesis unfolding CoreTerm_Bin
+    apply (cases op)
+    apply (all \<open>crush_boot f: free_kind_def contract: free_kind_contract_def\<close>)
+    apply (all \<open>crush_base inline: len_def simp add: free_kind_m_def unat_small nth_map unat_of_nat_eq word_less_nat_alt\<close>)
+    apply (auto simp: free_once_m_def nth_map word_unat_eq_iff)
+    done
+next
+  case (CoreTerm_Extract hi lo a)
+  show ?thesis unfolding CoreTerm_Extract
+    apply (crush_boot f: free_kind_def contract: free_kind_contract_def)
+    apply (crush_base inline: len_def simp add: free_kind_m_def unat_small nth_map unat_of_nat_eq word_less_nat_alt)
+    done
+next
+  case (CoreTerm_Ite c a b)
+  show ?thesis unfolding CoreTerm_Ite
+    apply (crush_boot f: free_kind_def contract: free_kind_contract_def)
+    apply (crush_base inline: len_def simp add: free_kind_m_def unat_small nth_map unat_of_nat_eq word_less_nat_alt)
+    apply (auto simp: free_once_m_def nth_map word_unat_eq_iff)
+    done
+qed
 
 definition rewrite_def_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word list \<Rightarrow> 64 word \<Rightarrow> 64 word list \<Rightarrow>
     ('s, CoreTerm \<times> 64 word list \<times> tnil, 'abort) function_contract\<close> where
@@ -1061,7 +1187,11 @@ definition rewrite_def_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Right
 
 lemma rewrite_def_spec [crush_specs]:
   shows \<open>\<Gamma>; rewrite_def t c w dw n mark \<Turnstile>\<^sub>F rewrite_def_contract t c w dw n mark\<close>
-  sorry
+  apply (crush_boot f: rewrite_def_def contract: rewrite_def_contract_def)
+  apply (crush_base simp add: mark_upd_def rewrite_m_def map_update word_le_nat_alt unat_small nth_map)
+  apply (simp_all add: cr_def)
+  apply (metis word_unat.Rep_inverse)+
+  done
 
 definition analyse_contract :: \<open>CoreProblem \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow>
     ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> CoreTerm list \<times> tnil, 'abort) function_contract\<close> where
@@ -1084,7 +1214,33 @@ definition mark_terms_contract :: \<open>bool list \<Rightarrow> CoreTerm list \
 
 lemma mark_terms_spec [crush_specs]:
   shows \<open>\<Gamma>; mark_terms live ts \<Turnstile>\<^sub>F mark_terms_contract live ts\<close>
-  sorry
+  apply (crush_boot f: mark_terms_def contract: mark_terms_contract_def)
+  apply (crush_base inline: len_def)
+  subgoal for live_ref l_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>k. \<Squnion>gv v gi i. live_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i \<le> length ts \<and> v = foldl mark_live_m live (take (unat i) ts) \<and> length ts - unat i \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gv v gi i. live_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i < length ts \<and> v = foldl mark_live_m live (take (unat i) ts) \<and> length ts - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len antisym_conv take_Suc_conv_app_nth mark_live_fold(1))
+    done
+  done
+
+lemma nz: \<open>(r :: 64 word) \<noteq> 0 \<Longrightarrow> 0 < unat r\<close>
+  by (simp add: unat_gt_0)
+
+lemma dce_back:
+  assumes \<open>0 < d\<close> \<open>d \<le> length defs\<close>
+  shows \<open>foldl (dce_step DW) (live, defs) (rev [d - Suc 0..<length defs]) =
+    dce_step DW (foldl (dce_step DW) (live, defs) (rev [d..<length defs])) (d - Suc 0)\<close>
+proof -
+  have \<open>[d - Suc 0..<length defs] = (d - Suc 0) # [d..<length defs]\<close> using assms by (simp add: upt_conv_Cons)
+  then show ?thesis by simp
+qed
 
 definition dce_contract :: \<open>bool list \<Rightarrow> 64 word list \<Rightarrow> CoreTerm list \<Rightarrow> ('s, CoreTerm list, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dce_contract live dw defs \<equiv>
@@ -1096,7 +1252,24 @@ definition dce_contract :: \<open>bool list \<Rightarrow> 64 word list \<Rightar
 
 lemma dce_spec [crush_specs]:
   shows \<open>\<Gamma>; dce live dw defs \<Turnstile>\<^sub>F dce_contract live dw defs\<close>
-  sorry
+  apply (crush_boot f: dce_def contract: dce_contract_def)
+  apply (crush_base inline: len_def)
+  subgoal for live_ref defs_ref d_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>k. \<Squnion>gl l gs ds gd d. live_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>l \<star> defs_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>ds \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star> can_alloc_reference \<star>
+               \<langle>unat d \<le> length defs \<and> foldl (dce_step (map unat dw)) (live, defs) (rev [unat d..<length defs]) = (l, ds) \<and>
+                length l = length defs \<and> length ds = length defs \<and> (\<forall>j < unat d. ds ! j = defs ! j) \<and> unat d \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gl l gs ds gd d. live_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>l \<star> defs_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>ds \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star> can_alloc_reference \<star>
+               \<langle>0 < unat d \<and> unat d \<le> length defs \<and> foldl (dce_step (map unat dw)) (live, defs) (rev [unat d..<length defs]) = (l, ds) \<and>
+                length l = length defs \<and> length ds = length defs \<and> (\<forall>j < unat d. ds ! j = defs ! j) \<and> unat d \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_gt_0 unat_minus_one dce_back)
+    apply (auto simp: dce_back dce_step_def nth_map word_le_nat_alt dest!: nz)
+    done
+  done
 
 definition copy_terms_contract :: \<open>CoreTerm list \<Rightarrow> ('s, CoreTerm list, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>copy_terms_contract ts \<equiv>
@@ -1106,7 +1279,21 @@ definition copy_terms_contract :: \<open>CoreTerm list \<Rightarrow> ('s, CoreTe
 
 lemma copy_terms_spec [crush_specs]:
   shows \<open>\<Gamma>; copy_terms ts \<Turnstile>\<^sub>F copy_terms_contract ts\<close>
-  sorry
+  apply (crush_boot f: copy_terms_def contract: copy_terms_contract_def)
+  apply (crush_base inline: len_def)
+  subgoal for r_ref a_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>k. \<Squnion>gv v gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> a_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i \<le> length ts \<and> v = take (unat i) ts \<and> length ts - unat i \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gv v gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> a_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i < length ts \<and> v = take (unat i) ts \<and> length ts - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base inline: vec_push_def len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len antisym_conv take_Suc_conv_app_nth)
+    done
+  done
 
 definition elim_contract :: \<open>CoreProblem \<Rightarrow> ('s, CoreProblem \<times> 64 word list \<times> 64 word list \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>elim_contract q \<equiv>

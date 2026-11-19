@@ -1248,10 +1248,15 @@ fn lower_problem(p: &Problem) -> CoreProblem {
     CoreProblem { widths: p.widths.clone(), defs: l.defs, asserts }
 }
 
-/// The solver: rewrites the problem into the core language and solves it.
+/// The solver: rewrites the problem into the core language, eliminates its unconstrained
+/// definitions, solves the result and reconstructs a model of the problem from a model of it.
 pub fn solve(p: &Problem) -> Answer {
     let q = lower_problem(p);
-    solve_core(&q)
+    let (q2, kind, mark) = elim(&q);
+    match solve_core(&q2) {
+        Answer::Sat(m2) => Answer::Sat(reconstruct(&q, &kind, &mark, &q2, &m2)),
+        Answer::Unsat => Answer::Unsat,
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

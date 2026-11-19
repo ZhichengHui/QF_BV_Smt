@@ -531,6 +531,9 @@ lemma rcnt_Bin: \<open>rcnt [CoreTerm_Bin op a b] x = rcnt [a] x + rcnt [b] x\<c
 lemma rcnt_Ref: \<open>rcnt [CoreTerm_Ref i] x = (if unat i = x then 1 else 0)\<close>
   by (simp add: rcnt_def is_ref_def)
 
+lemma rcnt_Ite: \<open>rcnt [CoreTerm_Ite c a b] x = rcnt [c] x + rcnt [a] x + rcnt [b] x\<close>
+  by (simp add: rcnt_def is_ref_def)
+
 subsection \<open>The analysis of a problem\<close>
 
 locale elim_prob =
@@ -1928,5 +1931,229 @@ proof -
   qed
   then show ?thesis using eval_m_correct[OF assms(1) assms(2)[symmetric] l] by simp
 qed
+
+lemma csubterms_trans: \<open>v \<in> set (csubterms u) \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> v \<in> set (csubterms t)\<close>
+  by (induction t) auto
+
+lemma bit_const_cases: \<open>bit_const_m t < 2 \<Longrightarrow> \<exists>c. t = CoreTerm_Const [c] \<and> bit_const_m t = (if c then 1 else 0)\<close>
+proof (cases t)
+  case (CoreTerm_Const bs)
+  assume b: \<open>bit_const_m t < 2\<close>
+  then have \<open>length bs = 1\<close> using CoreTerm_Const by (simp add: bit_const_m_def split: if_splits)
+  then obtain c where \<open>bs = [c]\<close> by (cases bs) auto
+  then show ?thesis using CoreTerm_Const by (simp add: bit_const_m_def)
+qed (simp_all add: bit_const_m_def)
+
+lemma no_ref_of_rcnt0: \<open>rcnt [t] x = 0 \<Longrightarrow> \<forall>u \<in> set (csubterms t). \<not> is_ref x u\<close>
+  using rcnt_pos by fastforce
+
+context elim_prob
+begin
+
+lemma cons_once:
+  assumes \<open>j < en\<close> \<open>2 \<le> kd ! j\<close>
+  shows \<open>rcnt [eD ! j] (cons j) = 1\<close>
+proof -
+  have r1: \<open>rcnt (eD @ eA) (cons j) = 1\<close> and ex: \<open>\<exists>u \<in> set (csubterms (eD ! j)). is_ref (cons j) u\<close>
+    using kd_cons[OF assms] by simp_all
+  have \<open>rcnt [eD ! j] (cons j) \<le> 1\<close> using rcnt_le[of \<open>eD ! j\<close> \<open>eD @ eA\<close> \<open>cons j\<close>] r1 assms(1) by (simp add: en_def)
+  moreover have \<open>0 < rcnt [eD ! j] (cons j)\<close> using ex rcnt_pos by blast
+  ultimately show ?thesis by simp
+qed
+
+text \<open>What the inversion of a free definition needs: the values of its other operands are final
+  (and have their widths), and its variables keep their values.\<close>
+definition invpre :: \<open>nat \<Rightarrow> bool list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
+    bool list list \<Rightarrow> bool\<close> where
+  \<open>invpre j v m dv m' dv' dv2 \<equiv> length v = eds ! j \<and> map length m = ews \<and> map length m' = ews \<and>
+     map length dv2 = eds \<and> cons j < length dv' \<and>
+     (\<forall>u \<in> set (csubterms (eD ! j)). \<forall>x. is_ref x u \<and> x \<noteq> cons j \<longrightarrow>
+        x < length dv \<and> x < length dv' \<and> dv' ! x = dv ! x \<and> length (dv ! x) = eds ! x \<and> dv ! x = eval_m m dv (eD ! x)) \<and>
+     (\<forall>u \<in> set (csubterms (eD ! j)). \<forall>x. is_var x u \<longrightarrow> m' ! x = m ! x) \<and>
+     (kd ! j = 4 \<longrightarrow> dv ! sec j = bits_one_m (eds ! sec j))\<close>
+
+lemma inv_def:
+  assumes j: \<open>j < en\<close> and k2: \<open>2 \<le> kd ! j\<close> and P: \<open>invpre j v m dv m' dv' dv2\<close>
+  shows \<open>fst (invert_m (eD ! j) (kd ! j) v m dv dv2) = cons j \<and>
+    length (snd (invert_m (eD ! j) (kd ! j) v m dv dv2)) = eds ! cons j \<and>
+    (dv' ! cons j = snd (invert_m (eD ! j) (kd ! j) v m dv dv2) \<longrightarrow> eval_m m' dv' (eD ! j) = v)\<close>
+proof -
+  have lv: \<open>length v = eds ! j\<close> and ml: \<open>map length m = ews\<close> and d2: \<open>map length dv2 = eds\<close>
+    and O: \<open>\<forall>u \<in> set (csubterms (eD ! j)). \<forall>x. is_ref x u \<and> x \<noteq> cons j \<longrightarrow>
+        x < length dv \<and> x < length dv' \<and> dv' ! x = dv ! x \<and> length (dv ! x) = eds ! x \<and> dv ! x = eval_m m dv (eD ! x)\<close>
+    and V: \<open>\<forall>u \<in> set (csubterms (eD ! j)). \<forall>x. is_var x u \<longrightarrow> m' ! x = m ! x\<close>
+    and T4: \<open>kd ! j = 4 \<longrightarrow> dv ! sec j = bits_one_m (eds ! sec j)\<close>
+    using P unfolding invpre_def by blast+
+  have n2: \<open>length dv2 = en\<close> using d2 len_eds by (metis length_map)
+  have d2n: \<open>x < en \<Longrightarrow> length (dv2 ! x) = eds ! x\<close> for x using d2 n2 by (metis nth_map)
+  have wtj: \<open>cwt ews eds (eD ! j)\<close> using wt_D'[OF j] .
+  have E: \<open>cwidth ews eds (eD ! j) = eds ! j\<close> using cwidth_eD[OF j] .
+  have once: \<open>rcnt [eD ! j] (cons j) = 1\<close> using cons_once[OF j k2] .
+  have cj: \<open>cons j < j\<close> using cons_lt[OF j k2] .
+  have sub: \<open>eval_m m' dv' ob = eval_m m dv ob \<and> length (eval_m m dv ob) = cwidth ews eds ob\<close>
+    if ob: \<open>ob \<in> set (csubterms (eD ! j))\<close> and nr: \<open>\<forall>u \<in> set (csubterms ob). \<not> is_ref (cons j) u\<close> for ob
+  proof -
+    have tr: \<open>u \<in> set (csubterms ob) \<Longrightarrow> u \<in> set (csubterms (eD ! j))\<close> for u using csubterms_trans ob by blast
+    have \<open>eval_m m' dv' ob = eval_m m dv ob\<close>
+      by (rule eval_m_cong) (use O V tr nr in \<open>fastforce+\<close>)
+    moreover have \<open>length (eval_m m dv ob) = cwidth ews eds ob\<close>
+      by (rule eval_m_len[OF wsub[OF wtj ob] ml]) (use O tr nr in fastforce)
+    ultimately show ?thesis by simp
+  qed
+  note sh = free_kind_shape[OF ana(5)[OF j] k2]
+  have tk: \<open>x < j \<Longrightarrow> take j eds ! x = eds ! x\<close> for x using j len_eds by simp
+  have fo: \<open>free_once_m (take j kd) erc x \<Longrightarrow> x < j\<close> for x using fo_take j by blast
+  consider
+      (Not) a where \<open>eD ! j = CoreTerm_Not (CoreTerm_Ref a)\<close> \<open>kd ! j = 2\<close>
+    | (Ext) hi lo a where \<open>eD ! j = CoreTerm_Extract hi lo (CoreTerm_Ref a)\<close> \<open>kd ! j = 2\<close>
+    | (AX2) op i b where \<open>eD ! j = CoreTerm_Bin op (CoreTerm_Ref i) b\<close> \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> \<open>kd ! j = 2\<close>
+    | (AX3) op a i where \<open>eD ! j = CoreTerm_Bin op a (CoreTerm_Ref i)\<close> \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> \<open>kd ! j = 3\<close>
+    | (Eq2) i b where \<open>eD ! j = CoreTerm_Bin BinOp_Eq (CoreTerm_Ref i) b\<close> \<open>kd ! j = 2\<close> \<open>0 < eds ! unat i\<close>
+    | (Eq3) a i where \<open>eD ! j = CoreTerm_Bin BinOp_Eq a (CoreTerm_Ref i)\<close> \<open>kd ! j = 3\<close> \<open>0 < eds ! unat i\<close>
+    | (MD) op a b where \<open>eD ! j = CoreTerm_Bin op (CoreTerm_Ref a) (CoreTerm_Ref b)\<close> \<open>op = BinOp_Mul \<or> op = BinOp_Udiv\<close>
+        \<open>kd ! j = 4\<close> \<open>unat a \<noteq> unat b\<close>
+    | (Ite) x a b where \<open>eD ! j = CoreTerm_Ite (CoreTerm_Ref x) (CoreTerm_Ref a) (CoreTerm_Ref b)\<close> \<open>kd ! j = 2\<close>
+        \<open>bit_const_m (eD ! unat a) < 2\<close> \<open>bit_const_m (eD ! unat b) < 2\<close> \<open>bit_const_m (eD ! unat a) \<noteq> bit_const_m (eD ! unat b)\<close>
+    using sh fo tk by (elim disjE exE conjE) (blast | metis)+
+  then show ?thesis
+  proof cases
+    case (Not a)
+    have c: \<open>cons j = unat a\<close> using Not by (simp add: cons_def consumed_m_def ref_index_m_def)
+    have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat a, bnot_m v)\<close>
+      using Not by (simp add: invert_m_def ref_index_m_def)
+    have w: \<open>eds ! unat a = eds ! j\<close> using E Not by simp
+    show ?thesis using inv c w lv Not inv_not by simp
+  next
+    case (Ext hi lo a)
+    have c: \<open>cons j = unat a\<close> using Ext by (simp add: cons_def consumed_m_def ref_index_m_def)
+    have al: \<open>unat a < en\<close> using c cj j by simp
+    have wa: \<open>unat lo \<le> unat hi\<close> \<open>unat hi < eds ! unat a\<close> using wtj Ext by simp_all
+    have lv': \<open>length v = Suc (unat hi) - unat lo\<close> using lv E Ext wa by simp
+    have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 =
+        (unat a, bconcat_m (replicate (eds ! unat a - 1 - unat hi) False) (bconcat_m v (replicate (unat lo) False)))\<close>
+      using Ext n2 d2n[OF al] by (simp add: invert_m_def ref_index_m_def Let_def)
+    show ?thesis using inv c inv_extract[OF lv' wa] Ext by simp
+  next
+    case (AX2 op i b)
+    have c: \<open>cons j = unat i\<close> using AX2 by (auto simp: cons_def consumed_m_def ref_index_m_def)
+    have \<open>rcnt [b] (unat i) = 0\<close> using once AX2 c by (simp add: rcnt_Bin rcnt_Ref)
+    then have S: \<open>eval_m m' dv' b = eval_m m dv b \<and> length (eval_m m dv b) = cwidth ews eds b\<close>
+      using sub[of b] AX2 c no_ref_of_rcnt0 by auto
+    have w: \<open>cwidth ews eds b = eds ! j\<close> \<open>eds ! unat i = eds ! j\<close> using wtj E AX2 by auto
+    let ?o = \<open>eval_m m dv b\<close>
+    have lo: \<open>length ?o = length v\<close> using S w lv by simp
+    show ?thesis
+    proof (cases \<open>op = BinOp_Add\<close>)
+      case True
+      have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat i, fst (badd_m v (bnot_m ?o) True))\<close>
+        using AX2 True by (simp add: invert_m_def ref_index_m_def)
+      show ?thesis using inv c inv_add[OF lo] S AX2 True w lv by (simp add: eval_bin_m_def)
+    next
+      case False
+      then have X: \<open>op = BinOp_Xor\<close> using AX2 by simp
+      have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat i, bbitw_m BinOp_Xor v ?o)\<close>
+        using AX2 X by (simp add: invert_m_def ref_index_m_def)
+      show ?thesis using inv c inv_xor[OF lo] S AX2 X w lv by (simp add: eval_bin_m_def)
+    qed
+  next
+    case (AX3 op a i)
+    have c: \<open>cons j = unat i\<close> using AX3 by (auto simp: cons_def consumed_m_def ref_index_m_def)
+    have \<open>rcnt [a] (unat i) = 0\<close> using once AX3 c by (simp add: rcnt_Bin rcnt_Ref)
+    then have S: \<open>eval_m m' dv' a = eval_m m dv a \<and> length (eval_m m dv a) = cwidth ews eds a\<close>
+      using sub[of a] AX3 c no_ref_of_rcnt0 by auto
+    have nc: \<open>op \<noteq> BinOp_Concat\<close> \<open>op \<noteq> BinOp_Eq\<close> \<open>op \<noteq> BinOp_Ult\<close> using AX3(2) by auto
+    have ww: \<open>cwidth ews eds a = eds ! unat i\<close> using wtj AX3(1) nc by simp
+    have we: \<open>cwidth ews eds (eD ! j) = cwidth ews eds a\<close> using AX3(1) nc by (cases op) simp_all
+    have w: \<open>cwidth ews eds a = eds ! j\<close> \<open>eds ! unat i = eds ! j\<close> using ww we E by simp_all
+    let ?o = \<open>eval_m m dv a\<close>
+    have lo: \<open>length ?o = length v\<close> using S w lv by simp
+    show ?thesis
+    proof (cases \<open>op = BinOp_Add\<close>)
+      case True
+      have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat i, fst (badd_m v (bnot_m ?o) True))\<close>
+        using AX3 True by (simp add: invert_m_def ref_index_m_def)
+      show ?thesis using inv c inv_add[OF lo] S AX3 True w lv by (simp add: eval_bin_m_def)
+    next
+      case False
+      then have X: \<open>op = BinOp_Xor\<close> using AX3 by simp
+      have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat i, bbitw_m BinOp_Xor v ?o)\<close>
+        using AX3 X by (simp add: invert_m_def ref_index_m_def)
+      show ?thesis using inv c inv_xor[OF lo] S AX3 X w lv by (simp add: eval_bin_m_def)
+    qed
+  next
+    case (Eq2 i b)
+    have c: \<open>cons j = unat i\<close> using Eq2 by (simp add: cons_def consumed_m_def ref_index_m_def)
+    have \<open>rcnt [b] (unat i) = 0\<close> using once Eq2 c by (simp add: rcnt_Bin rcnt_Ref)
+    then have S: \<open>eval_m m' dv' b = eval_m m dv b \<and> length (eval_m m dv b) = cwidth ews eds b\<close>
+      using sub[of b] Eq2 c no_ref_of_rcnt0 by auto
+    have w: \<open>cwidth ews eds b = eds ! unat i\<close> \<open>eds ! j = 1\<close> using wtj E Eq2 by auto
+    let ?o = \<open>eval_m m dv b\<close>
+    have l1: \<open>length v = 1\<close> \<open>0 < length ?o\<close> using lv w S Eq2 by simp_all
+    have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat i, if v ! 0 then ?o else bnot_m ?o)\<close>
+      using Eq2 by (simp add: invert_m_def ref_index_m_def)
+    show ?thesis using inv c inv_eq[OF l1] S Eq2 w by (simp add: eval_bin_m_def)
+  next
+    case (Eq3 a i)
+    have c: \<open>cons j = unat i\<close> using Eq3 by (simp add: cons_def consumed_m_def ref_index_m_def)
+    have \<open>rcnt [a] (unat i) = 0\<close> using once Eq3 c by (simp add: rcnt_Bin rcnt_Ref)
+    then have S: \<open>eval_m m' dv' a = eval_m m dv a \<and> length (eval_m m dv a) = cwidth ews eds a\<close>
+      using sub[of a] Eq3 c no_ref_of_rcnt0 by auto
+    have w: \<open>cwidth ews eds a = eds ! unat i\<close> \<open>eds ! j = 1\<close> using wtj E Eq3 by auto
+    let ?o = \<open>eval_m m dv a\<close>
+    have l1: \<open>length v = 1\<close> \<open>0 < length ?o\<close> using lv w S Eq3 by simp_all
+    have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat i, if v ! 0 then ?o else bnot_m ?o)\<close>
+      using Eq3 by (simp add: invert_m_def ref_index_m_def)
+    show ?thesis using inv c inv_eq[OF l1] S Eq3 w by (simp add: eval_bin_m_def)
+  next
+    case (MD op a b)
+    have c: \<open>cons j = unat a\<close> \<open>sec j = unat b\<close> using MD by (simp_all add: cons_def consumed_m_def sec_def second_m_def ref_index_m_def)
+    have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat a, v)\<close>
+      using MD by (auto simp: invert_m_def ref_index_m_def)
+    have nc: \<open>op \<noteq> BinOp_Concat\<close> \<open>op \<noteq> BinOp_Eq\<close> \<open>op \<noteq> BinOp_Ult\<close> using MD(2) by auto
+    have ww: \<open>eds ! unat a = eds ! unat b\<close> using wtj MD(1) nc by simp
+    have we: \<open>cwidth ews eds (eD ! j) = eds ! unat a\<close> using MD(1) nc by (cases op) simp_all
+    have w: \<open>eds ! unat a = eds ! j\<close> \<open>eds ! unat b = eds ! j\<close> using ww we E by simp_all
+    have rb: \<open>is_ref (unat b) (CoreTerm_Ref b)\<close> \<open>CoreTerm_Ref b \<in> set (csubterms (eD ! j))\<close>
+      using MD by (simp_all add: is_ref_def)
+    have Ob: \<open>dv' ! unat b = dv ! unat b\<close>
+      using O[THEN bspec, OF rb(2), THEN spec, of \<open>unat b\<close>] rb(1) c MD(4) by simp
+    have db: \<open>dv' ! unat b = bits_one_m (eds ! j)\<close> using Ob T4 MD(3) c w by simp
+    show ?thesis
+    proof (cases \<open>op = BinOp_Mul\<close>)
+      case True
+      then show ?thesis using inv c w lv db MD inv_mul(1)[of v \<open>eds ! j\<close>] by (simp add: eval_bin_m_def)
+    next
+      case False
+      then have U: \<open>op = BinOp_Udiv\<close> using MD by simp
+      then show ?thesis using inv c w lv db MD inv_mul(2)[of v \<open>eds ! j\<close>] by (simp add: eval_bin_m_def)
+    qed
+  next
+    case (Ite x a b)
+    have c: \<open>cons j = unat x\<close> using Ite by (simp add: cons_def consumed_m_def ref_index_m_def)
+    have \<open>rcnt [CoreTerm_Ref a] (unat x) = 0\<close> \<open>rcnt [CoreTerm_Ref b] (unat x) = 0\<close>
+      using once Ite(1) c by (simp_all add: rcnt_Ite rcnt_Ref)
+    then have ne: \<open>unat a \<noteq> unat x\<close> \<open>unat b \<noteq> unat x\<close> by (simp_all add: rcnt_Ref split: if_splits)
+    obtain ca where ca: \<open>eD ! unat a = CoreTerm_Const [ca]\<close> \<open>bit_const_m (eD ! unat a) = (if ca then 1 else 0)\<close>
+      using bit_const_cases[OF Ite(3)] by blast
+    obtain cb where cb: \<open>eD ! unat b = CoreTerm_Const [cb]\<close> \<open>bit_const_m (eD ! unat b) = (if cb then 1 else 0)\<close>
+      using bit_const_cases[OF Ite(4)] by blast
+    have cab: \<open>ca \<noteq> cb\<close> using Ite(5) ca(2) cb(2) by (cases ca; cases cb) simp_all
+    have ra: \<open>dv' ! unat a = [ca]\<close> \<open>dv ! unat a = [ca]\<close>
+      using O Ite ne c ca by (auto simp: is_ref_def)
+    have rb: \<open>dv' ! unat b = [cb]\<close> using O Ite ne c cb by (auto simp: is_ref_def)
+    have w: \<open>eds ! unat x = 1\<close> \<open>eds ! j = eds ! unat a\<close> using wtj E Ite by auto
+    have wa: \<open>eds ! unat a = 1\<close>
+    proof -
+      have \<open>unat a < j\<close> using wt_D[OF j] Ite(1) len_eds j by simp
+      then show ?thesis using eds_nth[of \<open>unat a\<close>] ca j by simp
+    qed
+    have l1: \<open>length v = 1\<close> using lv w wa by simp
+    have inv: \<open>invert_m (eD ! j) (kd ! j) v m dv dv2 = (unat x, [beq_m v [ca]])\<close>
+      using Ite ra by (simp add: invert_m_def ref_index_m_def)
+    show ?thesis using inv c w ra rb Ite inv_ite[OF l1 cab] by (auto split: if_splits)
+  qed
+qed
+
+end
 
 end

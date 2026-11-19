@@ -885,4 +885,33 @@ lemma mk_char:
 
 end
 
+context elim_prob
+begin
+
+lemma take_eds_nth: \<open>i < k \<Longrightarrow> k \<le> en \<Longrightarrow> take k eds ! i = eds ! i\<close>
+  by simp
+
+text \<open>A rewritten definition is no wider than the operand it consumes; when narrower, it is an
+  \<open>extract\<close> of width at least 1.\<close>
+lemma kd_width:
+  assumes k: \<open>k < en\<close> and h: \<open>2 \<le> kd ! k\<close>
+  shows \<open>eds ! k \<le> eds ! cons k \<and> (eds ! k \<noteq> eds ! cons k \<longrightarrow> 1 \<le> eds ! k \<and> eds ! k - 1 < 2 ^ 64)\<close>
+proof -
+  note sh = free_kind_shape[OF ana(5)[OF k] h]
+  have W: \<open>cwt ews (take k eds) (eD ! k)\<close> using wt_D[OF k] .
+  have E: \<open>eds ! k = cwidth ews (take k eds) (eD ! k)\<close> using eds_nth[OF k] .
+  have lk: \<open>length (take k eds) = k\<close> using k len_eds by simp
+  have fl: \<open>free_once_m (take k kd) erc x \<Longrightarrow> x < k\<close> for x using fo_take k by blast
+  have ec: \<open>i < en \<Longrightarrow> eD ! i = CoreTerm_Const bs \<Longrightarrow> eds ! i = length bs\<close> for i bs
+    using eds_nth[of i] by simp
+  have u64: \<open>unat (w :: 64 word) - y < 18446744073709551616\<close> for w y
+    using unat_lt2p[of w] by simp
+  show ?thesis
+    using sh
+  proof (elim disjE exE conjE)
+  qed (use W E lk fl k ec in \<open>auto simp: cons_def consumed_m_def ref_index_m_def bit_const_m_def u64 split: CoreTerm.splits if_splits\<close>)
+qed
+
+end
+
 end

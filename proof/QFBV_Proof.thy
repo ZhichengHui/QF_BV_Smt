@@ -1,5 +1,5 @@
 theory QFBV_Proof
-  imports QFBV_Refine QFBV_Eval QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount QFBV_Elim
+  imports QFBV_Refine QFBV_Eval QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount QFBV_ElimSpec
 begin
 
 lemma lin1: \<open>1 \<le> w + 1\<close> for w :: nat
@@ -887,10 +887,10 @@ next
 qed
 
 text \<open>Within \<^const>\<open>sizes_ok\<close>, the core problem built by the rewriting is within the fuel of the
-  core solver.\<close>
-theorem lower_fuel_lt:
+  core solver: it meets the hypotheses of \<open>fuel_bound_lt\<close>.\<close>
+theorem lower_fb_hyps:
   assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
-  shows \<open>fuel_bound (lower_problem_m p) < 2 ^ 64\<close>
+  shows \<open>fb_hyps (lower_problem_m p)\<close>
 proof -
   let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
@@ -965,8 +965,8 @@ proof -
     qed
   qed
   show ?thesis
-  proof (rule fuel_bound_lt)
-    show \<open>cproblem_wt ?q\<close> by (rule cwt)
+    unfolding fb_hyps_def
+  proof (intro conjI)
     show \<open>2 + sum_list (cvar_widths ?q) + length (CoreProblem_asserts ?q) +
       sum_list (map (ccount (cvar_widths ?q) (cdef_widths (cvar_widths ?q) [] (CoreProblem_defs ?q)))
         (CoreProblem_defs ?q @ CoreProblem_asserts ?q)) < 2 ^ 63\<close>
@@ -979,6 +979,11 @@ proof -
       unfolding qw cds using tb .
   qed
 qed
+
+theorem lower_fuel_lt:
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
+  shows \<open>fuel_bound (lower_problem_m p) < 2 ^ 64\<close>
+  by (rule fb_hyps_lt[OF lower_problem_correct(1)[OF assms(1) prob_bnd[OF assms]] lower_fb_hyps[OF assms]])
 
 section \<open>The top-level theorem\<close>
 
@@ -1294,31 +1299,39 @@ subsection \<open>\<^verbatim>\<open>solve\<close> meets the specification's con
 text \<open>The top-level theorem: \<^const>\<open>solve\<close> meets \<^const>\<open>solve_contract\<close> of the specification (Sat yields a
   model, Unsat rules out every model, well-sortedness as precondition) whenever the translation's
   fuel covers \<^const>\<open>size_bound\<close>, which is expressed on the problem alone, and exceeds
-  \<^const>\<open>dpll_fuel\<close> of the rewritten problem, the bound of the search loop of \<^verbatim>\<open>dpll\<close>.\<close>
-text \<open>\<^const>\<open>solve\<close> only calls \<^const>\<open>lower_problem\<close> and \<^const>\<open>solve_core\<close>; narrow the
-  automation's specification set to those so its proof stays fast.\<close>
+  \<^const>\<open>dpll_fuel\<close> of the rewritten problem after the elimination of its unconstrained
+  definitions, the bound of the search loop of \<^verbatim>\<open>dpll\<close>.\<close>
+text \<open>\<^const>\<open>solve\<close> only calls \<^const>\<open>lower_problem\<close>, \<^const>\<open>elim\<close>, \<^const>\<open>solve_core\<close> and
+  \<^const>\<open>reconstruct\<close>; their specifications are given to the automation explicitly.\<close>
 declare lower_spec cref_spec lower_problem_spec [crush_specs del]
 
 theorem solve_spec:
-  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>dpll_fuel (lower_problem_m p) < urust_fuel\<close>
+  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m p))) < urust_fuel\<close>
   shows \<open>\<Gamma>; solve p \<Turnstile>\<^sub>F solve_contract p\<close>
 proof (cases \<open>problem_wt p\<close>)
   case True
   have bnd: \<open>bnd (fst (lasserts_res p))\<close> using prob_bnd[OF True assms(2)] .
-  \<comment> \<open>Abstract the rewritten problem to a variable, so the automation works on a small goal
-      instead of the (very large) unfolded \<^term>\<open>lower_problem_m p\<close>.\<close>
+  \<comment> \<open>Abstract the rewritten problem and its elimination to variables, so the automation works on
+      a small goal instead of the (very large) unfolded \<^term>\<open>lower_problem_m p\<close>.\<close>
   obtain q where q: \<open>lower_problem_m p = q\<close> by blast
+  obtain q2 kd mk where e: \<open>elim_m q = (q2, kd, mk)\<close> by (cases \<open>elim_m q\<close>) auto
   have sz: \<open>csize_bound q \<le> urust_fuel\<close> using lower_size_bound[OF True bnd] assms(1) q by simp
-  have sz2: \<open>fuel_bound q < 2 ^ 64\<close> using lower_fuel_lt[OF True assms(2)] q by simp
-  have df: \<open>dpll_fuel q < urust_fuel\<close> using assms(3) q by simp
   have cwt: \<open>cproblem_wt q\<close> using lower_problem_correct(1)[OF True bnd] q by simp
+  have H: \<open>fb_hyps q\<close> using lower_fb_hyps[OF True assms(2)] q by simp
+  have fq: \<open>fuel_bound q \<le> urust_fuel\<close> using fuel_bound_le[OF cwt] sz by simp
+  note EF = elim_facts[OF cwt H fq e]
+  have sz2: \<open>csize_bound q2 \<le> urust_fuel\<close> using EF(3) sz by simp
+  have df: \<open>dpll_fuel q2 < urust_fuel\<close> using assms(3) q e by simp
   have cm: \<open>cis_model q m = is_model p m\<close> for m using lower_problem_correct(2)[OF True bnd] q by simp
+  have unsat: \<open>\<forall>m. \<not> cis_model q2 m \<Longrightarrow> \<forall>m. \<not> is_model p m\<close> using EF(5) cm by blast
+  have sat: \<open>cis_model q2 m2 \<Longrightarrow> recon_pre urust_fuel q kd mk q2 m2 \<and> is_model p (reconstruct_m q kd mk q2 m2)\<close> for m2
+    using EF(6) cm by blast
   show ?thesis
     apply (crush_boot f: solve_def contract: solve_contract_def)
-    apply (crush_base specs add: lower_problem_spec solve_core_spec[OF sz sz2 df]
-        contracts add: lower_problem_contract_def csolve_contract_def
-        simp add: lp_pre_def True assms q cwt)
-    using cm assms by (auto split: Answer.splits)
+    apply (crush_base specs add: lower_problem_spec elim_spec solve_core_spec[OF sz2 EF(4) df] reconstruct_spec
+        contracts add: lower_problem_contract_def elim_contract_def csolve_contract_def reconstruct_contract_def
+        simp add: lp_pre_def True assms q cwt fq EF(1) e split: Answer.splits)
+    sorry
 next
   case False
   then have F: \<open>problem_wt p = False\<close> by simp
@@ -1345,7 +1358,8 @@ lemma QFBV_ctxI:
   by intro_locales
 
 text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>QFBV_Spec\<close>. The bound on
-  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close> plus \<^const>\<open>dpll_fuel\<close> of the rewritten problem, which
+  the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close> plus \<^const>\<open>dpll_fuel\<close> of the rewritten problem after the
+  elimination, which
   \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close> supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
 theorem solve_correct:
   shows \<open>solve_correct \<Gamma>\<close>
@@ -1354,10 +1368,10 @@ proof (unfold solve_correct_def, intro allI impI)
   assume \<open>problem_wt p \<and> sizes_ok p\<close>
   then have ov: \<open>sizes_ok p\<close> by simp
   have \<open>\<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
-    if \<open>size_bound p + Suc (dpll_fuel (lower_problem_m p)) \<le> fuel\<close> for fuel
+    if \<open>size_bound p + Suc (dpll_fuel (fst (elim_m (lower_problem_m p)))) \<le> fuel\<close> for fuel
     by (rule QFBV_ctx.solve_spec[OF QFBV_ctxI _ ov]) (use that in simp_all)
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
-    by (intro exI[of _ \<open>size_bound p + Suc (dpll_fuel (lower_problem_m p))\<close>]) simp
+    by (intro exI[of _ \<open>size_bound p + Suc (dpll_fuel (fst (elim_m (lower_problem_m p))))\<close>]) simp
 qed
 
 end

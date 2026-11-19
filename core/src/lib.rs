@@ -1089,6 +1089,290 @@ pub fn solve(p: &Problem) -> Answer {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Evaluation of core terms. A value is a list of bits, least significant bit first, as in a
+// model. Model reconstruction needs the values of definitions under a model.
+
+fn bits_not(a: &Vec<bool>) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < a.len() {
+        r.push(!a[i]);
+        i += 1;
+    }
+    r
+}
+
+/// `x & y`, `x | y` or `x ^ y` for `And`, `Or` or `Xor` (any other operator).
+fn bit_op(op: &BinOp, x: bool, y: bool) -> bool {
+    match op {
+        BinOp::And => x && y,
+        BinOp::Or => x || y,
+        _ => x != y,
+    }
+}
+
+/// `And`, `Or` or `Xor` (any other operator) bit by bit.
+fn bits_bitwise(op: &BinOp, a: &Vec<bool>, b: &Vec<bool>) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < a.len() {
+        r.push(bit_op(op, a[i], b[i]));
+        i += 1;
+    }
+    r
+}
+
+/// The sum bit and the carry of `x + y + c`.
+fn full_add(x: bool, y: bool, c: bool) -> (bool, bool) {
+    let s = x != (y != c);
+    if x == y {
+        (s, x)
+    } else {
+        (s, c)
+    }
+}
+
+/// The sum of `a`, `b` and the carry `cin`, truncated to the width of `a`, and the carry out.
+fn bits_add(a: &Vec<bool>, b: &Vec<bool>, cin: bool) -> (Vec<bool>, bool) {
+    let mut carry = cin;
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < a.len() {
+        let (s, c) = full_add(a[i], b[i], carry);
+        r.push(s);
+        carry = c;
+        i += 1;
+    }
+    (r, carry)
+}
+
+/// `a` shifted by `s` places, to the left (towards the high bits) or to the right.
+fn bits_shift_const(a: &Vec<bool>, s: usize, left: bool) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut j: usize = 0;
+    while j < a.len() {
+        if left {
+            if j < s {
+                r.push(false);
+            } else {
+                r.push(a[j - s]);
+            }
+        } else if s < a.len() - j {
+            r.push(a[j + s]);
+        } else {
+            r.push(false);
+        }
+        j += 1;
+    }
+    r
+}
+
+/// The product of `a` and `b`, truncated to the width of `a`: the sum of `a << i` over the set
+/// bits `i` of `b`.
+fn bits_mul(a: &Vec<bool>, b: &Vec<bool>) -> Vec<bool> {
+    let mut acc = vec![false; a.len()];
+    let mut i: usize = 0;
+    while i < a.len() {
+        if b[i] {
+            let (s, _) = bits_add(&acc, &bits_shift_const(a, i, true), false);
+            acc = s;
+        }
+        i += 1;
+    }
+    acc
+}
+
+fn bits_eq(a: &Vec<bool>, b: &Vec<bool>) -> bool {
+    let mut r = true;
+    let mut i: usize = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            r = false;
+        }
+        i += 1;
+    }
+    r
+}
+
+/// Whether `a < b` (unsigned): `a + !b + 1` has no carry out.
+fn bits_ult(a: &Vec<bool>, b: &Vec<bool>) -> bool {
+    let (_, c) = bits_add(a, &bits_not(b), true);
+    !c
+}
+
+/// `a` extended with zeros, or truncated, to width `w`.
+fn bits_zext(a: &Vec<bool>, w: usize) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < w {
+        if i < a.len() {
+            r.push(a[i]);
+        } else {
+            r.push(false);
+        }
+        i += 1;
+    }
+    r
+}
+
+/// `2 r + x`, truncated to the width of `r`: `x` below the bits of `r` but its highest.
+fn bits_shl1(r: &Vec<bool>, x: bool) -> Vec<bool> {
+    let mut s = Vec::new();
+    s.push(x);
+    let mut k: usize = 0;
+    while k + 1 < r.len() {
+        s.push(r[k]);
+        k += 1;
+    }
+    s
+}
+
+/// The unsigned quotient and remainder of `a` and `b` (all ones and `a` if `b` is 0), by long
+/// division: from the highest bit of `a` down, the remainder so far (one bit wider than `a`, so
+/// that `2 r + 1` fits) takes the next bit, and `b` is subtracted where it fits.
+fn bits_divrem(a: &Vec<bool>, b: &Vec<bool>) -> (Vec<bool>, Vec<bool>) {
+    let w = a.len();
+    if bits_eq(b, &vec![false; w]) {
+        return (vec![true; w], a.clone());
+    }
+    let nb = bits_not(&bits_zext(b, w + 1));
+    let mut q = vec![false; w];
+    let mut r = vec![false; w + 1];
+    let mut i: usize = w;
+    while i > 0 {
+        i -= 1;
+        let r1 = bits_shl1(&r, a[i]);
+        let (d, c) = bits_add(&r1, &nb, true);
+        if c {
+            r = d;
+            q[i] = true;
+        } else {
+            r = r1;
+        }
+    }
+    (q, bits_zext(&r, w))
+}
+
+/// One step of the shift amount: `2 s + x`, at most `w`, if `s < w`; otherwise `s`.
+fn shift_amount_step(s: usize, x: bool, w: usize) -> usize {
+    if s < w {
+        let t = if x { s + s + 1 } else { s + s };
+        if t > w {
+            w
+        } else {
+            t
+        }
+    } else {
+        s
+    }
+}
+
+/// `a` shifted by `b`: by the value of `b`, or by the width of `a` (all zeros) if that is smaller.
+/// The shift is computed from the highest bit of `b` down and kept at most the width.
+fn bits_shift(a: &Vec<bool>, b: &Vec<bool>, left: bool) -> Vec<bool> {
+    let w = a.len();
+    let mut s: usize = 0;
+    let mut i: usize = b.len();
+    while i > 0 {
+        i -= 1;
+        s = shift_amount_step(s, b[i], w);
+    }
+    bits_shift_const(a, s, left)
+}
+
+/// Bits `lo..=hi` of `a`.
+fn bits_extract(a: &Vec<bool>, hi: usize, lo: usize) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = lo;
+    while i <= hi {
+        r.push(a[i]);
+        i += 1;
+    }
+    r
+}
+
+/// The concatenation with `hi` as the high part.
+fn bits_concat(hi: &Vec<bool>, lo: &Vec<bool>) -> Vec<bool> {
+    let mut r = lo.clone();
+    let mut i: usize = 0;
+    while i < hi.len() {
+        r.push(hi[i]);
+        i += 1;
+    }
+    r
+}
+
+fn eval_bin(op: &BinOp, a: &Vec<bool>, b: &Vec<bool>) -> Vec<bool> {
+    match op {
+        BinOp::And => bits_bitwise(op, a, b),
+        BinOp::Or => bits_bitwise(op, a, b),
+        BinOp::Xor => bits_bitwise(op, a, b),
+        BinOp::Add => {
+            let (s, _) = bits_add(a, b, false);
+            s
+        }
+        BinOp::Mul => bits_mul(a, b),
+        BinOp::Udiv => {
+            let (q, _) = bits_divrem(a, b);
+            q
+        }
+        BinOp::Urem => {
+            let (_, r) = bits_divrem(a, b);
+            r
+        }
+        BinOp::Shl => bits_shift(a, b, true),
+        BinOp::Lshr => bits_shift(a, b, false),
+        BinOp::Concat => bits_concat(a, b),
+        BinOp::Eq => {
+            let mut r = Vec::new();
+            r.push(bits_eq(a, b));
+            r
+        }
+        BinOp::Ult => {
+            let mut r = Vec::new();
+            r.push(bits_ult(a, b));
+            r
+        }
+    }
+}
+
+/// The value of `t`, given the values `vars` of the variables and `defs` of the definitions.
+pub fn eval_term(vars: &Vec<Vec<bool>>, defs: &Vec<Vec<bool>>, t: &CoreTerm) -> Vec<bool> {
+    match t {
+        CoreTerm::Const(bits) => bits.clone(),
+        CoreTerm::Var(i) => vars[*i].clone(),
+        CoreTerm::Ref(i) => defs[*i].clone(),
+        CoreTerm::Not(a) => bits_not(&eval_term(vars, defs, a)),
+        CoreTerm::Bin(op, a, b) => {
+            let x = eval_term(vars, defs, a);
+            let y = eval_term(vars, defs, b);
+            eval_bin(op, &x, &y)
+        }
+        CoreTerm::Extract(hi, lo, a) => bits_extract(&eval_term(vars, defs, a), *hi, *lo),
+        CoreTerm::Ite(c, a, b) => {
+            let x = eval_term(vars, defs, c);
+            if x[0] {
+                eval_term(vars, defs, a)
+            } else {
+                eval_term(vars, defs, b)
+            }
+        }
+    }
+}
+
+/// The values of the definitions of `p` under the assignment `m` of its variables.
+pub fn eval_defs(p: &CoreProblem, m: &Vec<Vec<bool>>) -> Vec<Vec<bool>> {
+    let mut defs = Vec::new();
+    let mut j: usize = 0;
+    while j < p.defs.len() {
+        let v = eval_term(m, &defs, &p.defs[j]);
+        defs.push(v);
+        j += 1;
+    }
+    defs
+}
+
+// ---------------------------------------------------------------------------------------------
 // The general problem structure: the interface to the SMT-LIB front end. These definitions are,
 // word for word, those of the front end (`frontend/src/problem.rs`); see there for their meaning.
 

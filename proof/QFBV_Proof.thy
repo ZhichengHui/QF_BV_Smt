@@ -1,5 +1,5 @@
 theory QFBV_Proof
-  imports QFBV_Refine QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount
+  imports QFBV_Refine QFBV_Eval QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount
 begin
 
 lemma lin1: \<open>1 \<le> w + 1\<close> for w :: nat

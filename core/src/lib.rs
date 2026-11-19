@@ -1808,26 +1808,43 @@ fn mark_live(live: Vec<bool>, t: &CoreTerm) -> Vec<bool> {
     }
 }
 
-/// The problem with the free definitions rewritten and the unreachable ones replaced by
-/// constants, the kinds and the marks of the definitions.
-pub fn elim(q: &CoreProblem) -> (CoreProblem, Vec<usize>, Vec<usize>) {
-    let n = q.defs.len();
-    let mut vc: Vec<usize> = vec![0; q.widths.len()];
-    let mut rc: Vec<usize> = vec![0; n];
-    let mut j: usize = 0;
-    while j < n {
-        let (v1, r1) = count_occ(vc, rc, &q.defs[j]);
-        vc = v1;
-        rc = r1;
-        j += 1;
-    }
+/// Adds the occurrences of variables and of definitions in the terms `ts` to `vc` and `rc`.
+fn count_terms(vc: Vec<usize>, rc: Vec<usize>, ts: &Vec<CoreTerm>) -> (Vec<usize>, Vec<usize>) {
+    let mut vc = vc;
+    let mut rc = rc;
     let mut i: usize = 0;
-    while i < q.asserts.len() {
-        let (v1, r1) = count_occ(vc, rc, &q.asserts[i]);
+    while i < ts.len() {
+        let (v1, r1) = count_occ(vc, rc, &ts[i]);
         vc = v1;
         rc = r1;
         i += 1;
     }
+    (vc, rc)
+}
+
+/// The definition `t` of kind `c` and width `w` rewritten (given the widths `dw` of the
+/// definitions before it, and the number `n` of definitions), and the marks updated.
+fn rewrite_def(t: &CoreTerm, c: usize, w: usize, dw: &Vec<usize>, n: usize, mark: Vec<usize>) -> (CoreTerm, Vec<usize>) {
+    if c >= 2 {
+        let a = consumed(t, c, n);
+        let mut mark = set_at(mark, a, 1);
+        if c == 4 {
+            mark = set_at(mark, second(t, n), 2);
+        }
+        if dw[a] == w {
+            (CoreTerm::Ref(a), mark)
+        } else {
+            (cextract(w - 1, 0, cref(a)), mark)
+        }
+    } else {
+        (copy_term(t), mark)
+    }
+}
+
+/// The widths, the kinds and the marks of the definitions of `q`, and the definitions with the
+/// free ones rewritten, given the occurrence counts `vc`, `rc`.
+fn analyse(q: &CoreProblem, vc: &Vec<usize>, rc: &Vec<usize>) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<CoreTerm>) {
+    let n = q.defs.len();
     let mut dw: Vec<usize> = Vec::new();
     let mut kind: Vec<usize> = Vec::new();
     let mut mark: Vec<usize> = vec![0; n];
@@ -1836,32 +1853,34 @@ pub fn elim(q: &CoreProblem) -> (CoreProblem, Vec<usize>, Vec<usize>) {
     while k < n {
         let t = &q.defs[k];
         let w = term_width(&q.widths, &dw, t);
-        let c = free_kind(&q.defs, &dw, &vc, &rc, &kind, t);
-        if c >= 2 {
-            let a = consumed(t, c, n);
-            mark = set_at(mark, a, 1);
-            if c == 4 {
-                mark = set_at(mark, second(t, n), 2);
-            }
-            if dw[a] == w {
-                defs.push(CoreTerm::Ref(a));
-            } else {
-                defs.push(cextract(w - 1, 0, cref(a)));
-            }
-        } else {
-            defs.push(copy_term(t));
-        }
+        let c = free_kind(&q.defs, &dw, vc, rc, &kind, t);
+        let (t2, m1) = rewrite_def(t, c, w, &dw, n, mark);
+        mark = m1;
+        defs.push(t2);
         dw.push(w);
         kind.push(c);
         k += 1;
     }
-    let mut live: Vec<bool> = vec![false; n];
+    (dw, kind, mark, defs)
+}
+
+/// Marks the definitions referred to in the terms `ts` as live.
+fn mark_terms(live: Vec<bool>, ts: &Vec<CoreTerm>) -> Vec<bool> {
+    let mut live = live;
     let mut l: usize = 0;
-    while l < q.asserts.len() {
-        live = mark_live(live, &q.asserts[l]);
+    while l < ts.len() {
+        live = mark_live(live, &ts[l]);
         l += 1;
     }
-    let mut d: usize = n;
+    live
+}
+
+/// From the last definition down: a live definition marks the definitions it refers to as live,
+/// any other one becomes the constant zero of its width (`dw`).
+fn dce(live: Vec<bool>, dw: &Vec<usize>, defs: Vec<CoreTerm>) -> Vec<CoreTerm> {
+    let mut live = live;
+    let mut defs = defs;
+    let mut d: usize = defs.len();
     while d > 0 {
         d -= 1;
         if live[d] {
@@ -1870,13 +1889,29 @@ pub fn elim(q: &CoreProblem) -> (CoreProblem, Vec<usize>, Vec<usize>) {
             defs[d] = CoreTerm::Const(vec![false; dw[d]]);
         }
     }
-    let mut asserts: Vec<CoreTerm> = Vec::new();
+    defs
+}
+
+fn copy_terms(ts: &Vec<CoreTerm>) -> Vec<CoreTerm> {
+    let mut r: Vec<CoreTerm> = Vec::new();
     let mut a: usize = 0;
-    while a < q.asserts.len() {
-        asserts.push(copy_term(&q.asserts[a]));
+    while a < ts.len() {
+        r.push(copy_term(&ts[a]));
         a += 1;
     }
-    (CoreProblem { widths: q.widths.clone(), defs, asserts }, kind, mark)
+    r
+}
+
+/// The problem with the free definitions rewritten and the unreachable ones replaced by
+/// constants, the kinds and the marks of the definitions.
+pub fn elim(q: &CoreProblem) -> (CoreProblem, Vec<usize>, Vec<usize>) {
+    let n = q.defs.len();
+    let (vc, rc) = count_terms(vec![0; q.widths.len()], vec![0; n], &q.defs);
+    let (vc, rc) = count_terms(vc, rc, &q.asserts);
+    let (dw, kind, mark, defs) = analyse(q, &vc, &rc);
+    let live = mark_terms(vec![false; n], &q.asserts);
+    let defs = dce(live, &dw, defs);
+    (CoreProblem { widths: q.widths.clone(), defs, asserts: copy_terms(&q.asserts) }, kind, mark)
 }
 
 /// The constant 1 of width `w` (0 if `w` is 0).

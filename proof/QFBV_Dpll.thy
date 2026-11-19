@@ -20,16 +20,23 @@ lemma wx_ex: \<open>q < length t \<Longrightarrow> lidx (lneg (t ! q)) = x \<Lon
 
 lemma wpw_step:
   assumes \<open>wprop_winv cs p t q p' nx' h' t' q'\<close> \<open>q' < length t'\<close> \<open>visit_post cs xn p' t' p1 nx1 h1 t1 b\<close>
-    \<open>lidx (lneg (t' ! q')) = xn\<close> \<open>wprop_inv cs t' n a1 t1\<close> \<open>wprop_inv cs t n a' t'\<close>
+    \<open>lidx (lneg (t' ! q')) = xn\<close> \<open>wprop_post cs t' n a1 t1 b'\<close> \<open>wprop_inv cs t n a' t'\<close>
   shows \<open>(b \<longrightarrow> wprop_winv cs p t q p1 nx1 h1 t1 (Suc q')) \<and> wprop_wpost cs p t q p1 nx1 h1 t1 (Suc q') False\<close>
 proof -
   obtain e where e: \<open>t' = t @ e\<close> using assms(6) by (auto simp: wprop_inv_def)
   have T: \<open>\<exists>e. t = take (length t) t'\<close> \<open>length t \<le> length t'\<close> using e by simp_all
-  have T1: \<open>\<exists>e. t1 = t' @ e\<close> using assms(5) by (auto simp: wprop_inv_def)
+  have T1: \<open>\<exists>e. t1 = t' @ e\<close> using assms(5) by (auto simp: wprop_post_def wprop_inv_def)
   note S = wprop_winv_step[OF assms(1,2) T(1) assms(3)[folded assms(4)] T1 T(2)]
   have \<open>q \<le> q'\<close> using assms(1) by (simp add: wprop_winv_def)
   then show ?thesis using S by (simp add: wprop_wpost_def)
 qed
+
+lemma wpw_exit':
+  \<open>wprop_winv cs p t q p' nx' h' t' (length t') \<Longrightarrow> wprop_wpost cs p t q p' nx' h' t' (length t') True\<close>
+  by (simp add: wprop_winv_def wprop_wpost_def)
+
+lemma winv_wl: \<open>wprop_winv cs p t q p' nx' h' t' q' \<Longrightarrow> wl_ok cs p' nx' h'\<close>
+  by (simp add: wprop_winv_def)
 
 lemma wpw_exit:
   \<open>wprop_winv cs p t q p' nx' h' t' q' \<Longrightarrow> \<not> q' < length t' \<Longrightarrow> q' \<le> length t' \<Longrightarrow>
@@ -87,11 +94,13 @@ lemma dpll_wpropagate_spec [crush_specs]:
         simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc Suc2_lt)
     apply (all \<open>(frule (1) wprop_step)?\<close>)
     apply (all \<open>(frule q_suc2, assumption, assumption)?\<close>)
-    apply (all \<open>(rule wx_ex; (assumption | (simp add: lidx_def lneg_def; fail)))?\<close>)
+    apply (all \<open>(rule wx_ex, assumption, (simp add: lidx_def lneg_def; fail))?\<close>)
     apply (all \<open>(frule wpw_step, assumption, assumption, (simp add: lidx_def lneg_def; fail), assumption,
         assumption)?\<close>)
     apply (all \<open>(frule (2) wpw_exit)?\<close>)
-    sorry
+    apply (auto simp add: dpll_wpre_def wprop_post_def unat_of_nat_eq
+        intro: tb_var tb_dbl tr_ok_length wprop_refl wprop_winv_refl winv_wl wpw_exit')
+    done
   done
 
 text \<open>The steps of the search loop of \<^verbatim>\<open>dpll\<close>, now with propagation over the watches.\<close>
@@ -249,8 +258,7 @@ proof -
   have P: \<open>wl_ok cs p1 nx1 h1\<close> \<open>q \<le> q1\<close> \<open>\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p1 t1 k\<close>
     \<open>b \<longrightarrow> q1 = length t1 \<and> (WS cs p t (set (take q t)) \<longrightarrow> WS cs p1 t1 (set t1))\<close>
     using assms(2) by (simp_all add: wprop_wpost_def)
-  have \<open>b \<longrightarrow> q1 = length t1 \<and> (WS cs p t (set (take q t)) \<longrightarrow> WS cs p1 t1 (set (take q1 t1)))\<close> using P(4) by simp
-  then show ?thesis using wstate_prop[OF assms(1) P(1) e P(2) assms(4) P(3)] by blast
+  show ?thesis by (rule wstate_prop[OF assms(1) P(1) e P(2) assms(4) P(3) P(4)])
 qed
 
 lemma dpll_wsatW:
@@ -268,11 +276,12 @@ qed
 
 lemma dpll_wdecW:
   assumes \<open>wstate cs p nx h t (unat q) L\<close> \<open>wprop_wpost cs p t (unat q) p1 nx1 h1 t1 (unat q1) True\<close>
-    \<open>wprop_post cs t N a1 t1 True\<close> \<open>unat q1 \<le> length t1\<close> \<open>length t1 < 2 ^ 64\<close>
+    \<open>wprop_post cs t N a1 t1 True\<close> \<open>unat q1 \<le> length t1\<close> \<open>N < 9223372036854775808\<close>
   shows \<open>wstate cs p1 nx1 h1 (t1 @ [l]) (unat q1) (L @ [unat (word64_of_nat (length t1))])\<close>
 proof -
   have W: \<open>wstate cs p1 nx1 h1 t1 (unat q1) L\<close> \<open>unat q1 = length t1\<close> using wst_after[OF assms(1-4)] by blast+
-  have \<open>unat (word64_of_nat (length t1)) = length t1\<close> using assms(5) by (simp add: unat_of_nat_eq)
+  have \<open>length t1 \<le> N\<close> using wprop_post_len[OF assms(3)] by simp
+  then have \<open>unat (word64_of_nat (length t1)) = length t1\<close> using assms(5) by (simp add: unat_of_nat_eq)
   then show ?thesis using wstate_decide[OF W(1)[unfolded W(2)]] W(2) by simp
 qed
 
@@ -297,11 +306,14 @@ qed
 
 lemma dpll_wst_init:
   assumes \<open>wl_ok cs p nx h\<close> \<open>\<forall>c \<in> set cs. lits_lt N c \<and> P c\<close> \<open>tpass_m cs (replicate N None) [] = (a0, t0, True)\<close>
-  shows \<open>wstate cs p nx h t0 (unat (0 :: 64 word)) (map unat [])\<close>
+  shows \<open>wstate cs p nx h t0 0 []\<close>
 proof -
   have \<open>SP cs t0\<close> by (rule tpass_SP[OF _ tr_ok_init assms(3)]) (use assms(2) in \<open>simp add: dpll_wf_def\<close>)
   then show ?thesis using wstate_init[OF assms(1)] by simp
 qed
+
+lemma wstate_wl: \<open>wstate cs p nx h t q L \<Longrightarrow> wl_ok cs p nx h\<close>
+  by (simp add: wstate_def)
 
 lemma tr_ok_lenA: \<open>tr_ok n a t \<Longrightarrow> length a = n\<close>
   by (simp add: tr_ok_def)
@@ -361,7 +373,9 @@ lemma dpll_top_spec [crush_specs]:
     apply (all \<open>(frule (2) dpll_bt_idx)?\<close>)
     apply (all \<open>(frule (1) dpll_init')?\<close>)
     apply (all \<open>(frule wprop_post_len)?\<close>)
-    sorry
+    apply (auto simp add: dpll_wpre_def intro: dpll_cs_ok_wcs[unfolded dpll_cs_ok_def] dstate_tr[THEN conjunct1]
+        less_imp_diff_less tr_ok_lenA dpll_wst_init wstate_wl dest: dpll_wunsat1)
+    done
   using dpll_init' by blast
 
 

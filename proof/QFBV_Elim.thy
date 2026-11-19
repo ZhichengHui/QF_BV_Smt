@@ -612,4 +612,123 @@ lemma ref_lt_A: \<open>t \<in> set eA \<Longrightarrow> u \<in> set (csubterms t
 
 end
 
+lemma vcnt_sum: \<open>vcnt ts x = sum_list (map (\<lambda>t. vcnt [t] x) ts)\<close>
+  by (induction ts) (simp_all add: vcnt_Cons[where ts = \<open>_ # _\<close>] vcnt_def)
+
+lemma vcnt_pos: \<open>u \<in> set (csubterms t) \<Longrightarrow> is_var x u \<Longrightarrow> 0 < vcnt [t] x\<close>
+  by (auto simp: vcnt_def filter_empty_conv)
+
+lemma vcnt1_unique:
+  assumes \<open>vcnt ts x = 1\<close> \<open>i < length ts\<close> \<open>j < length ts\<close>
+    \<open>u \<in> set (csubterms (ts ! i))\<close> \<open>is_var x u\<close> \<open>u' \<in> set (csubterms (ts ! j))\<close> \<open>is_var x u'\<close>
+  shows \<open>i = j\<close>
+proof (rule ccontr)
+  assume ne: \<open>i \<noteq> j\<close>
+  let ?f = \<open>\<lambda>k. vcnt [ts ! k] x\<close>
+  have \<open>vcnt ts x = (\<Sum>k<length ts. ?f k)\<close>
+    unfolding vcnt_sum[of ts] by (simp add: sum_list_sum_nth atLeast0LessThan)
+  moreover have \<open>(\<Sum>k\<in>{i, j}. ?f k) \<le> (\<Sum>k<length ts. ?f k)\<close>
+    using assms(2,3) by (intro sum_mono2) auto
+  moreover have \<open>0 < ?f i\<close> \<open>0 < ?f j\<close> using vcnt_pos assms(4-7) by blast+
+  ultimately show False using ne assms(1) by simp
+qed
+
+lemma min2_eq1: \<open>min 2 (v::nat) = 1 \<Longrightarrow> v = 1\<close>
+  by (cases v) (simp_all add: min_def split: if_splits)
+
+context elim_prob
+begin
+
+lemma kd_le: \<open>k < en \<Longrightarrow> kd ! k \<le> 4\<close>
+  using ana(5) free_kind_le by metis
+
+lemma lws: \<open>length (CoreProblem_widths q) = length ews\<close>
+  by (simp add: ews_def cvar_widths_def)
+
+lemma kd_1:
+  assumes \<open>k < en\<close> \<open>kd ! k = 1\<close>
+  shows \<open>\<exists>i. eD ! k = CoreTerm_Var i \<and> unat i < length ews \<and> vcnt (eD @ eA) (unat i) = 1\<close>
+proof -
+  obtain i where i: \<open>eD ! k = CoreTerm_Var i\<close> \<open>evc ! unat i = 1\<close>
+    using free_kind_1[of eD \<open>take k eds\<close> evc erc \<open>take k kd\<close> \<open>eD ! k\<close>] ana(5)[OF assms(1)] assms(2) by metis
+  have l: \<open>unat i < length ews\<close> using wt_D[OF assms(1)] i(1) by simp
+  have \<open>min 2 (vcnt (eD @ eA) (unat i)) = 1\<close>
+    using occ_res(3)[of \<open>unat i\<close> q] l i(2) lws by (simp add: evc_def eD_def eA_def)
+  then show ?thesis using i l min2_eq1 by blast
+qed
+
+lemma fo_take:
+  assumes \<open>free_once_m (take k kd) erc x\<close> \<open>k < en\<close>
+  shows \<open>x < k \<and> kd ! x \<noteq> 0 \<and> rcnt (eD @ eA) x = 1\<close>
+proof -
+  have x: \<open>x < k\<close> \<open>kd ! x \<noteq> 0\<close> \<open>erc ! x = 1\<close>
+    using assms ana(2) by (auto simp: free_once_m_def)
+  have \<open>min 2 (rcnt (eD @ eA) x) = 1\<close>
+    using occ_res(4)[of x q] x assms(2) by (simp add: erc_def eD_def eA_def en_def)
+  then show ?thesis using x min2_eq1 by blast
+qed
+
+lemma kd_cons:
+  assumes \<open>k < en\<close> \<open>2 \<le> kd ! k\<close>
+  shows \<open>cons k < k \<and> kd ! cons k \<noteq> 0 \<and> rcnt (eD @ eA) (cons k) = 1 \<and>
+    (\<exists>u \<in> set (csubterms (eD ! k)). is_ref (cons k) u)\<close>
+proof -
+  note sh = free_kind_shape[OF ana(5)[OF assms(1)] assms(2)]
+  have \<open>free_once_m (take k kd) erc (cons k) \<and> (\<exists>u \<in> set (csubterms (eD ! k)). is_ref (cons k) u)\<close>
+    using sh by (auto simp: cons_def consumed_m_def ref_index_m_def is_ref_def)
+  then show ?thesis using fo_take assms(1) by blast
+qed
+
+lemma kd_sec:
+  assumes \<open>k < en\<close> \<open>kd ! k = 4\<close>
+  shows \<open>sec k < k \<and> kd ! sec k \<noteq> 0 \<and> rcnt (eD @ eA) (sec k) = 1 \<and> sec k \<noteq> cons k \<and>
+    (\<exists>u \<in> set (csubterms (eD ! k)). is_ref (sec k) u)\<close>
+proof -
+  have h2: \<open>2 \<le> kd ! k\<close> using assms(2) by simp
+  note sh = free_kind_shape[OF ana(5)[OF assms(1)] h2] assms(2)
+  have \<open>free_once_m (take k kd) erc (sec k) \<and> sec k \<noteq> cons k \<and> (\<exists>u \<in> set (csubterms (eD ! k)). is_ref (sec k) u)\<close>
+    using sh by (auto simp: cons_def sec_def consumed_m_def second_m_def ref_index_m_def is_ref_def)
+  then show ?thesis using fo_take assms(1) by blast
+qed
+
+lemma eDA: \<open>k < en \<Longrightarrow> (eD @ eA) ! k = eD ! k\<close> \<open>length (eD @ eA) = en + length eA\<close>
+  by (simp_all add: nth_append en_def)
+
+text \<open>A definition referred to once is referred to by one definition, and not by an assertion.\<close>
+lemma ref_unique:
+  assumes \<open>rcnt (eD @ eA) x = 1\<close> \<open>k < en\<close> \<open>k' < en\<close>
+    \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_ref x u\<close> \<open>u' \<in> set (csubterms (eD ! k'))\<close> \<open>is_ref x u'\<close>
+  shows \<open>k = k'\<close>
+  using rcnt1_unique[OF assms(1), of k k' u u'] assms eDA by simp
+
+lemma ref_not_A:
+  assumes \<open>rcnt (eD @ eA) x = 1\<close> \<open>k < en\<close> \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_ref x u\<close>
+    \<open>t \<in> set eA\<close> \<open>u' \<in> set (csubterms t)\<close> \<open>is_ref x u'\<close>
+  shows False
+proof -
+  obtain j where j: \<open>j < length eA\<close> \<open>eA ! j = t\<close> using assms(5) by (meson in_set_conv_nth)
+  have \<open>(eD @ eA) ! (en + j) = t\<close> using j by (simp add: nth_append en_def)
+  then have \<open>k = en + j\<close> using rcnt1_unique[OF assms(1), of k \<open>en + j\<close> u u'] assms eDA j by simp
+  then show False using assms(2) by simp
+qed
+
+lemma var_unique:
+  assumes \<open>vcnt (eD @ eA) x = 1\<close> \<open>k < en\<close> \<open>k' < en\<close>
+    \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_var x u\<close> \<open>u' \<in> set (csubterms (eD ! k'))\<close> \<open>is_var x u'\<close>
+  shows \<open>k = k'\<close>
+  using vcnt1_unique[OF assms(1), of k k' u u'] assms eDA by simp
+
+lemma var_not_A:
+  assumes \<open>vcnt (eD @ eA) x = 1\<close> \<open>k < en\<close> \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_var x u\<close>
+    \<open>t \<in> set eA\<close> \<open>u' \<in> set (csubterms t)\<close> \<open>is_var x u'\<close>
+  shows False
+proof -
+  obtain j where j: \<open>j < length eA\<close> \<open>eA ! j = t\<close> using assms(5) by (meson in_set_conv_nth)
+  have \<open>(eD @ eA) ! (en + j) = t\<close> using j by (simp add: nth_append en_def)
+  then have \<open>k = en + j\<close> using vcnt1_unique[OF assms(1), of k \<open>en + j\<close> u u'] assms eDA j by simp
+  then show False using assms(2) by simp
+qed
+
+end
+
 end

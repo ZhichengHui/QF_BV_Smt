@@ -2456,4 +2456,368 @@ qed
 
 end
 
+context recon_prob
+begin
+
+definition rinv :: \<open>nat \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
+  \<open>rinv k dv m \<equiv> length dv = k \<and> map length m = ews \<and>
+     (\<forall>i<k. tp i < k \<longrightarrow> dv ! i = eval_m m dv (eD ! i) \<and> length (dv ! i) = eds ! i) \<and>
+     (\<forall>x<length ews. \<not> (isleaf x \<and> tp (ldef x) < k) \<longrightarrow> m ! x = m2 ! x) \<and>
+     (\<forall>i<k. tp i = i \<and> kd ! i \<noteq> 0 \<longrightarrow> dv ! i = target i)\<close>
+
+lemma rinvI:
+  assumes \<open>length dv = k\<close> \<open>map length m = ews\<close>
+    \<open>\<And>i. i < k \<Longrightarrow> tp i < k \<Longrightarrow> dv ! i = eval_m m dv (eD ! i) \<and> length (dv ! i) = eds ! i\<close>
+    \<open>\<And>x. x < length ews \<Longrightarrow> \<not> (isleaf x \<and> tp (ldef x) < k) \<Longrightarrow> m ! x = m2 ! x\<close>
+    \<open>\<And>i. i < k \<Longrightarrow> tp i = i \<and> kd ! i \<noteq> 0 \<Longrightarrow> dv ! i = target i\<close>
+  shows \<open>rinv k dv m\<close>
+  unfolding rinv_def using assms by blast
+
+lemma app_eval: \<open>i < en \<Longrightarrow> i \<le> length dv \<Longrightarrow> eval_m m (dv @ [e]) (eD ! i) = eval_m m dv (eD ! i)\<close>
+  by (rule eval_m_cong) (use ref_lt_D[of i] in \<open>fastforce simp: nth_append\<close>)+
+
+lemma tp_k_free: \<open>i < en \<Longrightarrow> tp i = k \<Longrightarrow> i \<noteq> k \<Longrightarrow> mk ! i = 1 \<and> 2 \<le> kd ! k\<close>
+  using tp_non tp_member by fastforce
+
+lemma rinv_step:
+  assumes k: \<open>k < en\<close> and I: \<open>rinv k dv m\<close>
+  shows \<open>case recon_step eD kd mk dv2 (dv, m) k of (dv', m') \<Rightarrow> rinv (Suc k) dv' m'\<close>
+proof -
+  have L: \<open>length dv = k\<close> and Mlen: \<open>map length m = ews\<close>
+    and LC: \<open>\<forall>i<k. tp i < k \<longrightarrow> dv ! i = eval_m m dv (eD ! i) \<and> length (dv ! i) = eds ! i\<close>
+    and VA: \<open>\<forall>x<length ews. \<not> (isleaf x \<and> tp (ldef x) < k) \<longrightarrow> m ! x = m2 ! x\<close>
+    and TO: \<open>\<forall>i<k. tp i = i \<and> kd ! i \<noteq> 0 \<longrightarrow> dv ! i = target i\<close>
+    using I unfolding rinv_def by blast+
+  have ke: \<open>Suc k \<le> en\<close> using k by simp
+  consider (A) \<open>mk ! k = 1\<close> | (B) \<open>mk ! k \<noteq> 1\<close> \<open>kd ! k = 0\<close> | (C) \<open>mk ! k \<noteq> 1\<close> \<open>kd ! k \<noteq> 0\<close> by blast
+  then show ?thesis
+  proof cases
+    case A
+    have st: \<open>recon_step eD kd mk dv2 (dv, m) k = (dv @ [[]], m)\<close> using A by (simp add: recon_step_def)
+    have ntk: \<open>i < en \<Longrightarrow> tp i \<noteq> k\<close> for i using tp_props[of i] A by auto
+    have tk: \<open>k < tp k\<close> using tp_par[OF k A] par[OF k A] tp_props[of \<open>par k\<close>] by simp
+    have \<open>rinv (Suc k) (dv @ [[]]) m\<close>
+    proof (rule rinvI)
+      show \<open>length (dv @ [[]]) = Suc k\<close> \<open>map length m = ews\<close> using L Mlen by simp_all
+    next
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i < Suc k\<close>
+      then have ik: \<open>i < k\<close> \<open>tp i < k\<close> using tk ntk[of i] k by (auto simp: less_Suc_eq)
+      have Li: \<open>dv ! i = eval_m m dv (eD ! i)\<close> \<open>length (dv ! i) = eds ! i\<close> using LC ik by blast+
+      show \<open>(dv @ [[]]) ! i = eval_m m (dv @ [[]]) (eD ! i) \<and> length ((dv @ [[]]) ! i) = eds ! i\<close>
+        using Li app_eval[of i dv m \<open>[]\<close>] ik k L by (simp add: nth_append)
+    next
+      fix x assume x: \<open>x < length ews\<close> \<open>\<not> (isleaf x \<and> tp (ldef x) < Suc k)\<close>
+      then have \<open>\<not> (isleaf x \<and> tp (ldef x) < k)\<close> by auto
+      then show \<open>m ! x = m2 ! x\<close> using VA x by simp
+    next
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i = i \<and> kd ! i \<noteq> 0\<close>
+      then have \<open>i < k\<close> using tk by (auto simp: less_Suc_eq)
+      then show \<open>(dv @ [[]]) ! i = target i\<close> using TO i L by (simp add: nth_append)
+    qed
+    then show ?thesis using st by simp
+  next
+    case B
+    let ?e = \<open>eval_m m dv (eD ! k)\<close>
+    have st: \<open>recon_step eD kd mk dv2 (dv, m) k = (dv @ [?e], m)\<close> using B by (simp add: recon_step_def)
+    have tkk: \<open>tp k = k\<close> using tp_non k B by simp
+    have ntk: \<open>i < en \<Longrightarrow> tp i = k \<Longrightarrow> i = k\<close> for i using tp_k_free B by fastforce
+    have le: \<open>length ?e = eds ! k\<close>
+    proof -
+      have \<open>length ?e = cwidth ews eds (eD ! k)\<close>
+      proof (rule eval_m_len[OF wt_D'[OF k] Mlen], intro ballI allI impI conjI)
+        fix u x assume u: \<open>u \<in> set (csubterms (eD ! k))\<close> and r: \<open>is_ref x u\<close>
+        have x: \<open>x < k\<close> using ref_lt_D[OF k u r] .
+        show \<open>x < length dv\<close> using x L by simp
+        have \<open>mk ! x \<noteq> 1\<close>
+        proof
+          assume mx: \<open>mk ! x = 1\<close>
+          then have \<open>k = par x\<close> using member_ref[of x k u] x k u r by simp
+          then show False using par[of x] mx x k B by auto
+        qed
+        then have \<open>tp x = x\<close> using tp_non x k by simp
+        then have \<open>tp x < k\<close> using x by simp
+        then show \<open>length (dv ! x) = eds ! x\<close> using LC x by blast
+      qed
+      then show ?thesis using cwidth_eD[OF k] by simp
+    qed
+    have \<open>rinv (Suc k) (dv @ [?e]) m\<close>
+    proof (rule rinvI)
+      show \<open>length (dv @ [?e]) = Suc k\<close> \<open>map length m = ews\<close> using L Mlen by simp_all
+    next
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i < Suc k\<close>
+      show \<open>(dv @ [?e]) ! i = eval_m m (dv @ [?e]) (eD ! i) \<and> length ((dv @ [?e]) ! i) = eds ! i\<close>
+      proof (cases \<open>i = k\<close>)
+        case True
+        then show ?thesis using app_eval[of k dv m ?e] L le k by (simp add: nth_append)
+      next
+        case False
+        then have ik: \<open>i < k\<close> \<open>tp i < k\<close> using i ntk[of i] k by (auto simp: less_Suc_eq)
+        have Li: \<open>dv ! i = eval_m m dv (eD ! i)\<close> \<open>length (dv ! i) = eds ! i\<close> using LC ik by blast+
+        then show ?thesis using app_eval[of i dv m ?e] ik k L by (simp add: nth_append)
+      qed
+    next
+      fix x assume x: \<open>x < length ews\<close> \<open>\<not> (isleaf x \<and> tp (ldef x) < Suc k)\<close>
+      have \<open>\<not> (isleaf x \<and> tp (ldef x) < k)\<close>
+      proof
+        assume h: \<open>isleaf x \<and> tp (ldef x) < k\<close>
+        then show False using x by auto
+      qed
+      moreover have \<open>isleaf x \<Longrightarrow> tp (ldef x) \<noteq> k\<close> using ldef ntk B by fastforce
+      ultimately show \<open>m ! x = m2 ! x\<close> using VA x by (auto simp: less_Suc_eq)
+    next
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i = i \<and> kd ! i \<noteq> 0\<close>
+      then have \<open>i < k\<close> using B by (auto simp: less_Suc_eq)
+      then show \<open>(dv @ [?e]) ! i = target i\<close> using TO i L by (simp add: nth_append)
+    qed
+    then show ?thesis using st by simp
+  next
+    case C
+    have tkk: \<open>tp k = k\<close> using tp_non k C by simp
+    let ?v = \<open>target k\<close>
+    have st: \<open>recon_step eD kd mk dv2 (dv, m) k = settle_m eD kd dv2 (Suc k) (dv @ [[]]) m k ?v\<close>
+      using C by (simp add: recon_step_def target_def)
+    have S: \<open>\<forall>i<Suc k. tp i < tp k \<longrightarrow> (dv @ [[]]) ! i = eval_m m (dv @ [[]]) (eD ! i) \<and> length ((dv @ [[]]) ! i) = eds ! i\<close>
+    proof (intro allI impI)
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i < tp k\<close>
+      then have ik: \<open>i < k\<close> using tkk by (auto simp: less_Suc_eq)
+      have tl: \<open>tp i < k\<close> using i tkk by simp
+      have Li: \<open>dv ! i = eval_m m dv (eD ! i)\<close> \<open>length (dv ! i) = eds ! i\<close> using LC ik tl by blast+
+      show \<open>(dv @ [[]]) ! i = eval_m m (dv @ [[]]) (eD ! i) \<and> length ((dv @ [[]]) ! i) = eds ! i\<close>
+        using Li app_eval[of i dv m \<open>[]\<close>] k L ik by (simp add: nth_append)
+    qed
+    have T: \<open>\<forall>i<Suc k. tp i < tp k \<and> tp i = i \<and> mk ! i = 2 \<longrightarrow> (dv @ [[]]) ! i = bits_one_m (eds ! i)\<close>
+    proof (intro allI impI)
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i < tp k \<and> tp i = i \<and> mk ! i = 2\<close>
+      then have ik: \<open>i < k\<close> using tkk by auto
+      obtain p where p: \<open>p < en\<close> \<open>kd ! p = 4\<close> \<open>sec p = i\<close> using mk_char(2)[of i] i ik k by auto
+      have ki: \<open>kd ! i \<noteq> 0\<close> using kd_sec[OF p(1,2)] p(3) by simp
+      have \<open>dv ! i = target i\<close> using TO ik i ki by simp
+      have l2: \<open>length (dv2 ! i) = eds ! i\<close> using dv2P(1,2) ik k by (metis nth_map less_trans)
+      show \<open>(dv @ [[]]) ! i = bits_one_m (eds ! i)\<close>
+        using \<open>dv ! i = target i\<close> ik L i l2 by (simp add: nth_append target_def)
+    qed
+    have lv: \<open>length ?v = eds ! k\<close> using target_len[OF k] .
+    have lN: \<open>length (dv @ [[]]) = Suc k\<close> using L by simp
+    note SO = settle_ok[OF k C(2) lessI lv lN lessI ke Mlen S T]
+    obtain dv' m' where r: \<open>settle_m eD kd dv2 (Suc k) (dv @ [[]]) m k ?v = (dv', m')\<close> by force
+    have R: \<open>length dv' = Suc k\<close> \<open>map length m' = ews\<close> \<open>\<forall>i<Suc k. \<not> below k i \<longrightarrow> dv' ! i = (dv @ [[]]) ! i\<close>
+      \<open>\<forall>x. x \<noteq> lvar k \<longrightarrow> m' ! x = m ! x\<close> \<open>dv' ! k = ?v\<close>
+      \<open>\<forall>i<Suc k. below k i \<longrightarrow> dv' ! i = eval_m m' dv' (eD ! i) \<and> length (dv' ! i) = eds ! i\<close>
+      using SO unfolding r by (simp only: prod.case, blast)+
+    have nb: \<open>\<not> below k i\<close> if \<open>i < en\<close> \<open>tp i \<noteq> k\<close> for i
+    proof
+      assume \<open>below k i\<close>
+      then have \<open>tp i = tp k\<close> using below_props[OF k] by blast
+      then show False using tkk that(2) by simp
+    qed
+    have LV: \<open>isleaf (lvar k) \<and> ldef (lvar k) = leaf k\<close> \<open>tp (leaf k) = k\<close> using lvar[OF k C(2)] leaf_props[OF k C(2)] tkk by simp_all
+    have \<open>rinv (Suc k) dv' m'\<close>
+    proof (rule rinvI)
+      show \<open>length dv' = Suc k\<close> \<open>map length m' = ews\<close> using R by simp_all
+    next
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i < Suc k\<close>
+      have il: \<open>i < en\<close> using i k by simp
+      show \<open>dv' ! i = eval_m m' dv' (eD ! i) \<and> length (dv' ! i) = eds ! i\<close>
+      proof (cases \<open>tp i = k\<close>)
+        case True
+        then have \<open>below k i\<close> using tree_below[OF il] by simp
+        then show ?thesis using R(6) i(1) by blast
+      next
+        case False
+        then have ik: \<open>i < k\<close> \<open>tp i < k\<close> using i tkk by (auto simp: less_Suc_eq)
+        have di: \<open>dv' ! i = dv ! i\<close> using R(3) nb[OF il False] ik L by (simp add: nth_append)
+        have rr: \<open>\<forall>u \<in> set (csubterms (eD ! i)). \<forall>x. is_ref x u \<longrightarrow> dv' ! x = dv ! x\<close>
+        proof (intro ballI allI impI)
+          fix u x assume u: \<open>u \<in> set (csubterms (eD ! i))\<close> and r: \<open>is_ref x u\<close>
+          have x: \<open>x < i\<close> using ref_lt_D[OF il u r] .
+          have \<open>tp x \<noteq> k\<close>
+          proof (cases \<open>mk ! x = 1\<close>)
+            case True
+            then have \<open>i = par x\<close> using member_ref[of x i u] x il u r by simp
+            then show ?thesis using tp_par[of x] True x il ik by simp
+          next
+            case False
+            then show ?thesis using tp_non[of x] x ik il by simp
+          qed
+          then show \<open>dv' ! x = dv ! x\<close> using R(3) nb[of x] x ik L il by (simp add: nth_append)
+        qed
+        have vv: \<open>\<forall>u \<in> set (csubterms (eD ! i)). \<forall>y. is_var y u \<longrightarrow> m' ! y = m ! y\<close>
+        proof (intro ballI allI impI)
+          fix u y assume u: \<open>u \<in> set (csubterms (eD ! i))\<close> and y: \<open>is_var y u\<close>
+          have \<open>y \<noteq> lvar k\<close>
+          proof
+            assume \<open>y = lvar k\<close>
+            then have \<open>i = leaf k\<close> using lvar_only[OF k C(2) il u] y by simp
+            then show False using LV False by simp
+          qed
+          then show \<open>m' ! y = m ! y\<close> using R(4) by simp
+        qed
+        have \<open>eval_m m' dv' (eD ! i) = eval_m m dv (eD ! i)\<close>
+          by (rule eval_m_cong) (use rr vv in simp_all)
+        moreover have \<open>dv ! i = eval_m m dv (eD ! i)\<close> \<open>length (dv ! i) = eds ! i\<close> using LC ik by blast+
+        ultimately show ?thesis using di by simp
+      qed
+    next
+      fix x assume x: \<open>x < length ews\<close> \<open>\<not> (isleaf x \<and> tp (ldef x) < Suc k)\<close>
+      have xk: \<open>x \<noteq> lvar k\<close> using x LV by auto
+      have \<open>\<not> (isleaf x \<and> tp (ldef x) < k)\<close> using x by auto
+      then show \<open>m' ! x = m2 ! x\<close> using VA x R(4) xk by simp
+    next
+      fix i assume i: \<open>i < Suc k\<close> \<open>tp i = i \<and> kd ! i \<noteq> 0\<close>
+      show \<open>dv' ! i = target i\<close>
+      proof (cases \<open>i = k\<close>)
+        case True
+        then show ?thesis using R(5) by simp
+      next
+        case False
+        then have ik: \<open>i < k\<close> using i by simp
+        have \<open>\<not> below k i\<close> using nb[of i] i ik k by simp
+        then show ?thesis using R(3) TO i ik L by (simp add: nth_append)
+      qed
+    qed
+    then show ?thesis using st r by simp
+  qed
+qed
+
+lemma rinv_fold: \<open>k \<le> en \<Longrightarrow> case foldl (recon_step eD kd mk dv2) ([], m2) [0..<k] of (dv, m) \<Rightarrow> rinv k dv m\<close>
+proof (induction k)
+  case 0
+  then show ?case using ml2 by (simp add: rinv_def)
+next
+  case (Suc k)
+  obtain dv m where s: \<open>foldl (recon_step eD kd mk dv2) ([], m2) [0..<k] = (dv, m)\<close> by force
+  have \<open>rinv k dv m\<close> using Suc s by simp
+  then show ?case using rinv_step[of k dv m] Suc.prems s by simp
+qed
+
+lemma lc_defs:
+  assumes \<open>length dv = en\<close> \<open>\<forall>i<en. dv ! i = eval_m m dv (eD ! i)\<close> \<open>map length m = ews\<close>
+  shows \<open>dv = eval_defs_m q m\<close>
+proof -
+  let ?E = \<open>eval_defs_m q m\<close>
+  note E = eval_defs_props[OF dwt assms(3)[symmetric]]
+  have lE: \<open>length ?E = en\<close> using E(1) len_eds by (metis eval_defs_m_def eD_def eds_def length_map)
+  have En: \<open>i < en \<Longrightarrow> ?E ! i = eval_m m ?E (eD ! i)\<close> for i using E(2) by (simp add: eval_defs_m_def eD_def en_def)
+  have \<open>i < en \<Longrightarrow> dv ! i = ?E ! i\<close> for i
+  proof (induction i rule: less_induct)
+    case (less i)
+    have \<open>eval_m m dv (eD ! i) = eval_m m ?E (eD ! i)\<close>
+      by (rule eval_m_cong) (use less ref_lt_D[OF less.prems] in fastforce)+
+    then show ?case using assms(2) En less.prems by simp
+  qed
+  then show ?thesis using assms(1) lE by (intro nth_equalityI) simp_all
+qed
+
+end
+
+context elim_prob
+begin
+
+lemma elim_parts: \<open>elim_m q = (q2, kd, mk)\<close>
+  by (simp add: elim_m_def q2_def kd_def mk_def)
+
+theorem recon_sound:
+  assumes M: \<open>cis_model q2 m2\<close>
+  shows \<open>cis_model q (reconstruct_m q kd mk q2 m2)\<close>
+proof -
+  have ml2: \<open>map length m2 = ews\<close> using M by (simp add: cis_model_def cis_assignment_def q2_ws)
+  interpret R: recon_prob q m2 by unfold_locales (rule ml2)
+  obtain dvF mF where f: \<open>foldl (recon_step eD kd mk R.dv2) ([], m2) [0..<en] = (dvF, mF)\<close> by force
+  have I: \<open>R.rinv en dvF mF\<close> using R.rinv_fold[of en] f by simp
+  have rc: \<open>reconstruct_m q kd mk q2 m2 = mF\<close> using f by (simp add: reconstruct_m_def R.dv2_def eD_def en_def)
+  have L: \<open>length dvF = en\<close> and Mlen: \<open>map length mF = ews\<close>
+    and LC: \<open>\<forall>i<en. tp i < en \<longrightarrow> dvF ! i = eval_m mF dvF (eD ! i) \<and> length (dvF ! i) = eds ! i\<close>
+    and VA: \<open>\<forall>x<length ews. \<not> (isleaf x \<and> tp (ldef x) < en) \<longrightarrow> mF ! x = m2 ! x\<close>
+    and TO: \<open>\<forall>i<en. tp i = i \<and> kd ! i \<noteq> 0 \<longrightarrow> dvF ! i = R.target i\<close>
+    using I unfolding R.rinv_def by blast+
+  have LC': \<open>\<forall>i<en. dvF ! i = eval_m mF dvF (eD ! i)\<close> using LC tp_props by blast
+  have dF: \<open>dvF = eval_defs_m q mF\<close> using R.lc_defs[OF L LC' Mlen] .
+  have VA': \<open>x < length ews \<Longrightarrow> \<not> isleaf x \<Longrightarrow> mF ! x = m2 ! x\<close> for x using VA by simp
+  have not2: \<open>mk ! x \<noteq> 2\<close> if x: \<open>x < en\<close> \<open>u \<in> set (csubterms t)\<close> \<open>is_ref x u\<close> \<open>t = eD ! j \<and> j < en \<and> kd ! j < 2 \<or> t \<in> set eA\<close> for x u t j
+  proof
+    assume m2x: \<open>mk ! x = 2\<close>
+    obtain p where p: \<open>p < en\<close> \<open>kd ! p = 4\<close> \<open>sec p = x\<close> using mk_char(2)[OF x(1)] m2x by auto
+    note KS = kd_sec[OF p(1,2)]
+    obtain u' where u': \<open>u' \<in> set (csubterms (eD ! p))\<close> \<open>is_ref x u'\<close> using KS p(3) by blast
+    show False using x(4)
+    proof
+      assume t: \<open>t = eD ! j \<and> j < en \<and> kd ! j < 2\<close>
+      then have \<open>j = p\<close> using ref_unique[of x j p u u'] KS p(1,3) x u' by simp
+      then show False using t p(2) by simp
+    next
+      assume \<open>t \<in> set eA\<close>
+      then show False using ref_not_A[of x p u' t u] KS p(1,3) x u' by simp
+    qed
+  qed
+  have claim: \<open>j < en \<Longrightarrow> live ! j \<Longrightarrow> mk ! j \<noteq> 1 \<Longrightarrow> mk ! j \<noteq> 2 \<Longrightarrow> dvF ! j = R.dv2 ! j\<close> for j
+  proof (induction j rule: less_induct)
+    case (less j)
+    note j = less.prems(1)
+    show ?case
+    proof (cases \<open>kd ! j = 0\<close>)
+      case True
+      have d: \<open>D2 ! j = eD ! j\<close> using D2(3)[OF j] ana(6)[OF j] less.prems(2) True by simp
+      have rr: \<open>\<forall>u \<in> set (csubterms (eD ! j)). \<forall>x. is_ref x u \<longrightarrow> dvF ! x = R.dv2 ! x\<close>
+      proof (intro ballI allI impI)
+        fix u x assume u: \<open>u \<in> set (csubterms (eD ! j))\<close> and r: \<open>is_ref x u\<close>
+        have x: \<open>x < j\<close> using ref_lt_D[OF j u r] .
+        have lx: \<open>live ! x\<close> using D2(4)[OF j less.prems(2)] ana(6)[OF j] True u r by simp
+        have mx: \<open>mk ! x \<noteq> 1\<close>
+        proof
+          assume mx: \<open>mk ! x = 1\<close>
+          then have \<open>j = par x\<close> using member_ref[of x j u] x j u r by simp
+          then show False using par[of x] mx True x j by auto
+        qed
+        have \<open>mk ! x \<noteq> 2\<close> using not2[of x u \<open>eD ! j\<close> j] x j u r True by simp
+        then show \<open>dvF ! x = R.dv2 ! x\<close> using less.IH[of x] x j lx mx by simp
+      qed
+      have vv: \<open>\<forall>u \<in> set (csubterms (eD ! j)). \<forall>y. is_var y u \<longrightarrow> mF ! y = m2 ! y\<close>
+      proof (intro ballI allI impI)
+        fix u y assume u: \<open>u \<in> set (csubterms (eD ! j))\<close> and y: \<open>is_var y u\<close>
+        have yl: \<open>y < length ews\<close> using cwt_var_lt[OF wt_D'[OF j] u y] .
+        have \<open>\<not> isleaf y\<close>
+        proof
+          assume \<open>isleaf y\<close>
+          note Ld = ldef[OF this]
+          have \<open>j = ldef y\<close> using leaf_var_unique[of \<open>ldef y\<close> y j u] Ld j u y by simp
+          then show False using Ld True by simp
+        qed
+        then show \<open>mF ! y = m2 ! y\<close> using VA' yl by simp
+      qed
+      have \<open>eval_m mF dvF (eD ! j) = eval_m m2 R.dv2 (eD ! j)\<close> by (rule eval_m_cong) (use vv rr in simp_all)
+      then show ?thesis using LC' j R.dv2P(3)[OF j] d by simp
+    next
+      case False
+      have \<open>tp j = j\<close> using tp_non j less.prems(3) by simp
+      then show ?thesis using TO j False less.prems(4) by (simp add: R.target_def)
+    qed
+  qed
+  have A: \<open>eval_m mF dvF t = eval_m m2 R.dv2 t\<close> if t: \<open>t \<in> set eA\<close> for t
+  proof (rule eval_m_cong)
+    show \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_var x u \<longrightarrow> mF ! x = m2 ! x\<close>
+    proof (intro ballI allI impI)
+      fix u x assume u: \<open>u \<in> set (csubterms t)\<close> \<open>is_var x u\<close>
+      have xl: \<open>x < length ews\<close> using cwt_var_lt[OF conjunct1[OF wt_A[OF t]] u] .
+      have \<open>\<not> isleaf x\<close> using ldef leaf_var_not_A t u by blast
+      then show \<open>mF ! x = m2 ! x\<close> using VA' xl by simp
+    qed
+    show \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> dvF ! x = R.dv2 ! x\<close>
+    proof (intro ballI allI impI)
+      fix u x assume u: \<open>u \<in> set (csubterms t)\<close> \<open>is_ref x u\<close>
+      have x: \<open>x < en\<close> using ref_lt_A[OF t u] .
+      have \<open>mk ! x \<noteq> 1\<close> using member_not_A[OF x _ t u] by blast
+      moreover have \<open>mk ! x \<noteq> 2\<close> using not2[of x u t 0] x u t by simp
+      ultimately show \<open>dvF ! x = R.dv2 ! x\<close> using claim[OF x D2(5)[OF t u]] by simp
+    qed
+  qed
+  have \<open>csatisfies q2 m2\<close> using M by (simp add: cis_model_def)
+  then have S: \<open>\<forall>t \<in> set eA. bits_nat (eval_m m2 R.dv2 t) = 1\<close>
+    using csat_bits[OF q2_wt] ml2 by (simp add: R.dv2_def q2_ws q2_parts)
+  have \<open>csatisfies q mF\<close>
+    using csat_bits[OF wt] Mlen S A dF by (simp add: eA_def ews_def)
+  then show ?thesis using Mlen rc by (simp add: cis_model_def cis_assignment_def ews_def)
+qed
+
+end
+
 end

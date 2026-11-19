@@ -1,5 +1,5 @@
 theory QFBV_Proof
-  imports QFBV_Refine QFBV_Eval QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount
+  imports QFBV_Refine QFBV_Eval QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount QFBV_Elim
 begin
 
 lemma lin1: \<open>1 \<le> w + 1\<close> for w :: nat
@@ -532,7 +532,7 @@ lemma lweight_le_tw: \<open>lweight ws ds t \<le> term_weight ws ds t\<close>
 
 lemma lweight_append: \<open>wt ws ds t \<Longrightarrow> lweight ws (ds @ e) t = lweight ws ds t\<close>
   unfolding lweight_def
-  using wt_subterm wt_width_append by (auto intro!: arg_cong[where f = sum_list] map_cong)
+  using wt_subterm QFBV_Lower.wt_width_append by (auto intro!: arg_cong[where f = sum_list] map_cong)
 
 lemma lweight_take:
   assumes \<open>defs_wt ws [] D\<close> \<open>j < length D\<close>
@@ -618,7 +618,7 @@ next
     by (cases \<open>foldl (ldefs_step p) (([], []), []) [0..<j]\<close>)
   have jl: \<open>j < length ?D\<close> using Suc.prems by simp
   have dwt: \<open>defs_wt ?ws [] ?D\<close> using assms by (simp add: problem_wt_def Let_def)
-  have wtj: \<open>wt ?ws (def_widths ?ws [] (take j ?D)) (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
+  have wtj: \<open>wt ?ws (def_widths ?ws [] (take j ?D)) (?D ! j)\<close> using QFBV_Lower.defs_wt_nth[OF dwt jl] .
   have IH: \<open>length (fst Lj) \<le> 2 * sum_list (map (lweight ?ws ?ds) (take j ?D))\<close> using Suc.IH jl f by simp
   have R: \<open>foldl (ldefs_step p) (([], []), []) [0..<Suc j] =
            (fst (lower_m ?ws dmj Lj (?D ! j)), dmj @ [snd (lower_m ?ws dmj Lj (?D ! j))])\<close>
@@ -678,7 +678,7 @@ next
   have inv: \<open>ldefs_inv p j (Lj, dmj)\<close> using ldefs_loop[OF dwt jle f Bj] .
   have lok: \<open>lok ?ws Lj\<close> and dmok: \<open>dm_ok ?dsj dmj Lj\<close>
     using inv by (simp_all add: ldefs_inv_def Let_def)
-  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
+  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using QFBV_Lower.defs_wt_nth[OF dwt jl] .
   have ob: \<open>4 * ?SUM < 2 ^ 63\<close> using ovf_sum[of p] assms(2) by (simp add: sizes_ok_def)
   have twj: \<open>lweight ?ws ?dsj (?D ! j) \<le> sum_list (map (lweight ?ws ?ds) (drop j ?D @ ?A))\<close>
   proof -
@@ -809,7 +809,7 @@ next
   have inv: \<open>ldefs_inv p j (Lj, dmj)\<close> using ldefs_loop[OF dwt jle f Bj] .
   have lok: \<open>lok ?ws Lj\<close> and dmok: \<open>dm_ok ?dsj dmj Lj\<close>
     using inv by (simp_all add: ldefs_inv_def Let_def)
-  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
+  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using QFBV_Lower.defs_wt_nth[OF dwt jl] .
   have IH: \<open>lcnt ?ws Lj \<le> sum_list (map (ecount ?ws ?ds) (take j ?D))\<close> \<open>lsmall ?ws (2 * ?SUM) Lj\<close>
     using Suc.IH jle f by simp_all
   obtain L' k where lm: \<open>lower_m ?ws dmj Lj (?D ! j) = (L', k)\<close> by (cases \<open>lower_m ?ws dmj Lj (?D ! j)\<close>)
@@ -1112,7 +1112,7 @@ proof -
   have Bj: \<open>bnd Lj\<close> using ldefs_bnd[OF assms(1,3) jle] f by simp
   have inv: \<open>ldefs_inv p j (Lj, dmj)\<close> using ldefs_loop[OF dwt jle f Bj] .
   have lok: \<open>lok ?ws Lj\<close> and dmok: \<open>dm_ok ?dsj dmj Lj\<close> using inv by (simp_all add: ldefs_inv_def Let_def)
-  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using defs_wt_nth[OF dwt jl] .
+  have wtj: \<open>wt ?ws ?dsj (?D ! j)\<close> using QFBV_Lower.defs_wt_nth[OF dwt jl] .
   have R: \<open>foldl (ldefs_step p) (([], []), []) [0..<Suc j] =
            (fst (lower_m ?ws dmj Lj (?D ! j)), dmj @ [snd (lower_m ?ws dmj Lj (?D ! j))])\<close>
     using f by (simp add: ldefs_step_def split_def Let_def)

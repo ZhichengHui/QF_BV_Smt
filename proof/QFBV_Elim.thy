@@ -914,4 +914,212 @@ qed
 
 end
 
+lemma length_mark_live [simp]: \<open>length (mark_live_m L t) = length L\<close>
+  by (induction t arbitrary: L) simp_all
+
+lemma mark_live_nth:
+  \<open>x < length L \<Longrightarrow> mark_live_m L t ! x \<longleftrightarrow> L ! x \<or> (\<exists>u \<in> set (csubterms t). is_ref x u)\<close>
+proof (induction t arbitrary: L)
+  case (CoreTerm_Ref i)
+  then show ?case by (cases \<open>unat i < length L\<close>) (auto simp: nth_list_update is_ref_def)
+qed (auto simp: is_ref_def)
+
+lemma mark_live_fold:
+  \<open>length (foldl mark_live_m L ts) = length L\<close>
+  \<open>x < length L \<Longrightarrow> foldl mark_live_m L ts ! x \<longleftrightarrow> L ! x \<or> (\<exists>t \<in> set ts. \<exists>u \<in> set (csubterms t). is_ref x u)\<close>
+proof (induction ts arbitrary: L)
+  case (Cons t ts)
+  { case 1 show ?case using Cons.IH(1) by simp }
+  { case 2 then show ?case using Cons.IH(2)[of \<open>mark_live_m L t\<close>] mark_live_nth[of x L t] by auto }
+qed simp_all
+
+lemma cdefs_wt_I:
+  assumes \<open>length D = length ds\<close> \<open>\<forall>j < length D. cwt ws (take j ds) (D ! j) \<and> cwidth ws (take j ds) (D ! j) = ds ! j\<close>
+  shows \<open>cdefs_wt ws [] D \<and> cdef_widths ws [] D = ds\<close>
+  using assms
+proof (induction D arbitrary: ds rule: rev_induct)
+  case Nil
+  then show ?case by simp
+next
+  case (snoc d D)
+  obtain ds' w where ds: \<open>ds = ds' @ [w]\<close> using snoc.prems(1) by (cases ds rule: rev_cases) auto
+  have l: \<open>length D = length ds'\<close> using snoc.prems(1) ds by simp
+  have \<open>\<forall>j < length D. cwt ws (take j ds') (D ! j) \<and> cwidth ws (take j ds') (D ! j) = ds' ! j\<close>
+  proof (intro allI impI)
+    fix j assume j: \<open>j < length D\<close>
+    have \<open>cwt ws (take j ds) ((D @ [d]) ! j) \<and> cwidth ws (take j ds) ((D @ [d]) ! j) = ds ! j\<close>
+      using snoc.prems(2) j by simp
+    then show \<open>cwt ws (take j ds') (D ! j) \<and> cwidth ws (take j ds') (D ! j) = ds' ! j\<close>
+      using j l ds by (simp add: nth_append)
+  qed
+  note IH = snoc.IH[OF l this]
+  have \<open>cwt ws ds' d \<and> cwidth ws ds' d = w\<close>
+    using snoc.prems(2)[rule_format, of \<open>length D\<close>] l ds by (simp add: nth_append)
+  then show ?case using IH ds by (simp add: cdefs_wt_append cdef_widths_append)
+qed
+
+context elim_prob
+begin
+
+lemma cons_lt: \<open>k < en \<Longrightarrow> 2 \<le> kd ! k \<Longrightarrow> cons k < k\<close>
+  using kd_cons by blast
+
+lemma unat_nat: \<open>x < en \<Longrightarrow> unat (word_of_nat x :: 64 word) = x\<close>
+  using nlt by (simp add: unat_of_nat_eq en_def eD_def)
+
+lemma d1_wt:
+  assumes j: \<open>j < en\<close>
+  shows \<open>cwt ews (take j eds) (d1 ! j) \<and> cwidth ews (take j eds) (d1 ! j) = eds ! j\<close>
+proof (cases \<open>2 \<le> kd ! j\<close>)
+  case True
+  let ?c = \<open>cons j\<close>
+  have c: \<open>?c < j\<close> using cons_lt[OF j True] .
+  have cu: \<open>unat (word_of_nat ?c :: 64 word) = ?c\<close> using unat_nat c j by simp
+  have tk: \<open>take j eds ! ?c = eds ! ?c\<close> \<open>length (take j eds) = j\<close> using c j len_eds by simp_all
+  note W = kd_width[OF j True]
+  have wu: \<open>eds ! j \<noteq> eds ! ?c \<Longrightarrow> unat (word_of_nat (eds ! j - 1) :: 64 word) = eds ! j - 1\<close>
+    by (rule unat_of_nat_eq) (use W in simp)
+  show ?thesis
+    using ana(6)[OF j] True cu tk W wu c by (auto simp: rewrite_m_def)
+next
+  case False
+  then show ?thesis using ana(6)[OF j] wt_D[OF j] eds_nth[OF j] by simp
+qed
+
+lemma d1_refs: \<open>j < en \<Longrightarrow> u \<in> set (csubterms (d1 ! j)) \<Longrightarrow> is_ref x u \<Longrightarrow> x < j\<close>
+  using wsub[OF conjunct1[OF d1_wt]] len_eds by (cases u) (fastforce simp: is_ref_def)+
+
+definition \<open>L0 = foldl mark_live_m (replicate en False) eA\<close>
+definition \<open>DS d = foldl (dce_step eds) (L0, d1) (rev [d..<en])\<close>
+
+definition dinv :: \<open>nat \<Rightarrow> bool list \<Rightarrow> CoreTerm list \<Rightarrow> bool\<close> where
+  \<open>dinv d L Ds \<equiv> length L = en \<and> length Ds = en \<and> (\<forall>j<d. Ds ! j = d1 ! j) \<and>
+     (\<forall>j. d \<le> j \<longrightarrow> j < en \<longrightarrow> Ds ! j = (if L ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))) \<and>
+     (\<forall>j. d \<le> j \<longrightarrow> j < en \<longrightarrow> L ! j \<longrightarrow> (\<forall>u \<in> set (csubterms (d1 ! j)). \<forall>x. is_ref x u \<longrightarrow> L ! x)) \<and>
+     (\<forall>t \<in> set eA. \<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> L ! x)\<close>
+
+lemma dinv_en: \<open>dinv en L0 d1\<close>
+proof -
+  have \<open>length L0 = en\<close> by (simp add: L0_def mark_live_fold(1))
+  moreover have \<open>\<forall>t \<in> set eA. \<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> L0 ! x\<close>
+    using mark_live_fold(2) ref_lt_A unfolding L0_def by fastforce
+  ultimately show ?thesis using ana(4) by (simp add: dinv_def)
+qed
+
+lemma dinv_step:
+  assumes \<open>d < en\<close> \<open>dinv (Suc d) L Ds\<close>
+  shows \<open>case dce_step eds (L, Ds) d of (L', Ds') \<Rightarrow> dinv d L' Ds'\<close>
+proof (cases \<open>L ! d\<close>)
+  case True
+  let ?L = \<open>mark_live_m L (d1 ! d)\<close>
+  have I: \<open>length L = en\<close> \<open>length Ds = en\<close> \<open>Ds ! d = d1 ! d\<close> using assms by (simp_all add: dinv_def)
+  have st: \<open>dce_step eds (L, Ds) d = (?L, Ds)\<close> using True I by (simp add: dce_step_def)
+  have Ln: \<open>x < en \<Longrightarrow> ?L ! x \<longleftrightarrow> L ! x \<or> (\<exists>u \<in> set (csubterms (d1 ! d)). is_ref x u)\<close> for x
+    using mark_live_nth[of x L] I by simp
+  have hi: \<open>d \<le> x \<Longrightarrow> x < en \<Longrightarrow> ?L ! x = L ! x\<close> for x
+    using Ln d1_refs[OF assms(1)] by fastforce
+  have \<open>dinv d ?L Ds\<close>
+    unfolding dinv_def
+  proof (intro conjI allI impI ballI)
+    show \<open>length ?L = en\<close> \<open>length Ds = en\<close> using I by simp_all
+  next
+    fix j assume \<open>j < d\<close> then show \<open>Ds ! j = d1 ! j\<close> using assms(2) by (simp add: dinv_def)
+  next
+    fix j assume j: \<open>d \<le> j\<close> \<open>j < en\<close>
+    show \<open>Ds ! j = (if ?L ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))\<close>
+    proof (cases \<open>j = d\<close>)
+      case True
+      then show ?thesis using I hi[of d] \<open>L ! d\<close> assms(1) by simp
+    next
+      case False
+      then show ?thesis using assms(2) j hi[of j] by (simp add: dinv_def)
+    qed
+  next
+    fix j u x assume j: \<open>d \<le> j\<close> \<open>j < en\<close> \<open>?L ! j\<close> \<open>u \<in> set (csubterms (d1 ! j))\<close> \<open>is_ref x u\<close>
+    have xl: \<open>x < en\<close> using d1_refs[OF j(2,4,5)] j(2) by simp
+    show \<open>?L ! x\<close>
+    proof (cases \<open>j = d\<close>)
+      case True
+      then show ?thesis using Ln[OF xl] j by blast
+    next
+      case False
+      then have \<open>L ! j\<close> using j hi by simp
+      then have \<open>L ! x\<close> using assms(2) j False unfolding dinv_def by (metis Suc_leI le_neq_implies_less)
+      then show ?thesis using Ln[OF xl] by blast
+    qed
+  next
+    fix t u x assume t: \<open>t \<in> set eA\<close> \<open>u \<in> set (csubterms t)\<close> \<open>is_ref x u\<close>
+    have \<open>L ! x\<close> \<open>x < en\<close> using assms(2) t ref_lt_A[OF t] unfolding dinv_def by blast+
+    then show \<open>?L ! x\<close> using Ln by blast
+  qed
+  then show ?thesis using st by simp
+next
+  case False
+  let ?Ds = \<open>Ds[d := CoreTerm_Const (replicate (eds ! d) False)]\<close>
+  have st: \<open>dce_step eds (L, Ds) d = (L, ?Ds)\<close> using False by (simp add: dce_step_def)
+  have I: \<open>length L = en\<close> \<open>length Ds = en\<close> using assms by (simp_all add: dinv_def)
+  have \<open>dinv d L ?Ds\<close>
+    unfolding dinv_def
+  proof (intro conjI allI impI ballI)
+    show \<open>length L = en\<close> \<open>length ?Ds = en\<close> using I by simp_all
+  next
+    fix j assume \<open>j < d\<close> then show \<open>?Ds ! j = d1 ! j\<close> using assms(2) by (simp add: dinv_def)
+  next
+    fix j assume j: \<open>d \<le> j\<close> \<open>j < en\<close>
+    show \<open>?Ds ! j = (if L ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))\<close>
+    proof (cases \<open>j = d\<close>)
+      case True
+      then show ?thesis using I False j by simp
+    next
+      case F: False
+      then have \<open>Suc d \<le> j\<close> using j by simp
+      then show ?thesis using assms(2) j F unfolding dinv_def by simp
+    qed
+  next
+    fix j u x assume j: \<open>d \<le> j\<close> \<open>j < en\<close> \<open>L ! j\<close> \<open>u \<in> set (csubterms (d1 ! j))\<close> \<open>is_ref x u\<close>
+    then have \<open>Suc d \<le> j\<close> using False by (cases \<open>j = d\<close>) auto
+    then show \<open>L ! x\<close> using assms(2) j unfolding dinv_def by blast
+  next
+    fix t u x assume \<open>t \<in> set eA\<close> \<open>u \<in> set (csubterms t)\<close> \<open>is_ref x u\<close>
+    then show \<open>L ! x\<close> using assms(2) unfolding dinv_def by blast
+  qed
+  then show ?thesis using st by simp
+qed
+
+lemma dinv_DS: \<open>m \<le> en \<Longrightarrow> case DS (en - m) of (L, Ds) \<Rightarrow> dinv (en - m) L Ds\<close>
+proof (induction m)
+  case 0
+  then show ?case using dinv_en by (simp add: DS_def)
+next
+  case (Suc m)
+  let ?d = \<open>en - Suc m\<close>
+  have d: \<open>?d < en\<close> \<open>Suc ?d = en - m\<close> using Suc.prems by simp_all
+  have \<open>rev [?d..<en] = rev [Suc ?d..<en] @ [?d]\<close> using d by (simp add: upt_rec)
+  then have e: \<open>DS ?d = dce_step eds (DS (Suc ?d)) ?d\<close> by (simp add: DS_def)
+  obtain L Ds where s: \<open>DS (Suc ?d) = (L, Ds)\<close> by (cases \<open>DS (Suc ?d)\<close>)
+  have \<open>dinv (Suc ?d) L Ds\<close> using Suc.IH Suc.prems s d(2) by simp
+  then show ?case using dinv_step[OF d(1)] e s by simp
+qed
+
+definition \<open>live = fst (dce_res q)\<close>
+definition \<open>D2 = snd (dce_res q)\<close>
+
+lemma dce_DS: \<open>dce_res q = DS 0\<close>
+  using ana_parts by (simp add: dce_res_def DS_def L0_def en_def eD_def eA_def Let_def)
+
+lemma dinv_final: \<open>dinv 0 live D2\<close>
+  using dinv_DS[of en] dce_DS by (cases \<open>DS 0\<close>) (simp add: live_def D2_def)
+
+lemma D2:
+  shows \<open>length D2 = en\<close> \<open>length live = en\<close>
+    \<open>j < en \<Longrightarrow> D2 ! j = (if live ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))\<close>
+    \<open>j < en \<Longrightarrow> live ! j \<Longrightarrow> u \<in> set (csubterms (d1 ! j)) \<Longrightarrow> is_ref x u \<Longrightarrow> live ! x\<close>
+    \<open>t \<in> set eA \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> is_ref x u \<Longrightarrow> live ! x\<close>
+  using dinv_final unfolding dinv_def by blast+
+
+lemma D2_wt: \<open>j < en \<Longrightarrow> cwt ews (take j eds) (D2 ! j) \<and> cwidth ews (take j eds) (D2 ! j) = eds ! j\<close>
+  using D2(3) d1_wt by auto
+
+end
+
 end

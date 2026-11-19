@@ -343,7 +343,7 @@ definition fuel_bound :: \<open>CoreProblem \<Rightarrow> nat\<close> where
      let ws = cvar_widths p in
      let ds = cdef_widths ws [] (CoreProblem_defs p) in
      let (s, vs) = encode_m p in
-     Max ({fst s + 2, length (snd s) + 2, length ws + 2, length (CoreProblem_defs p) + 2,
+     Max ({fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), length ws + 2, length (CoreProblem_defs p) + 2,
            length (CoreProblem_asserts p) + 2} \<union>
           set (map (\<lambda>w. w + 2) ws) \<union>
           set (map (\<lambda>c. length c + 2) (snd s)) \<union>

@@ -1037,7 +1037,7 @@ proof -
     then have \<open>tbound ws ds t < 2 ^ 63\<close> using assms(6) by (simp add: ws_def ds_def)
     then show \<open>tbound ws ds t < 2 ^ 64\<close> by simp
   qed
-  define X where \<open>X = {fst s + 2, length (snd s) + 2, length ws + 2, length (CoreProblem_defs p) + 2,
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), length ws + 2, length (CoreProblem_defs p) + 2,
            length (CoreProblem_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
           set (map (\<lambda>c. length c + 2) (snd s)) \<union>
           set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
@@ -1045,7 +1045,8 @@ proof -
   have all: \<open>\<forall>x \<in> X. x < 2 ^ 64\<close>
   proof
     fix x assume \<open>x \<in> X\<close>
-    then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close> | \<open>x = length ws + 2\<close>
+    then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
+      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = length ws + 2\<close>
       | \<open>x = length (CoreProblem_defs p) + 2\<close> | \<open>x = length (CoreProblem_asserts p) + 2\<close>
       | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
       | \<open>x \<in> set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
@@ -1056,17 +1057,19 @@ proof -
     next
       case 2 then show ?thesis using c by simp
     next
-      case 3 then show ?thesis using assms(3) by (simp add: ws_def)
+      case 3 then show ?thesis using c by simp
     next
-      case 4 then show ?thesis using assms(4) by simp
+      case 4 then show ?thesis using assms(3) by (simp add: ws_def)
     next
-      case 5 then show ?thesis using assms(5) by simp
+      case 5 then show ?thesis using assms(4) by simp
     next
-      case 6 then show ?thesis using w by auto
+      case 6 then show ?thesis using assms(5) by simp
     next
-      case 7 then show ?thesis using cl by auto
+      case 7 then show ?thesis using w by auto
     next
-      case 8 then show ?thesis using tb by auto
+      case 8 then show ?thesis using cl by auto
+    next
+      case 9 then show ?thesis using tb by auto
     qed
   qed
   have M: \<open>Max X < 2 ^ 64\<close> using all by (simp add: Max_less_iff[OF fin ne])
@@ -1164,6 +1167,17 @@ proof -
   qed
   have h1: \<open>fst s + 2 \<le> B\<close> using gen[of \<open>fst s\<close>] EG' by simp
   have h2: \<open>length (snd s) + 2 \<le> B\<close> using gen[of \<open>length (snd s)\<close>] EG' by simp
+  have h2': \<open>2 * (fst s + length (snd s)) \<le> B\<close>
+  proof -
+    have b1: \<open>2 * sum_list ws \<le> 1000 * sum_list ws\<close>
+      and b2: \<open>2 * length (CoreProblem_asserts p) \<le> 1000 * length (CoreProblem_asserts p)\<close>
+      and b3: \<open>200 * Y \<le> 1000 * Y\<close> by simp_all
+    have \<open>2 * (fst s + length (snd s)) \<le> 2 * (2 + sum_list ws + length (CoreProblem_asserts p) + 100 * Y)\<close>
+      using EG' by simp
+    then have \<open>2 * (fst s + length (snd s)) \<le> 4 + 2 * sum_list ws + 2 * length (CoreProblem_asserts p) + 200 * Y\<close>
+      by simp
+    then show ?thesis using Bexp b1 b2 b3 by linarith
+  qed
   have h3: \<open>length ws + 2 \<le> B\<close> using Bexp by linarith
   have h4: \<open>length (CoreProblem_defs p) + 2 \<le> B\<close> using Bexp by linarith
   have h5: \<open>length (CoreProblem_asserts p) + 2 \<le> B\<close> using Bexp by linarith
@@ -1187,7 +1201,7 @@ proof -
   have \<open>fuel_bound p \<le> B\<close>
     unfolding fuel_bound_def
     apply (simp add: e Let_def ws_def[symmetric] ds_def[symmetric])
-    using h1 h2 h3 h4 h5 h6 h7 h8 by auto
+    using h1 h2 h2' h3 h4 h5 h6 h7 h8 by auto
   then show ?thesis by (simp add: B_def)
 qed
 

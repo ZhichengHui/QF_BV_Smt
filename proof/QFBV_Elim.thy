@@ -1311,4 +1311,61 @@ qed
 
 end
 
+subsection \<open>Evaluation depends on the variables and definitions a term mentions\<close>
+
+lemma eval_m_cong:
+  assumes \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_var x u \<longrightarrow> vs ! x = vs' ! x\<close>
+    \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> dv ! x = dv' ! x\<close>
+  shows \<open>eval_m vs dv t = eval_m vs' dv' t\<close>
+  using assms
+proof (induction t)
+  case (CoreTerm_Bin op a b)
+  have \<open>eval_m vs dv a = eval_m vs' dv' a\<close>
+    by (rule CoreTerm_Bin.IH(1)) (use CoreTerm_Bin.prems in auto)
+  moreover have \<open>eval_m vs dv b = eval_m vs' dv' b\<close>
+    by (rule CoreTerm_Bin.IH(2)) (use CoreTerm_Bin.prems in auto)
+  ultimately show ?case by simp
+next
+  case (CoreTerm_Ite c a b)
+  have \<open>eval_m vs dv c = eval_m vs' dv' c\<close>
+    by (rule CoreTerm_Ite.IH(1)) (use CoreTerm_Ite.prems in auto)
+  moreover have \<open>eval_m vs dv a = eval_m vs' dv' a\<close>
+    by (rule CoreTerm_Ite.IH(2)) (use CoreTerm_Ite.prems in auto)
+  moreover have \<open>eval_m vs dv b = eval_m vs' dv' b\<close>
+    by (rule CoreTerm_Ite.IH(3)) (use CoreTerm_Ite.prems in auto)
+  ultimately show ?case by simp
+qed (simp_all add: is_var_def is_ref_def)
+
+lemma eval_defs_len: \<open>length (eval_defs_from vs dv D) = length dv + length D\<close>
+  by (induction D arbitrary: dv) (simp_all add: eval_defs_from_def)
+
+lemma eval_defs_prefix: \<open>\<exists>e. eval_defs_from vs dv D = dv @ e\<close>
+proof (induction D arbitrary: dv)
+  case (Cons d D)
+  then show ?case by (simp add: eval_defs_from_def) (metis append_assoc)
+qed (simp add: eval_defs_from_def)
+
+lemma eval_defs_take:
+  assumes \<open>k \<le> length D\<close>
+  shows \<open>take k (eval_defs_from vs [] D) = eval_defs_from vs [] (take k D)\<close>
+proof -
+  have \<open>eval_defs_from vs [] D = eval_defs_from vs (eval_defs_from vs [] (take k D)) (drop k D)\<close>
+    unfolding eval_defs_from_def foldl_append[symmetric] by simp
+  then obtain e where \<open>eval_defs_from vs [] D = eval_defs_from vs [] (take k D) @ e\<close> using eval_defs_prefix by metis
+  then show ?thesis using assms eval_defs_len[of vs \<open>[]\<close> \<open>take k D\<close>] by simp
+qed
+
+lemma eval_defs_nth:
+  assumes \<open>j < length D\<close>
+  shows \<open>eval_defs_from vs [] D ! j = eval_m vs (take j (eval_defs_from vs [] D)) (D ! j)\<close>
+proof -
+  have \<open>take (Suc j) (eval_defs_from vs [] D) = eval_defs_from vs [] (take j D @ [D ! j])\<close>
+    using eval_defs_take[of \<open>Suc j\<close> D vs] assms by (simp add: take_Suc_conv_app_nth)
+  also have \<open>\<dots> = eval_defs_from vs [] (take j D) @ [eval_m vs (eval_defs_from vs [] (take j D)) (D ! j)]\<close>
+    by (rule eval_defs_from_snoc)
+  finally have \<open>take (Suc j) (eval_defs_from vs [] D) ! j = eval_m vs (eval_defs_from vs [] (take j D)) (D ! j)\<close>
+    using eval_defs_len[of vs \<open>[]\<close> \<open>take j D\<close>] assms by (simp add: nth_append)
+  then show ?thesis using eval_defs_take[of j D vs] assms by simp
+qed
+
 end

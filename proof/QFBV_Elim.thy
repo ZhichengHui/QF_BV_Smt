@@ -1368,4 +1368,144 @@ proof -
   then show ?thesis using eval_defs_take[of j D vs] assms by simp
 qed
 
+subsection \<open>Chains of consumed definitions\<close>
+
+context elim_prob
+begin
+
+text \<open>The parent of a consumed definition: the definition that consumes it.\<close>
+definition par :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>par j = (LEAST k. k < en \<and> 2 \<le> kd ! k \<and> cons k = j)\<close>
+
+lemma par:
+  assumes \<open>j < en\<close> \<open>mk ! j = 1\<close>
+  shows \<open>par j < en \<and> 2 \<le> kd ! par j \<and> cons (par j) = j \<and> j < par j\<close>
+proof -
+  obtain i where i: \<open>i < en \<and> 2 \<le> kd ! i \<and> cons i = j\<close> using mk_char(1)[OF assms(1)] assms(2) by blast
+  have P: \<open>par j < en \<and> 2 \<le> kd ! par j \<and> cons (par j) = j\<close>
+    unfolding par_def by (rule LeastI[of _ i]) (use i in blast)
+  then show ?thesis using cons_lt[of \<open>par j\<close>] by auto
+qed
+
+lemma mk_cons: \<open>k < en \<Longrightarrow> 2 \<le> kd ! k \<Longrightarrow> mk ! cons k = 1\<close>
+  using mk_char(1)[of \<open>cons k\<close>] cons_lt[of k] by auto
+
+lemma par_cons:
+  assumes \<open>k < en\<close> \<open>2 \<le> kd ! k\<close>
+  shows \<open>par (cons k) = k\<close>
+proof -
+  have c: \<open>cons k < en\<close> using cons_lt[OF assms] assms(1) by simp
+  note P = par[OF c mk_cons[OF assms]]
+  show ?thesis using cons_unique[OF _ assms(1) _ assms(2)] P by blast
+qed
+
+primrec tp_f :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>tp_f 0 j = j\<close>
+| \<open>tp_f (Suc f) j = (if j < en \<and> mk ! j = 1 then tp_f f (par j) else j)\<close>
+
+lemma tp_f_eq: \<open>en \<le> f + j \<Longrightarrow> en \<le> f' + j \<Longrightarrow> tp_f f j = tp_f f' j\<close>
+proof (induction f arbitrary: j f')
+  case 0
+  then show ?case by (cases f') simp_all
+next
+  case (Suc g)
+  show ?case
+  proof (cases \<open>j < en \<and> mk ! j = 1\<close>)
+    case True
+    then obtain g' where g': \<open>f' = Suc g'\<close> using Suc.prems by (cases f') auto
+    have \<open>j < par j\<close> using par True by blast
+    then show ?thesis using Suc.IH[of \<open>par j\<close> g'] Suc.prems True g' by simp
+  next
+    case False
+    then show ?thesis using False by (cases f') auto
+  qed
+qed
+
+text \<open>The top of the chain of a definition: itself unless it is consumed.\<close>
+definition tp :: \<open>nat \<Rightarrow> nat\<close> where \<open>tp j = tp_f en j\<close>
+
+lemma tp_non: \<open>j < en \<Longrightarrow> mk ! j \<noteq> 1 \<Longrightarrow> tp j = j\<close>
+  by (cases en) (simp_all add: tp_def)
+
+lemma tp_par: \<open>j < en \<Longrightarrow> mk ! j = 1 \<Longrightarrow> tp j = tp (par j)\<close>
+proof -
+  assume j: \<open>j < en\<close> \<open>mk ! j = 1\<close>
+  then obtain g where g: \<open>en = Suc g\<close> by (cases en) auto
+  have \<open>j < par j\<close> using par j by blast
+  then show ?thesis using j g tp_f_eq[of g \<open>par j\<close> en] by (simp add: tp_def)
+qed
+
+lemma tp_props: \<open>j < en \<Longrightarrow> j \<le> tp j \<and> tp j < en \<and> mk ! tp j \<noteq> 1\<close>
+proof (induction \<open>en - j\<close> arbitrary: j rule: less_induct)
+  case less
+  show ?case
+  proof (cases \<open>mk ! j = 1\<close>)
+    case True
+    note P = par[OF less.prems True]
+    have \<open>en - par j < en - j\<close> using P less.prems by (meson diff_less_mono2)
+    then show ?thesis using less.hyps[of \<open>par j\<close>] P tp_par[OF less.prems True] by simp
+  next
+    case False
+    then show ?thesis using tp_non less.prems by simp
+  qed
+qed
+
+primrec leaf_f :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>leaf_f 0 j = j\<close>
+| \<open>leaf_f (Suc f) j = (if j < en \<and> 2 \<le> kd ! j then leaf_f f (cons j) else j)\<close>
+
+lemma leaf_f_eq: \<open>j < f \<Longrightarrow> j < f' \<Longrightarrow> leaf_f f j = leaf_f f' j\<close>
+proof (induction f arbitrary: j f')
+  case 0
+  then show ?case by simp
+next
+  case (Suc g)
+  obtain g' where g': \<open>f' = Suc g'\<close> using Suc.prems by (cases f') auto
+  show ?case
+  proof (cases \<open>j < en \<and> 2 \<le> kd ! j\<close>)
+    case True
+    have \<open>cons j < j\<close> using cons_lt True by blast
+    then show ?thesis using Suc.IH[of \<open>cons j\<close> g'] Suc.prems True g' by simp
+  next
+    case False
+    then show ?thesis using g' by auto
+  qed
+qed
+
+text \<open>The bottom of the chain of a definition.\<close>
+definition leaf :: \<open>nat \<Rightarrow> nat\<close> where \<open>leaf j = leaf_f en j\<close>
+
+lemma leaf_stop: \<open>j < en \<Longrightarrow> \<not> 2 \<le> kd ! j \<Longrightarrow> leaf j = j\<close>
+  by (cases en) (simp_all add: leaf_def)
+
+lemma leaf_step: \<open>j < en \<Longrightarrow> 2 \<le> kd ! j \<Longrightarrow> leaf j = leaf (cons j)\<close>
+proof -
+  assume j: \<open>j < en\<close> \<open>2 \<le> kd ! j\<close>
+  then obtain g where g: \<open>en = Suc g\<close> by (cases en) auto
+  have \<open>cons j < j\<close> using cons_lt j by blast
+  then show ?thesis using j g leaf_f_eq[of \<open>cons j\<close> g en] by (simp add: leaf_def)
+qed
+
+lemma leaf_props:
+  \<open>j < en \<Longrightarrow> kd ! j \<noteq> 0 \<Longrightarrow> kd ! leaf j = 1 \<and> leaf j \<le> j \<and> eds ! j \<le> eds ! leaf j \<and> tp (leaf j) = tp j\<close>
+proof (induction j rule: less_induct)
+  case (less j)
+  show ?case
+  proof (cases \<open>2 \<le> kd ! j\<close>)
+    case True
+    have c: \<open>cons j < j\<close> \<open>kd ! cons j \<noteq> 0\<close> using kd_cons[OF less.prems(1) True] by simp_all
+    note IH = less.IH[OF c(1) _ c(2)]
+    have \<open>tp (cons j) = tp j\<close>
+      using tp_par[of \<open>cons j\<close>] mk_cons par_cons less.prems(1) True c(1) by simp
+    then show ?thesis using IH leaf_step[OF less.prems(1) True] kd_width[OF less.prems(1) True] c less.prems(1)
+      by simp
+  next
+    case False
+    then have \<open>kd ! j = 1\<close> using less.prems by simp
+    then show ?thesis using leaf_stop[OF less.prems(1)] False by simp
+  qed
+qed
+
+end
+
 end

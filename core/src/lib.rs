@@ -1562,6 +1562,452 @@ pub fn eval_defs(p: &CoreProblem, m: &Vec<Vec<bool>>) -> Vec<Vec<bool>> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Elimination of unconstrained definitions. A definition is *free* when its value can be chosen
+// freely, independently of everything else: a variable that occurs once in the problem, or an
+// operation that can take every value by the choice of an operand that is itself free and occurs
+// once (it is *consumed*). Each free definition is rewritten to (the low bits of) the operand it
+// consumes, so that in the new problem its value is the low bits of a variable; the definitions no
+// longer reachable from the assertions become constants. The variables, the number of definitions
+// and the width of every definition stay the same, and no term grows. A model of the new problem
+// gives a model of the problem by pushing the value of each free definition down to its variable.
+//
+// The kind of a definition: 0 not free; 1 a variable that occurs once; 2 free, consuming its first
+// operand (the condition of `Ite`); 3 free, consuming its second operand; 4 `Mul` or `Udiv` of two
+// free operands: the first is consumed and the second is set to 1. The mark of a definition: 1 if
+// consumed, 2 if it is the second operand of a definition of kind 4, else 0.
+
+/// `c[i]` plus one, at most 2.
+fn bump(c: Vec<usize>, i: usize) -> Vec<usize> {
+    let mut c = c;
+    if c[i] < 2 {
+        c[i] = c[i] + 1;
+    }
+    c
+}
+
+/// Adds the occurrences of variables and of definitions in `t` to `vc` and `rc` (at most 2).
+fn count_occ(vc: Vec<usize>, rc: Vec<usize>, t: &CoreTerm) -> (Vec<usize>, Vec<usize>) {
+    match t {
+        CoreTerm::Const(_) => (vc, rc),
+        CoreTerm::Var(i) => (bump(vc, *i), rc),
+        CoreTerm::Ref(i) => (vc, bump(rc, *i)),
+        CoreTerm::Not(a) => count_occ(vc, rc, a),
+        CoreTerm::Bin(_, a, b) => {
+            let (vc, rc) = count_occ(vc, rc, a);
+            count_occ(vc, rc, b)
+        }
+        CoreTerm::Extract(_, _, a) => count_occ(vc, rc, a),
+        CoreTerm::Ite(c, a, b) => {
+            let (vc, rc) = count_occ(vc, rc, c);
+            let (vc, rc) = count_occ(vc, rc, a);
+            count_occ(vc, rc, b)
+        }
+    }
+}
+
+/// The width of `t`, given the widths `ws` of the variables and `dw` of the definitions.
+fn term_width(ws: &Vec<usize>, dw: &Vec<usize>, t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Const(bits) => bits.len(),
+        CoreTerm::Var(i) => ws[*i],
+        CoreTerm::Ref(i) => dw[*i],
+        CoreTerm::Not(a) => term_width(ws, dw, a),
+        CoreTerm::Bin(op, a, b) => match op {
+            BinOp::Concat => term_width(ws, dw, a) + term_width(ws, dw, b),
+            BinOp::Eq => 1,
+            BinOp::Ult => 1,
+            _ => term_width(ws, dw, a),
+        },
+        CoreTerm::Extract(hi, lo, _) => *hi - *lo + 1,
+        CoreTerm::Ite(_, a, _) => term_width(ws, dw, a),
+    }
+}
+
+/// The index `i` of `Ref(i)`; `n` for any other term.
+fn ref_index(t: &CoreTerm, n: usize) -> usize {
+    match t {
+        CoreTerm::Ref(i) => *i,
+        _ => n,
+    }
+}
+
+/// 0 or 1 for a constant of width 1; 2 for any other term.
+fn bit_const(t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Const(bits) => {
+            if bits.len() == 1 {
+                if bits[0] {
+                    1
+                } else {
+                    0
+                }
+            } else {
+                2
+            }
+        }
+        _ => 2,
+    }
+}
+
+/// Whether `i` refers to a free definition (of index below `kind.len()`) that occurs once.
+fn free_once(kind: &Vec<usize>, rc: &Vec<usize>, i: usize) -> bool {
+    i < kind.len() && kind[i] != 0 && rc[i] == 1
+}
+
+/// The kind of the definition `t`, given the definitions before it (`defs`, with widths `dw` and
+/// kinds `kind`) and the occurrence counts `vc`, `rc`.
+fn free_kind(defs: &Vec<CoreTerm>, dw: &Vec<usize>, vc: &Vec<usize>, rc: &Vec<usize>, kind: &Vec<usize>, t: &CoreTerm) -> usize {
+    let n = kind.len();
+    match t {
+        CoreTerm::Var(i) => {
+            if vc[*i] == 1 {
+                1
+            } else {
+                0
+            }
+        }
+        CoreTerm::Not(a) => {
+            if free_once(kind, rc, ref_index(a, n)) {
+                2
+            } else {
+                0
+            }
+        }
+        CoreTerm::Extract(_, _, a) => {
+            if free_once(kind, rc, ref_index(a, n)) {
+                2
+            } else {
+                0
+            }
+        }
+        CoreTerm::Bin(op, a, b) => {
+            let ia = ref_index(a, n);
+            let ib = ref_index(b, n);
+            match op {
+                BinOp::Add => {
+                    if free_once(kind, rc, ia) {
+                        2
+                    } else if free_once(kind, rc, ib) {
+                        3
+                    } else {
+                        0
+                    }
+                }
+                BinOp::Xor => {
+                    if free_once(kind, rc, ia) {
+                        2
+                    } else if free_once(kind, rc, ib) {
+                        3
+                    } else {
+                        0
+                    }
+                }
+                BinOp::Eq => {
+                    if free_once(kind, rc, ia) && dw[ia] > 0 {
+                        2
+                    } else if free_once(kind, rc, ib) && dw[ib] > 0 {
+                        3
+                    } else {
+                        0
+                    }
+                }
+                BinOp::Mul => {
+                    if free_once(kind, rc, ia) && free_once(kind, rc, ib) && ia != ib {
+                        4
+                    } else {
+                        0
+                    }
+                }
+                BinOp::Udiv => {
+                    if free_once(kind, rc, ia) && free_once(kind, rc, ib) && ia != ib {
+                        4
+                    } else {
+                        0
+                    }
+                }
+                _ => 0,
+            }
+        }
+        CoreTerm::Ite(c, a, b) => {
+            let ic = ref_index(c, n);
+            let ia = ref_index(a, n);
+            let ib = ref_index(b, n);
+            if free_once(kind, rc, ic) && ia < n && ib < n {
+                let x = bit_const(&defs[ia]);
+                let y = bit_const(&defs[ib]);
+                if x < 2 && y < 2 && x != y {
+                    2
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        }
+        _ => 0,
+    }
+}
+
+/// The operand that a definition `t` of kind `k` (2, 3 or 4) consumes.
+fn consumed(t: &CoreTerm, k: usize, n: usize) -> usize {
+    match t {
+        CoreTerm::Not(a) => ref_index(a, n),
+        CoreTerm::Extract(_, _, a) => ref_index(a, n),
+        CoreTerm::Bin(_, a, b) => {
+            if k == 3 {
+                ref_index(b, n)
+            } else {
+                ref_index(a, n)
+            }
+        }
+        CoreTerm::Ite(c, _, _) => ref_index(c, n),
+        _ => n,
+    }
+}
+
+/// The second operand of a binary operation.
+fn second(t: &CoreTerm, n: usize) -> usize {
+    match t {
+        CoreTerm::Bin(_, _, b) => ref_index(b, n),
+        _ => n,
+    }
+}
+
+fn copy_op(op: &BinOp) -> BinOp {
+    match op {
+        BinOp::And => BinOp::And,
+        BinOp::Or => BinOp::Or,
+        BinOp::Xor => BinOp::Xor,
+        BinOp::Add => BinOp::Add,
+        BinOp::Mul => BinOp::Mul,
+        BinOp::Udiv => BinOp::Udiv,
+        BinOp::Urem => BinOp::Urem,
+        BinOp::Shl => BinOp::Shl,
+        BinOp::Lshr => BinOp::Lshr,
+        BinOp::Concat => BinOp::Concat,
+        BinOp::Eq => BinOp::Eq,
+        BinOp::Ult => BinOp::Ult,
+    }
+}
+
+fn copy_term(t: &CoreTerm) -> CoreTerm {
+    match t {
+        CoreTerm::Const(bits) => CoreTerm::Const(bits.clone()),
+        CoreTerm::Var(i) => CoreTerm::Var(*i),
+        CoreTerm::Ref(i) => CoreTerm::Ref(*i),
+        CoreTerm::Not(a) => cnot(copy_term(a)),
+        CoreTerm::Bin(op, a, b) => cbin(copy_op(op), copy_term(a), copy_term(b)),
+        CoreTerm::Extract(hi, lo, a) => cextract(*hi, *lo, copy_term(a)),
+        CoreTerm::Ite(c, a, b) => cite(copy_term(c), copy_term(a), copy_term(b)),
+    }
+}
+
+/// Marks the definitions referred to in `t` as live.
+fn mark_live(live: Vec<bool>, t: &CoreTerm) -> Vec<bool> {
+    match t {
+        CoreTerm::Const(_) => live,
+        CoreTerm::Var(_) => live,
+        CoreTerm::Ref(i) => {
+            let mut live = live;
+            live[*i] = true;
+            live
+        }
+        CoreTerm::Not(a) => mark_live(live, a),
+        CoreTerm::Bin(_, a, b) => {
+            let live = mark_live(live, a);
+            mark_live(live, b)
+        }
+        CoreTerm::Extract(_, _, a) => mark_live(live, a),
+        CoreTerm::Ite(c, a, b) => {
+            let live = mark_live(live, c);
+            let live = mark_live(live, a);
+            mark_live(live, b)
+        }
+    }
+}
+
+/// The problem with the free definitions rewritten and the unreachable ones replaced by
+/// constants, the kinds and the marks of the definitions.
+pub fn elim(q: &CoreProblem) -> (CoreProblem, Vec<usize>, Vec<usize>) {
+    let n = q.defs.len();
+    let mut vc: Vec<usize> = vec![0; q.widths.len()];
+    let mut rc: Vec<usize> = vec![0; n];
+    let mut j: usize = 0;
+    while j < n {
+        let (v1, r1) = count_occ(vc, rc, &q.defs[j]);
+        vc = v1;
+        rc = r1;
+        j += 1;
+    }
+    let mut i: usize = 0;
+    while i < q.asserts.len() {
+        let (v1, r1) = count_occ(vc, rc, &q.asserts[i]);
+        vc = v1;
+        rc = r1;
+        i += 1;
+    }
+    let mut dw: Vec<usize> = Vec::new();
+    let mut kind: Vec<usize> = Vec::new();
+    let mut mark: Vec<usize> = vec![0; n];
+    let mut defs: Vec<CoreTerm> = Vec::new();
+    let mut k: usize = 0;
+    while k < n {
+        let t = &q.defs[k];
+        let w = term_width(&q.widths, &dw, t);
+        let c = free_kind(&q.defs, &dw, &vc, &rc, &kind, t);
+        if c >= 2 {
+            let a = consumed(t, c, n);
+            mark = set_at(mark, a, 1);
+            if c == 4 {
+                mark = set_at(mark, second(t, n), 2);
+            }
+            if dw[a] == w {
+                defs.push(CoreTerm::Ref(a));
+            } else {
+                defs.push(cextract(w - 1, 0, cref(a)));
+            }
+        } else {
+            defs.push(copy_term(t));
+        }
+        dw.push(w);
+        kind.push(c);
+        k += 1;
+    }
+    let mut live: Vec<bool> = vec![false; n];
+    let mut l: usize = 0;
+    while l < q.asserts.len() {
+        live = mark_live(live, &q.asserts[l]);
+        l += 1;
+    }
+    let mut d: usize = n;
+    while d > 0 {
+        d -= 1;
+        if live[d] {
+            live = mark_live(live, &defs[d]);
+        } else {
+            defs[d] = CoreTerm::Const(vec![false; dw[d]]);
+        }
+    }
+    let mut asserts: Vec<CoreTerm> = Vec::new();
+    let mut a: usize = 0;
+    while a < q.asserts.len() {
+        asserts.push(copy_term(&q.asserts[a]));
+        a += 1;
+    }
+    (CoreProblem { widths: q.widths.clone(), defs, asserts }, kind, mark)
+}
+
+/// The constant 1 of width `w` (0 if `w` is 0).
+fn bits_one(w: usize) -> Vec<bool> {
+    let mut r = vec![false; w];
+    if w > 0 {
+        r[0] = true;
+    }
+    r
+}
+
+/// The operand that the definition `t` of kind `k` (2, 3 or 4) consumes, and the value it must
+/// take for `t` to have the value `v`, given the values `dv` of the other operands and the
+/// widths (the lengths of `dv2`) of all definitions.
+fn invert(t: &CoreTerm, k: usize, v: &Vec<bool>, dv: &Vec<Vec<bool>>, dv2: &Vec<Vec<bool>>) -> (usize, Vec<bool>) {
+    let n = dv2.len();
+    match t {
+        CoreTerm::Not(a) => (ref_index(a, n), bits_not(v)),
+        CoreTerm::Extract(hi, lo, a) => {
+            let ia = ref_index(a, n);
+            let w = dv2[ia].len();
+            let low = bits_concat(v, &vec![false; *lo]);
+            (ia, bits_concat(&vec![false; w - 1 - *hi], &low))
+        }
+        CoreTerm::Bin(op, a, b) => {
+            let ia = ref_index(a, n);
+            let ib = ref_index(b, n);
+            let (ic, io) = if k == 3 { (ib, ia) } else { (ia, ib) };
+            match op {
+                BinOp::Add => {
+                    let (s, _) = bits_add(v, &bits_not(&dv[io]), true);
+                    (ic, s)
+                }
+                BinOp::Xor => (ic, bits_bitwise(op, v, &dv[io])),
+                BinOp::Eq => {
+                    if v[0] {
+                        (ic, dv[io].clone())
+                    } else {
+                        (ic, bits_not(&dv[io]))
+                    }
+                }
+                _ => (ic, v.clone()),
+            }
+        }
+        CoreTerm::Ite(c, a, _) => {
+            let ia = ref_index(a, n);
+            let mut r = Vec::new();
+            r.push(bits_eq(v, &dv[ia]));
+            (ref_index(c, n), r)
+        }
+        _ => (n, v.clone()),
+    }
+}
+
+/// The index of the variable of `Var(i)`; 0 for any other term.
+fn var_index(t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Var(i) => *i,
+        _ => 0,
+    }
+}
+
+/// Gives the free definition `k` the value `v`: down the chain of consumed operands from `k`,
+/// each definition gets the value that gives its parent its value, and the variable at the
+/// bottom gets the value of its definition.
+fn settle(defs: &Vec<CoreTerm>, kind: &Vec<usize>, dv2: &Vec<Vec<bool>>, dv: Vec<Vec<bool>>, m: Vec<Vec<bool>>, k: usize, v: Vec<bool>) -> (Vec<Vec<bool>>, Vec<Vec<bool>>) {
+    let mut dv = dv;
+    let mut m = m;
+    let mut j = k;
+    let mut v = v;
+    let mut i: usize = 0;
+    while i <= k {
+        dv[j] = v.clone();
+        if kind[j] == 1 {
+            m[var_index(&defs[j])] = v;
+            return (dv, m);
+        }
+        let (a, va) = invert(&defs[j], kind[j], &v, &dv, dv2);
+        j = a;
+        v = va;
+        i += 1;
+    }
+    (dv, m)
+}
+
+/// A model of `q` from a model `m2` of its elimination `q2` (with the kinds and marks returned by
+/// `elim`): the free definitions that are not consumed take their values in `q2` (1 for the second
+/// operands of kind 4), which are pushed down to their variables; the other variables keep their
+/// values.
+pub fn reconstruct(q: &CoreProblem, kind: &Vec<usize>, mark: &Vec<usize>, q2: &CoreProblem, m2: &Vec<Vec<bool>>) -> Vec<Vec<bool>> {
+    let dv2 = eval_defs(q2, m2);
+    let mut m = m2.clone();
+    let mut dv: Vec<Vec<bool>> = Vec::new();
+    let mut k: usize = 0;
+    while k < q.defs.len() {
+        if mark[k] == 1 {
+            dv.push(Vec::new());
+        } else if kind[k] == 0 {
+            let v = eval_term(&m, &dv, &q.defs[k]);
+            dv.push(v);
+        } else {
+            dv.push(Vec::new());
+            let v = if mark[k] == 2 { bits_one(dv2[k].len()) } else { dv2[k].clone() };
+            let (dv1, m1) = settle(&q.defs, kind, &dv2, dv, m, k, v);
+            dv = dv1;
+            m = m1;
+        }
+        k += 1;
+    }
+    m
+}
+
+// ---------------------------------------------------------------------------------------------
 // The general problem structure: the interface to the SMT-LIB front end. These definitions are,
 // word for word, those of the front end (`frontend/src/problem.rs`); see there for their meaning.
 

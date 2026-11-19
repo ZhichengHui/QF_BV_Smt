@@ -1831,6 +1831,613 @@ definition "eval_defs" :: \<open>CoreProblem \<Rightarrow> ((bool list) list) \<
     * defs
   \<rbrakk>\<close>
 
+(* Rust: bump *)
+definition "bump" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>bump \<equiv> \<lambda>c i. FunctionBody \<lbrakk>
+    let mut c = { let init_1 = c; \<llangle>init_1 :: (64 word) list\<rrangle> };
+    if ((* c)[i]) < 2_usize {
+      * (c[i]) = ((* c)[i]) + 1_usize;
+    };
+    * c
+  \<rbrakk>\<close>
+
+text \<open>Recursive group count_occ: defined by iterating count_occ_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "count_occ_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>count_occ_rec_step \<equiv> \<lambda>rec_count_occ. (\<lambda>vc rc t. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Const(_) \<Rightarrow> {
+        (vc, rc)
+      },
+      CoreTerm_Var(i) \<Rightarrow> {
+        (bump(vc, i), rc)
+      },
+      CoreTerm_Ref(i) \<Rightarrow> {
+        (vc, bump(rc, i))
+      },
+      CoreTerm_Not(a) \<Rightarrow> {
+        \<epsilon>\<open>rec_count_occ\<close>(vc, rc, a)
+      },
+      CoreTerm_Bin(_, a, b) \<Rightarrow> {
+        let destr_1 = \<epsilon>\<open>rec_count_occ\<close>(vc, rc, a);
+        let vc = destr_1.0;
+        let rc = destr_1.1;
+        \<epsilon>\<open>rec_count_occ\<close>(vc, rc, b)
+      },
+      CoreTerm_Extract(_, _, a) \<Rightarrow> {
+        \<epsilon>\<open>rec_count_occ\<close>(vc, rc, a)
+      },
+      CoreTerm_Ite(c, a, b) \<Rightarrow> {
+        let destr_2 = \<epsilon>\<open>rec_count_occ\<close>(vc, rc, c);
+        let vc = destr_2.0;
+        let rc = destr_2.1;
+        let destr_3 = \<epsilon>\<open>rec_count_occ\<close>(vc, rc, a);
+        let vc = destr_3.0;
+        let rc = destr_3.1;
+        \<epsilon>\<open>rec_count_occ\<close>(vc, rc, b)
+      }
+    }
+  \<rbrakk>)\<close>
+
+(* Rust: count_occ *)
+definition "count_occ" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>count_occ \<equiv> ((count_occ_rec_step ^^ urust_fuel) (\<lambda>vc rc t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+
+text \<open>Recursive group term_width: defined by iterating term_width_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "term_width_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>term_width_rec_step \<equiv> \<lambda>rec_term_width. (\<lambda>ws dw t. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Const(bits) \<Rightarrow> {
+        len(bits)
+      },
+      CoreTerm_Var(i) \<Rightarrow> {
+        ws[i]
+      },
+      CoreTerm_Ref(i) \<Rightarrow> {
+        dw[i]
+      },
+      CoreTerm_Not(a) \<Rightarrow> {
+        \<epsilon>\<open>rec_term_width\<close>(ws, dw, a)
+      },
+      CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
+        match op_v {
+          BinOp_Concat \<Rightarrow> {
+            \<epsilon>\<open>rec_term_width\<close>(ws, dw, a) + \<epsilon>\<open>rec_term_width\<close>(ws, dw, b)
+          },
+          BinOp_Eq \<Rightarrow> {
+            1_usize
+          },
+          BinOp_Ult \<Rightarrow> {
+            1_usize
+          },
+          _ \<Rightarrow> {
+            \<epsilon>\<open>rec_term_width\<close>(ws, dw, a)
+          }
+        }
+      },
+      CoreTerm_Extract(hi, lo, _) \<Rightarrow> {
+        (hi - lo) + 1_usize
+      },
+      CoreTerm_Ite(_, a, _) \<Rightarrow> {
+        \<epsilon>\<open>rec_term_width\<close>(ws, dw, a)
+      }
+    }
+  \<rbrakk>)\<close>
+
+(* Rust: term_width *)
+definition "term_width" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>term_width \<equiv> ((term_width_rec_step ^^ urust_fuel) (\<lambda>ws dw t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+
+(* Rust: ref_index *)
+definition "ref_index" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>ref_index \<equiv> \<lambda>t n. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Ref(i) \<Rightarrow> {
+        i
+      },
+      _ \<Rightarrow> {
+        n
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: bit_const *)
+definition "bit_const" :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>bit_const \<equiv> \<lambda>t. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Const(bits) \<Rightarrow> {
+        if len(bits) == 1_usize {
+          if bits[0_usize] {
+            1_usize
+          } else {
+            0_usize
+          }
+        } else {
+          2_usize
+        }
+      },
+      _ \<Rightarrow> {
+        2_usize
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: free_once *)
+definition "free_once" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>free_once \<equiv> \<lambda>kind rc i. FunctionBody \<lbrakk>
+    ((i < len(kind)) && ((kind[i]) != 0_usize)) && ((rc[i]) == 1_usize)
+  \<rbrakk>\<close>
+
+(* Rust: free_kind *)
+definition "free_kind" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>free_kind \<equiv> \<lambda>defs dw vc rc kind t. FunctionBody \<lbrakk>
+    let n = len(kind);
+    match t {
+      CoreTerm_Var(i) \<Rightarrow> {
+        if (vc[i]) == 1_usize {
+          1_usize
+        } else {
+          0_usize
+        }
+      },
+      CoreTerm_Not(a) \<Rightarrow> {
+        if free_once(kind, rc, ref_index(a, n)) {
+          2_usize
+        } else {
+          0_usize
+        }
+      },
+      CoreTerm_Extract(_, _, a) \<Rightarrow> {
+        if free_once(kind, rc, ref_index(a, n)) {
+          2_usize
+        } else {
+          0_usize
+        }
+      },
+      CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
+        let ia = ref_index(a, n);
+        let ib = ref_index(b, n);
+        match op_v {
+          BinOp_Add \<Rightarrow> {
+            if free_once(kind, rc, ia) {
+              2_usize
+            } else {
+              if free_once(kind, rc, ib) {
+                3_usize
+              } else {
+                0_usize
+              }
+            }
+          },
+          BinOp_Xor \<Rightarrow> {
+            if free_once(kind, rc, ia) {
+              2_usize
+            } else {
+              if free_once(kind, rc, ib) {
+                3_usize
+              } else {
+                0_usize
+              }
+            }
+          },
+          BinOp_Eq \<Rightarrow> {
+            if free_once(kind, rc, ia) && ((dw[ia]) > 0_usize) {
+              2_usize
+            } else {
+              if free_once(kind, rc, ib) && ((dw[ib]) > 0_usize) {
+                3_usize
+              } else {
+                0_usize
+              }
+            }
+          },
+          BinOp_Mul \<Rightarrow> {
+            if (free_once(kind, rc, ia) && free_once(kind, rc, ib)) && (ia != ib) {
+              4_usize
+            } else {
+              0_usize
+            }
+          },
+          BinOp_Udiv \<Rightarrow> {
+            if (free_once(kind, rc, ia) && free_once(kind, rc, ib)) && (ia != ib) {
+              4_usize
+            } else {
+              0_usize
+            }
+          },
+          _ \<Rightarrow> {
+            0_usize
+          }
+        }
+      },
+      CoreTerm_Ite(c, a, b) \<Rightarrow> {
+        let ic = ref_index(c, n);
+        let ia = ref_index(a, n);
+        let ib = ref_index(b, n);
+        if (free_once(kind, rc, ic) && (ia < n)) && (ib < n) {
+          let x = bit_const(defs[ia]);
+          let y = bit_const(defs[ib]);
+          if ((x < 2_usize) && (y < 2_usize)) && (x != y) {
+            2_usize
+          } else {
+            0_usize
+          }
+        } else {
+          0_usize
+        }
+      },
+      _ \<Rightarrow> {
+        0_usize
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: consumed *)
+definition "consumed" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>consumed \<equiv> \<lambda>t k n. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Not(a) \<Rightarrow> {
+        ref_index(a, n)
+      },
+      CoreTerm_Extract(_, _, a) \<Rightarrow> {
+        ref_index(a, n)
+      },
+      CoreTerm_Bin(_, a, b) \<Rightarrow> {
+        if k == 3_usize {
+          ref_index(b, n)
+        } else {
+          ref_index(a, n)
+        }
+      },
+      CoreTerm_Ite(c, _, _) \<Rightarrow> {
+        ref_index(c, n)
+      },
+      _ \<Rightarrow> {
+        n
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: second *)
+definition "second" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>second \<equiv> \<lambda>t n. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Bin(_, _, b) \<Rightarrow> {
+        ref_index(b, n)
+      },
+      _ \<Rightarrow> {
+        n
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: copy_op *)
+definition "copy_op" :: \<open>BinOp \<Rightarrow> ('s, BinOp, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>copy_op \<equiv> \<lambda>op_v. FunctionBody \<lbrakk>
+    match op_v {
+      BinOp_And \<Rightarrow> {
+        BinOp_And
+      },
+      BinOp_Or \<Rightarrow> {
+        BinOp_Or
+      },
+      BinOp_Xor \<Rightarrow> {
+        BinOp_Xor
+      },
+      BinOp_Add \<Rightarrow> {
+        BinOp_Add
+      },
+      BinOp_Mul \<Rightarrow> {
+        BinOp_Mul
+      },
+      BinOp_Udiv \<Rightarrow> {
+        BinOp_Udiv
+      },
+      BinOp_Urem \<Rightarrow> {
+        BinOp_Urem
+      },
+      BinOp_Shl \<Rightarrow> {
+        BinOp_Shl
+      },
+      BinOp_Lshr \<Rightarrow> {
+        BinOp_Lshr
+      },
+      BinOp_Concat \<Rightarrow> {
+        BinOp_Concat
+      },
+      BinOp_Eq \<Rightarrow> {
+        BinOp_Eq
+      },
+      BinOp_Ult \<Rightarrow> {
+        BinOp_Ult
+      }
+    }
+  \<rbrakk>\<close>
+
+text \<open>Recursive group copy_term: defined by iterating copy_term_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "copy_term_rec_step" :: \<open>((CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>copy_term_rec_step \<equiv> \<lambda>rec_copy_term. (\<lambda>t. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Const(bits) \<Rightarrow> {
+        CoreTerm_Const_mk(bits)
+      },
+      CoreTerm_Var(i) \<Rightarrow> {
+        CoreTerm_Var_mk(i)
+      },
+      CoreTerm_Ref(i) \<Rightarrow> {
+        CoreTerm_Ref_mk(i)
+      },
+      CoreTerm_Not(a) \<Rightarrow> {
+        cnot(\<epsilon>\<open>rec_copy_term\<close>(a))
+      },
+      CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
+        cbin(copy_op(op_v), \<epsilon>\<open>rec_copy_term\<close>(a), \<epsilon>\<open>rec_copy_term\<close>(b))
+      },
+      CoreTerm_Extract(hi, lo, a) \<Rightarrow> {
+        cextract(hi, lo, \<epsilon>\<open>rec_copy_term\<close>(a))
+      },
+      CoreTerm_Ite(c, a, b) \<Rightarrow> {
+        cite(\<epsilon>\<open>rec_copy_term\<close>(c), \<epsilon>\<open>rec_copy_term\<close>(a), \<epsilon>\<open>rec_copy_term\<close>(b))
+      }
+    }
+  \<rbrakk>)\<close>
+
+(* Rust: copy_term *)
+definition "copy_term" :: \<open>CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>copy_term \<equiv> ((copy_term_rec_step ^^ urust_fuel) (\<lambda>t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+
+text \<open>Recursive group mark_live: defined by iterating mark_live_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
+
+definition "mark_live_rec_step" :: \<open>(((bool list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> (((bool list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+  \<open>mark_live_rec_step \<equiv> \<lambda>rec_mark_live. (\<lambda>live t. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Const(_) \<Rightarrow> {
+        live
+      },
+      CoreTerm_Var(_) \<Rightarrow> {
+        live
+      },
+      CoreTerm_Ref(i) \<Rightarrow> {
+        let mut live = { let init_1 = live; \<llangle>init_1 :: bool list\<rrangle> };
+        * (live[i]) = true;
+        * live
+      },
+      CoreTerm_Not(a) \<Rightarrow> {
+        \<epsilon>\<open>rec_mark_live\<close>(live, a)
+      },
+      CoreTerm_Bin(_, a, b) \<Rightarrow> {
+        let live = \<epsilon>\<open>rec_mark_live\<close>(live, a);
+        \<epsilon>\<open>rec_mark_live\<close>(live, b)
+      },
+      CoreTerm_Extract(_, _, a) \<Rightarrow> {
+        \<epsilon>\<open>rec_mark_live\<close>(live, a)
+      },
+      CoreTerm_Ite(c, a, b) \<Rightarrow> {
+        let live = \<epsilon>\<open>rec_mark_live\<close>(live, c);
+        let live = \<epsilon>\<open>rec_mark_live\<close>(live, a);
+        \<epsilon>\<open>rec_mark_live\<close>(live, b)
+      }
+    }
+  \<rbrakk>)\<close>
+
+(* Rust: mark_live *)
+definition "mark_live" :: \<open>(bool list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>mark_live \<equiv> ((mark_live_rec_step ^^ urust_fuel) (\<lambda>live t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
+
+(* Rust: elim *)
+definition "elim" :: \<open>CoreProblem \<Rightarrow> ('s, (CoreProblem \<times> ((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>elim \<equiv> \<lambda>q. FunctionBody \<lbrakk>
+    let n = len(q.CoreProblem_defs);
+    let mut vc = { let init_1 = vec_from_elem(0_usize, len(q.CoreProblem_widths)); \<llangle>init_1 :: (64 word) list\<rrangle> };
+    let mut rc = { let init_2 = vec_from_elem(0_usize, n); \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < n {
+      let destr_3 = count_occ(* vc, * rc, q.CoreProblem_defs[* j]);
+      let v1 = destr_3.0;
+      let r1 = destr_3.1;
+      * vc = v1;
+      * rc = r1;
+      * j += 1_usize;
+    };
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(q.CoreProblem_asserts) {
+      let destr_4 = count_occ(* vc, * rc, q.CoreProblem_asserts[* i]);
+      let v1 = destr_4.0;
+      let r1 = destr_4.1;
+      * vc = v1;
+      * rc = r1;
+      * i += 1_usize;
+    };
+    let mut dw = { let init_6 = { let res_5 = []; \<llangle>res_5 :: (64 word) list\<rrangle> }; \<llangle>init_6 :: (64 word) list\<rrangle> };
+    let mut kind = { let init_8 = { let res_7 = []; \<llangle>res_7 :: (64 word) list\<rrangle> }; \<llangle>init_8 :: (64 word) list\<rrangle> };
+    let mut mark = { let init_9 = vec_from_elem(0_usize, n); \<llangle>init_9 :: (64 word) list\<rrangle> };
+    let mut defs = { let init_11 = { let res_10 = []; \<llangle>res_10 :: CoreTerm list\<rrangle> }; \<llangle>init_11 :: CoreTerm list\<rrangle> };
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < n {
+      let t = q.CoreProblem_defs[* k];
+      let w = term_width(q.CoreProblem_widths, * dw, t);
+      let c = free_kind(q.CoreProblem_defs, * dw, * vc, * rc, * kind, t);
+      if c >= 2_usize {
+        let a = consumed(t, c, n);
+        * mark = set_at(* mark, a, 1_usize);
+        if c == 4_usize {
+          * mark = set_at(* mark, second(t, n), 2_usize);
+        };
+        if ((* dw)[a]) == w {
+          vec_push(defs, CoreTerm_Ref_mk(a));
+        } else {
+          vec_push(defs, cextract(w - 1_usize, 0_usize, cref(a)));
+        }
+      } else {
+        vec_push(defs, copy_term(t));
+      };
+      vec_push(dw, w);
+      vec_push(kind, c);
+      * k += 1_usize;
+    };
+    let mut live = { let init_12 = vec_from_elem(false, n); \<llangle>init_12 :: bool list\<rrangle> };
+    let mut l = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* l) < len(q.CoreProblem_asserts) {
+      * live = mark_live(* live, q.CoreProblem_asserts[* l]);
+      * l += 1_usize;
+    };
+    let mut d = n;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) > 0_usize {
+      * d -= 1_usize;
+      if (* live)[* d] {
+        * live = mark_live(* live, (* defs)[* d]);
+      } else {
+        * (defs[* d]) = CoreTerm_Const_mk(vec_from_elem(false, (* dw)[* d]));
+      }
+    };
+    let mut asserts = { let init_14 = { let res_13 = []; \<llangle>res_13 :: CoreTerm list\<rrangle> }; \<llangle>init_14 :: CoreTerm list\<rrangle> };
+    let mut a = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* a) < len(q.CoreProblem_asserts) {
+      vec_push(asserts, copy_term(q.CoreProblem_asserts[* a]));
+      * a += 1_usize;
+    };
+    (CoreProblem_mk { CoreProblem_widths: q.CoreProblem_widths, CoreProblem_defs: * defs, CoreProblem_asserts: * asserts }, * kind, * mark)
+  \<rbrakk>\<close>
+
+(* Rust: bits_one *)
+definition "bits_one" :: \<open>(64 word) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>bits_one \<equiv> \<lambda>w. FunctionBody \<lbrakk>
+    let mut r = { let init_1 = vec_from_elem(false, w); \<llangle>init_1 :: bool list\<rrangle> };
+    if w > 0_usize {
+      * (r[0_usize]) = true;
+    };
+    * r
+  \<rbrakk>\<close>
+
+(* Rust: invert *)
+definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, ((64 word) \<times> (bool list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>invert \<equiv> \<lambda>t k v dv dv2. FunctionBody \<lbrakk>
+    let n = len(dv2);
+    match t {
+      CoreTerm_Not(a) \<Rightarrow> {
+        (ref_index(a, n), bits_not(v))
+      },
+      CoreTerm_Extract(hi, lo, a) \<Rightarrow> {
+        let ia = ref_index(a, n);
+        let w = len(dv2[ia]);
+        let low = bits_concat(v, vec_from_elem(false, lo));
+        (ia, bits_concat(vec_from_elem(false, (w - 1_usize) - hi), low))
+      },
+      CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
+        let ia = ref_index(a, n);
+        let ib = ref_index(b, n);
+        let destr_1 = if k == 3_usize {
+          (ib, ia)
+        } else {
+          (ia, ib)
+        };
+        let ic = destr_1.0;
+        let io = destr_1.1;
+        match op_v {
+          BinOp_Add \<Rightarrow> {
+            let destr_2 = bits_add(v, bits_not(dv[io]), true);
+            let s = destr_2.0;
+            (ic, s)
+          },
+          BinOp_Xor \<Rightarrow> {
+            (ic, bits_bitwise(op_v, v, dv[io]))
+          },
+          BinOp_Eq \<Rightarrow> {
+            if v[0_usize] {
+              (ic, dv[io])
+            } else {
+              (ic, bits_not(dv[io]))
+            }
+          },
+          _ \<Rightarrow> {
+            (ic, v)
+          }
+        }
+      },
+      CoreTerm_Ite(c, a, _) \<Rightarrow> {
+        let ia = ref_index(a, n);
+        let mut r = { let init_4 = { let res_3 = []; \<llangle>res_3 :: bool list\<rrangle> }; \<llangle>init_4 :: bool list\<rrangle> };
+        vec_push(r, bits_eq(v, dv[ia]));
+        (ref_index(c, n), * r)
+      },
+      _ \<Rightarrow> {
+        (n, v)
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: var_index *)
+definition "var_index" :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>var_index \<equiv> \<lambda>t. FunctionBody \<lbrakk>
+    match t {
+      CoreTerm_Var(i) \<Rightarrow> {
+        i
+      },
+      _ \<Rightarrow> {
+        0_usize
+      }
+    }
+  \<rbrakk>\<close>
+
+(* Rust: settle *)
+definition "settle" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> ('s, (((bool list) list) \<times> ((bool list) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>settle \<equiv> \<lambda>defs kind dv2 dv m k v. FunctionBody \<lbrakk>
+    let mut dv = { let init_1 = dv; \<llangle>init_1 :: (bool list) list\<rrangle> };
+    let mut m = { let init_2 = m; \<llangle>init_2 :: (bool list) list\<rrangle> };
+    let mut j = k;
+    let mut v = { let init_3 = v; \<llangle>init_3 :: bool list\<rrangle> };
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) <= k {
+      * (dv[* j]) = * v;
+      if (kind[* j]) == 1_usize {
+        * (m[var_index(defs[* j])]) = * v;
+        return (* dv, * m);
+      };
+      let destr_4 = invert(defs[* j], kind[* j], * v, * dv, dv2);
+      let a = destr_4.0;
+      let va = destr_4.1;
+      * j = a;
+      * v = va;
+      * i += 1_usize;
+    };
+    (* dv, * m)
+  \<rbrakk>\<close>
+
+(* Rust: reconstruct *)
+definition "reconstruct" :: \<open>CoreProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreProblem \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, (bool list) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>reconstruct \<equiv> \<lambda>q kind mark q2 m2. FunctionBody \<lbrakk>
+    let dv2 = eval_defs(q2, m2);
+    let mut m = { let init_1 = m2; \<llangle>init_1 :: (bool list) list\<rrangle> };
+    let mut dv = { let init_3 = { let res_2 = []; \<llangle>res_2 :: (bool list) list\<rrangle> }; \<llangle>init_3 :: (bool list) list\<rrangle> };
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(q.CoreProblem_defs) {
+      if (mark[* k]) == 1_usize {
+        vec_push(dv, { let res_4 = []; \<llangle>res_4 :: bool list\<rrangle> });
+      } else {
+        if (kind[* k]) == 0_usize {
+          let v = eval_term(* m, * dv, q.CoreProblem_defs[* k]);
+          vec_push(dv, v);
+        } else {
+          vec_push(dv, { let res_5 = []; \<llangle>res_5 :: bool list\<rrangle> });
+          let v = if (mark[* k]) == 2_usize {
+            bits_one(len(dv2[* k]))
+          } else {
+            dv2[* k]
+          };
+          let destr_6 = settle(q.CoreProblem_defs, kind, dv2, * dv, * m, * k, v);
+          let dv1 = destr_6.0;
+          let m1 = destr_6.1;
+          * dv = dv1;
+          * m = m1;
+        }
+      };
+      * k += 1_usize;
+    };
+    * m
+  \<rbrakk>\<close>
+
 (* Rust: bits1 *)
 definition "bits1" :: \<open>bool \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits1 \<equiv> \<lambda>b. FunctionBody \<lbrakk>

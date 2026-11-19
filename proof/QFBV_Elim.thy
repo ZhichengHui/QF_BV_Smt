@@ -1655,9 +1655,155 @@ definition m2_of :: \<open>bool list list \<Rightarrow> bool list list\<close> w
   \<open>m2_of m = map (\<lambda>x. if isleaf x then bzext_m (eval_defs_m q m ! tp (ldef x)) (ews ! x) else m ! x) [0..<length ews]\<close>
 
 theorem elim_complete:
-  assumes \<open>cis_model q m\<close>
+  assumes M: \<open>cis_model q m\<close>
   shows \<open>cis_model q2 (m2_of m)\<close>
-  sorry
+proof -
+  have ml: \<open>map length m = ews\<close> using M by (simp add: cis_model_def cis_assignment_def ews_def)
+  define dvb where \<open>dvb = eval_defs_m q m\<close>
+  define m2 where \<open>m2 = m2_of m\<close>
+  define dv2b where \<open>dv2b = eval_defs_m q2 m2\<close>
+  have m2l: \<open>length m2 = length ews\<close> by (simp add: m2_def m2_of_def)
+  have m2n: \<open>x < length ews \<Longrightarrow> m2 ! x = (if isleaf x then bzext_m (dvb ! tp (ldef x)) (ews ! x) else m ! x)\<close> for x
+    by (simp add: m2_def m2_of_def dvb_def)
+  have ml2: \<open>map length m2 = ews\<close>
+  proof (rule nth_equalityI)
+    show \<open>length (map length m2) = length ews\<close> using m2l by simp
+  next
+    fix x assume \<open>x < length (map length m2)\<close>
+    then have x: \<open>x < length ews\<close> using m2l by simp
+    have \<open>length (m ! x) = ews ! x\<close> using ml x by (metis length_map nth_map)
+    then show \<open>map length m2 ! x = ews ! x\<close> using m2n[OF x] x m2l by (simp add: bzext_m_def)
+  qed
+  have dvbP: \<open>map length dvb = eds\<close> \<open>j < en \<Longrightarrow> dvb ! j = eval_m m dvb (eD ! j)\<close> for j
+    using eval_defs_props[OF dwt ml[symmetric]] by (simp_all add: dvb_def eval_defs_m_def eds_def en_def eD_def)
+  have dv2P: \<open>map length dv2b = eds\<close> \<open>j < en \<Longrightarrow> dv2b ! j = eval_m m2 dv2b (D2 ! j)\<close> for j
+    using eval_defs_props[OF conjunct1[OF D2_defs] ml2[symmetric]] D2_defs D2(1)
+    by (simp_all add: dv2b_def eval_defs_m_def q2_parts)
+  have dvbl: \<open>j < en \<Longrightarrow> length (dvb ! j) = eds ! j\<close> for j using dvbP(1) len_eds by (metis nth_map length_map)
+  have dv2l: \<open>j < en \<Longrightarrow> length (dv2b ! j) = eds ! j\<close> for j using dv2P(1) len_eds by (metis nth_map length_map)
+  have claim: \<open>j < en \<Longrightarrow> live ! j \<Longrightarrow> (mk ! j \<noteq> 1 \<longrightarrow> dv2b ! j = dvb ! j) \<and>
+      (kd ! j \<noteq> 0 \<longrightarrow> dv2b ! j = take (eds ! j) (m2 ! lvar j))\<close> for j
+  proof (induction j rule: less_induct)
+    case (less j)
+    note j = less.prems(1) and lj = less.prems(2)
+    consider (k0) \<open>kd ! j = 0\<close> | (k1) \<open>kd ! j = 1\<close> | (k2) \<open>2 \<le> kd ! j\<close> by linarith
+    then show ?case
+    proof cases
+      case k0
+      have d: \<open>D2 ! j = eD ! j\<close> using D2(3)[OF j] ana(6)[OF j] lj k0 by simp
+      have refs: \<open>dv2b ! x = dvb ! x\<close> if u: \<open>u \<in> set (csubterms (eD ! j))\<close> \<open>is_ref x u\<close> for u x
+      proof -
+        have x: \<open>x < j\<close> using ref_lt_D[OF j u] .
+        have lx: \<open>live ! x\<close> using D2(4)[OF j lj] ana(6)[OF j] k0 u by simp
+        have mx: \<open>mk ! x \<noteq> 1\<close>
+        proof
+          assume mx1: \<open>mk ! x = 1\<close>
+          then have \<open>j = par x\<close> using member_ref[of x j u] x j u by simp
+          then show False using par[of x] mx1 k0 x j by auto
+        qed
+        show ?thesis using less.IH[of x] x j lx mx by auto
+      qed
+      have vars: \<open>m2 ! x = m ! x\<close> if u: \<open>u \<in> set (csubterms (eD ! j))\<close> \<open>is_var x u\<close> for u x
+      proof -
+        have xl: \<open>x < length ews\<close> using cwt_var_lt[OF wt_D'[OF j] u] .
+        have \<open>\<not> isleaf x\<close>
+        proof
+          assume \<open>isleaf x\<close>
+          note L = ldef[OF this]
+          have \<open>j = ldef x\<close> using leaf_var_unique[of \<open>ldef x\<close> x j u] L j u by simp
+          then show False using L k0 by simp
+        qed
+        then show ?thesis using m2n[OF xl] by simp
+      qed
+      have \<open>eval_m m2 dv2b (eD ! j) = eval_m m dvb (eD ! j)\<close>
+        using refs vars by (intro eval_m_cong) auto
+      then have \<open>dv2b ! j = dvb ! j\<close> using dv2P(2)[OF j] dvbP(2)[OF j] d by simp
+      then show ?thesis using k0 by simp
+    next
+      case k1
+      obtain i where i: \<open>eD ! j = CoreTerm_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF j k1] by blast
+      have d: \<open>D2 ! j = eD ! j\<close> using D2(3)[OF j] ana(6)[OF j] lj k1 by simp
+      have lf: \<open>leaf j = j\<close> using leaf_stop[OF j] k1 by simp
+      have lv: \<open>lvar j = unat i\<close> by (simp add: lvar_def lf i var_index_m_def)
+      have w: \<open>ews ! unat i = eds ! j\<close> using eds_nth[OF j] i by simp
+      have e: \<open>dv2b ! j = m2 ! unat i\<close> using dv2P(2)[OF j] d i by simp
+      have len: \<open>length (m2 ! unat i) = eds ! j\<close> using ml2 i w by (metis nth_map m2l)
+      have U2: \<open>dv2b ! j = take (eds ! j) (m2 ! lvar j)\<close> using e len lv by simp
+      have U1: \<open>dv2b ! j = dvb ! j\<close> if mj: \<open>mk ! j \<noteq> 1\<close>
+      proof -
+        note LV = lvar[OF j, unfolded lf lv] 
+        have \<open>m2 ! unat i = bzext_m (dvb ! tp j) (ews ! unat i)\<close> using m2n[OF i(2)] LV k1 by simp
+        then show ?thesis using e tp_non[OF j mj] bzext_id[of \<open>dvb ! j\<close>] dvbl[OF j] w by simp
+      qed
+      show ?thesis using U1 U2 k1 by simp
+    next
+      case k2
+      let ?c = \<open>cons j\<close>
+      have c: \<open>?c < j\<close> \<open>kd ! ?c \<noteq> 0\<close> using kd_cons[OF j k2] by simp_all
+      have cl: \<open>?c < en\<close> using c j by simp
+      have cu: \<open>unat (word_of_nat ?c :: 64 word) = ?c\<close> using unat_nat cl by simp
+      have tk: \<open>take j eds ! ?c = eds ! ?c\<close> using c j len_eds by simp
+      have d1j: \<open>d1 ! j = rewrite_m (take j eds) ?c (eds ! j)\<close> using ana(6)[OF j] k2 by simp
+      have d: \<open>D2 ! j = d1 ! j\<close> using D2(3)[OF j] lj by simp
+      have \<open>CoreTerm_Ref (word_of_nat ?c) \<in> set (csubterms (d1 ! j))\<close> using d1j by (simp add: rewrite_m_def)
+      moreover have \<open>is_ref ?c (CoreTerm_Ref (word_of_nat ?c))\<close> using cu by (simp add: is_ref_def)
+      ultimately have lc: \<open>live ! ?c\<close> using D2(4)[OF j lj] by blast
+      have IHc: \<open>dv2b ! ?c = take (eds ! ?c) (m2 ! lvar ?c)\<close> using less.IH[of ?c] c cl lc by auto
+      have lvc: \<open>lvar ?c = lvar j\<close> using leaf_step[OF j k2] by (simp add: lvar_def)
+      note W = kd_width[OF j k2]
+      have U2: \<open>dv2b ! j = take (eds ! j) (m2 ! lvar j)\<close>
+      proof (cases \<open>eds ! ?c = eds ! j\<close>)
+        case True
+        then have \<open>D2 ! j = CoreTerm_Ref (word_of_nat ?c)\<close> using d d1j tk by (simp add: rewrite_m_def)
+        then show ?thesis using dv2P(2)[OF j] cu IHc lvc True by simp
+      next
+        case False
+        obtain hi :: \<open>64 word\<close> where hi: \<open>hi = word_of_nat (eds ! j - 1)\<close> by blast
+        then have e: \<open>D2 ! j = CoreTerm_Extract hi 0 (CoreTerm_Ref (word_of_nat ?c))\<close>
+          using d d1j tk False by (simp add: rewrite_m_def)
+        have hu: \<open>unat hi = eds ! j - 1\<close> unfolding hi by (rule unat_of_nat_eq) (use W False in simp)
+        have \<open>dv2b ! j = bextract_m (dv2b ! ?c) (unat hi) 0\<close> using dv2P(2)[OF j] e cu by simp
+        also have \<open>\<dots> = take (eds ! j) (dv2b ! ?c)\<close>
+          using bextract_take[of \<open>unat hi\<close> \<open>dv2b ! ?c\<close>] hu W False dv2l[OF cl] by simp
+        finally show ?thesis using IHc lvc W by (simp add: min_def)
+      qed
+      have U1: \<open>dv2b ! j = dvb ! j\<close> if mj: \<open>mk ! j \<noteq> 1\<close>
+      proof -
+        have k0: \<open>kd ! j \<noteq> 0\<close> using k2 by simp
+        note LV = lvar[OF j k0]
+        note LP = leaf_props[OF j k0]
+        have \<open>m2 ! lvar j = bzext_m (dvb ! tp (leaf j)) (ews ! lvar j)\<close> using m2n LV by simp
+        then have \<open>m2 ! lvar j = bzext_m (dvb ! j) (ews ! lvar j)\<close> using LP tp_non[OF j mj] by simp
+        moreover have \<open>length (dvb ! j) \<le> ews ! lvar j\<close> using dvbl[OF j] LV LP by simp
+        ultimately show ?thesis using U2 bzext_take dvbl[OF j] by metis
+      qed
+      show ?thesis using U1 U2 by simp
+    qed
+  qed
+  have A: \<open>eval_m m2 dv2b t = eval_m m dvb t\<close> if t: \<open>t \<in> set eA\<close> for t
+  proof (rule eval_m_cong)
+    show \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_var x u \<longrightarrow> m2 ! x = m ! x\<close>
+    proof (intro ballI allI impI)
+      fix u x assume u: \<open>u \<in> set (csubterms t)\<close> \<open>is_var x u\<close>
+      have xl: \<open>x < length ews\<close> using cwt_var_lt[OF conjunct1[OF wt_A[OF t]] u] .
+      have \<open>\<not> isleaf x\<close> using ldef leaf_var_not_A t u by blast
+      then show \<open>m2 ! x = m ! x\<close> using m2n[OF xl] by simp
+    qed
+    show \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> dv2b ! x = dvb ! x\<close>
+    proof (intro ballI allI impI)
+      fix u x assume u: \<open>u \<in> set (csubterms t)\<close> \<open>is_ref x u\<close>
+      have x: \<open>x < en\<close> using ref_lt_A[OF t u] .
+      have \<open>mk ! x \<noteq> 1\<close> using member_not_A[OF x _ t u] by blast
+      then show \<open>dv2b ! x = dvb ! x\<close> using claim[OF x D2(5)[OF t u]] by simp
+    qed
+  qed
+  have \<open>csatisfies q m\<close> using M by (simp add: cis_model_def)
+  then have S: \<open>\<forall>t \<in> set eA. bits_nat (eval_m m dvb t) = 1\<close>
+    using csat_bits[OF wt] ml by (simp add: dvb_def eA_def ews_def)
+  have \<open>csatisfies q2 m2\<close>
+    using csat_bits[OF q2_wt] ml2 S A by (simp add: q2_ws q2_parts dv2b_def)
+  then show ?thesis using ml2 by (simp add: cis_model_def cis_assignment_def q2_ws m2_def)
+qed
 
 end
 

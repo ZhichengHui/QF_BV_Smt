@@ -731,4 +731,158 @@ qed
 
 end
 
+lemma elim_step_app: \<open>\<exists>w c m' t'. elim_step ws D vc rc (dw, kind, mark, defs) k = (dw @ [w], kind @ [c], m', defs @ [t'])\<close>
+  by (auto simp: elim_step_def Let_def)
+
+lemma elim_fold_app:
+  \<open>\<exists>e1 e2 m e3. foldl (elim_step ws D vc rc) (dw, kind, mark, defs) xs = (dw @ e1, kind @ e2, m, defs @ e3)\<close>
+proof (induction xs arbitrary: dw kind mark defs)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons x xs)
+  obtain w c m' t' where e: \<open>elim_step ws D vc rc (dw, kind, mark, defs) x = (dw @ [w], kind @ [c], m', defs @ [t'])\<close>
+    using elim_step_app by blast
+  obtain e1 e2 m e3 where
+    \<open>foldl (elim_step ws D vc rc) (dw @ [w], kind @ [c], m', defs @ [t']) xs = (dw @ [w] @ e1, kind @ [c] @ e2, m, defs @ [t'] @ e3)\<close>
+    using Cons.IH[of \<open>dw @ [w]\<close> \<open>kind @ [c]\<close> m' \<open>defs @ [t']\<close>] by auto
+  then show ?case using e by auto
+qed
+
+context elim_prob
+begin
+
+lemma ana_res_eq: \<open>ana_res q = foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<en]\<close>
+  by (simp add: ana_res_def Let_def ews_def eD_def evc_def erc_def en_def)
+
+lemma ana_parts: \<open>ana_res q = (eds, kd, mk, d1)\<close>
+  using ana(1) by (cases \<open>ana_res q\<close>) (simp add: kd_def mk_def d1_def)
+
+lemma ana_prefix:
+  assumes \<open>k \<le> en\<close>
+  shows \<open>\<exists>M. foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<k] = (take k eds, take k kd, M, take k d1)\<close>
+proof -
+  obtain dw kind mark defs where s: \<open>foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<k] = (dw, kind, mark, defs)\<close>
+    by (cases \<open>foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<k]\<close>)
+  have l: \<open>length dw = k\<close> \<open>length kind = k\<close> \<open>length defs = k\<close>
+    using ana_fold[of k eD ews evc erc dw kind mark defs] s assms by (simp_all add: en_def cdef_widths_length min_def)
+  obtain e1 e2 m e3 where f: \<open>foldl (elim_step ews eD evc erc) (dw, kind, mark, defs) [k..<en] = (dw @ e1, kind @ e2, m, defs @ e3)\<close>
+    using elim_fold_app by blast
+  have \<open>[0..<en] = [0..<k] @ [k..<en]\<close> using assms by (metis le_add_diff_inverse upt_add_eq_append zero_le)
+  then have \<open>ana_res q = (dw @ e1, kind @ e2, m, defs @ e3)\<close> using ana_res_eq s f by simp
+  then show ?thesis using ana_parts l s by auto
+qed
+
+lemma ex_lsuc: \<open>(\<exists>i<Suc k. P i) \<longleftrightarrow> (\<exists>i<k. P i) \<or> P k\<close>
+  by (auto simp: less_Suc_eq)
+
+definition MK :: \<open>nat \<Rightarrow> nat list\<close> where
+  \<open>MK k = map (\<lambda>j. if \<exists>i<k. 2 \<le> kd ! i \<and> cons i = j then 1 else if \<exists>i<k. kd ! i = 4 \<and> sec i = j then 2 else 0) [0..<en]\<close>
+
+lemma cons_sec_ne:
+  assumes \<open>i < en\<close> \<open>k < en\<close> \<open>2 \<le> kd ! i\<close> \<open>kd ! k = 4\<close> \<open>cons i = sec k\<close>
+  shows False
+proof -
+  obtain u where u: \<open>u \<in> set (csubterms (eD ! i))\<close> \<open>is_ref (cons i) u\<close> using kd_cons[OF assms(1,3)] by blast
+  obtain u' where u': \<open>u' \<in> set (csubterms (eD ! k))\<close> \<open>is_ref (sec k) u'\<close> using kd_sec[OF assms(2,4)] by blast
+  have \<open>i = k\<close> using ref_unique[of \<open>sec k\<close> i k u u'] kd_sec[OF assms(2,4)] assms u u' by simp
+  then show False using kd_sec[OF assms(2,4)] assms(5) by simp
+qed
+
+lemma cons_unique:
+  assumes \<open>i < en\<close> \<open>k < en\<close> \<open>2 \<le> kd ! i\<close> \<open>2 \<le> kd ! k\<close> \<open>cons i = cons k\<close>
+  shows \<open>i = k\<close>
+proof -
+  obtain u where u: \<open>u \<in> set (csubterms (eD ! i))\<close> \<open>is_ref (cons i) u\<close> using kd_cons[OF assms(1,3)] by blast
+  obtain u' where u': \<open>u' \<in> set (csubterms (eD ! k))\<close> \<open>is_ref (cons k) u'\<close> using kd_cons[OF assms(2,4)] by blast
+  show ?thesis using ref_unique[of \<open>cons k\<close> i k u u'] kd_cons[OF assms(2,4)] assms u u' by simp
+qed
+
+lemma sec_unique:
+  assumes \<open>i < en\<close> \<open>k < en\<close> \<open>kd ! i = 4\<close> \<open>kd ! k = 4\<close> \<open>sec i = sec k\<close>
+  shows \<open>i = k\<close>
+proof -
+  obtain u where u: \<open>u \<in> set (csubterms (eD ! i))\<close> \<open>is_ref (sec i) u\<close> using kd_sec[OF assms(1,3)] by blast
+  obtain u' where u': \<open>u' \<in> set (csubterms (eD ! k))\<close> \<open>is_ref (sec k) u'\<close> using kd_sec[OF assms(2,4)] by blast
+  show ?thesis using ref_unique[of \<open>sec k\<close> i k u u'] kd_sec[OF assms(2,4)] assms u u' by simp
+qed
+
+lemma mk_fold:
+  assumes \<open>k \<le> en\<close>
+  shows \<open>fst (snd (snd (foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<k]))) = MK k\<close>
+  using assms
+proof (induction k)
+  case 0
+  then show ?case by (simp add: MK_def map_replicate_const)
+next
+  case (Suc k)
+  then have k: \<open>k < en\<close> by simp
+  obtain M where s: \<open>foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<k] = (take k eds, take k kd, M, take k d1)\<close>
+    using ana_prefix[of k] k by auto
+  have M: \<open>M = MK k\<close> using Suc.IH s k by simp
+  have c: \<open>free_kind_m eD (take k eds) evc erc (take k kd) (eD ! k) = kd ! k\<close> using ana(5)[OF k] by simp
+  have l: \<open>length (MK k) = en\<close> by (simp add: MK_def)
+  have st: \<open>fst (snd (snd (foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<Suc k]))) =
+    (if 2 \<le> kd ! k then (if kd ! k = 4 then list_update (list_update (MK k) (cons k) 1) (sec k) 2 else list_update (MK k) (cons k) 1) else MK k)\<close>
+    using s M c by (simp add: elim_step_def Let_def cons_def sec_def en_def)
+  show ?case
+  proof (rule nth_equalityI)
+    show \<open>length (fst (snd (snd (foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<Suc k])))) = length (MK (Suc k))\<close>
+      using st l by (simp add: MK_def)
+  next
+    fix j assume \<open>j < length (fst (snd (snd (foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<Suc k]))))\<close>
+    then have j: \<open>j < en\<close> using st l by (simp split: if_splits)
+    have ck: \<open>2 \<le> kd ! k \<Longrightarrow> cons k < en\<close> using kd_cons[OF k] k by simp
+    have sk: \<open>kd ! k = 4 \<Longrightarrow> sec k < en \<and> sec k \<noteq> cons k\<close> using kd_sec[OF k] k by simp
+    have no1: \<open>kd ! k = 4 \<Longrightarrow> \<not> (\<exists>i<Suc k. 2 \<le> kd ! i \<and> cons i = sec k)\<close>
+      using cons_sec_ne[OF _ k] sk k by (metis less_Suc_eq less_trans)
+    show \<open>fst (snd (snd (foldl (elim_step ews eD evc erc) ([], [], replicate en 0, []) [0..<Suc k]))) ! j = MK (Suc k) ! j\<close>
+    proof (cases \<open>2 \<le> kd ! k\<close>)
+      case False
+      then show ?thesis unfolding st using j l by (auto simp: MK_def ex_lsuc)
+    next
+      case T2: True
+      show ?thesis
+      proof (cases \<open>kd ! k = 4\<close>)
+        case T4: True
+        have s1: \<open>sec k < en\<close> \<open>sec k \<noteq> cons k\<close> \<open>cons k < en\<close> using sk[OF T4] ck[OF T2] by simp_all
+        consider \<open>j = sec k\<close> | \<open>j = cons k\<close> | \<open>j \<noteq> sec k\<close> \<open>j \<noteq> cons k\<close> by blast
+        then show ?thesis
+        proof cases
+          case 1
+          then show ?thesis unfolding st using j l T2 T4 s1 no1[OF T4] by (auto simp: MK_def ex_lsuc)
+        next
+          case 2
+          then show ?thesis unfolding st using j l T2 T4 s1 by (auto simp: MK_def ex_lsuc)
+        next
+          case 3
+          then show ?thesis unfolding st using j l T2 T4 s1 by (auto simp: MK_def ex_lsuc)
+        qed
+      next
+        case F4: False
+        have s1: \<open>cons k < en\<close> using ck[OF T2] by simp_all
+        show ?thesis
+        proof (cases \<open>j = cons k\<close>)
+          case True
+          then show ?thesis unfolding st using j l T2 F4 s1 by (auto simp: MK_def ex_lsuc)
+        next
+          case False
+          then show ?thesis unfolding st using j l T2 F4 s1 by (auto simp: MK_def ex_lsuc)
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma mk_MK: \<open>mk = MK en\<close>
+  using mk_fold[of en] ana_parts ana_res_eq by simp
+
+lemma mk_char:
+  assumes \<open>j < en\<close>
+  shows \<open>mk ! j = 1 \<longleftrightarrow> (\<exists>i<en. 2 \<le> kd ! i \<and> cons i = j)\<close>
+    \<open>mk ! j = 2 \<longleftrightarrow> (\<exists>i<en. kd ! i = 4 \<and> sec i = j)\<close>
+  using assms cons_sec_ne by (auto simp: mk_MK MK_def)
+
+end
+
 end

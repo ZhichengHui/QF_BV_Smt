@@ -1907,9 +1907,10 @@ fn bits_one(w: usize) -> Vec<bool> {
 }
 
 /// The operand that the definition `t` of kind `k` (2, 3 or 4) consumes, and the value it must
-/// take for `t` to have the value `v`, given the values `dv` of the other operands and the
-/// widths (the lengths of `dv2`) of all definitions.
-fn invert(t: &CoreTerm, k: usize, v: &Vec<bool>, dv: &Vec<Vec<bool>>, dv2: &Vec<Vec<bool>>) -> (usize, Vec<bool>) {
+/// take for `t` to have the value `v`, given the values `m` of the variables and `dv` of the
+/// definitions the other operands refer to, and the widths (the lengths of `dv2`) of all
+/// definitions.
+fn invert(t: &CoreTerm, k: usize, v: &Vec<bool>, m: &Vec<Vec<bool>>, dv: &Vec<Vec<bool>>, dv2: &Vec<Vec<bool>>) -> (usize, Vec<bool>) {
     let n = dv2.len();
     match t {
         CoreTerm::Not(a) => (ref_index(a, n), bits_not(v)),
@@ -1920,20 +1921,19 @@ fn invert(t: &CoreTerm, k: usize, v: &Vec<bool>, dv: &Vec<Vec<bool>>, dv2: &Vec<
             (ia, bits_concat(&vec![false; w - 1 - *hi], &low))
         }
         CoreTerm::Bin(op, a, b) => {
-            let ia = ref_index(a, n);
-            let ib = ref_index(b, n);
-            let (ic, io) = if k == 3 { (ib, ia) } else { (ia, ib) };
+            let ic = if k == 3 { ref_index(b, n) } else { ref_index(a, n) };
+            let o = if k == 3 { eval_term(m, dv, a) } else { eval_term(m, dv, b) };
             match op {
                 BinOp::Add => {
-                    let (s, _) = bits_add(v, &bits_not(&dv[io]), true);
+                    let (s, _) = bits_add(v, &bits_not(&o), true);
                     (ic, s)
                 }
-                BinOp::Xor => (ic, bits_bitwise(op, v, &dv[io])),
+                BinOp::Xor => (ic, bits_bitwise(op, v, &o)),
                 BinOp::Eq => {
                     if v[0] {
-                        (ic, dv[io].clone())
+                        (ic, o)
                     } else {
-                        (ic, bits_not(&dv[io]))
+                        (ic, bits_not(&o))
                     }
                 }
                 _ => (ic, v.clone()),
@@ -1972,7 +1972,7 @@ fn settle(defs: &Vec<CoreTerm>, kind: &Vec<usize>, dv2: &Vec<Vec<bool>>, dv: Vec
             m[var_index(&defs[j])] = v;
             return (dv, m);
         }
-        let (a, va) = invert(&defs[j], kind[j], &v, &dv, dv2);
+        let (a, va) = invert(&defs[j], kind[j], &v, &m, &dv, dv2);
         j = a;
         v = va;
         i += 1;

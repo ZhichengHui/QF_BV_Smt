@@ -38,7 +38,7 @@ fn random_problem(r: &mut Rng) -> CoreProblem {
         let w = dw[a];
         let same: Vec<usize> = (0..n).filter(|&j| dw[j] == w).collect();
         let b = same[r.below(same.len())];
-        let (t, tw) = match r.below(13) {
+        let (t, tw) = match r.below(16) {
             0 => (CoreTerm::Not(rf(a)), w),
             1 => {
                 let hi = r.below(w);
@@ -68,6 +68,10 @@ fn random_problem(r: &mut Rng) -> CoreProblem {
                     (CoreTerm::Not(rf(a)), w)
                 }
             }
+            // Operands that are not references, as in the rewriting of `bvsub` and `bvule`.
+            13 => (CoreTerm::Bin(BinOp::Add, rf(a), Box::new(CoreTerm::Not(rf(b)))), w),
+            14 => (CoreTerm::Bin(BinOp::Xor, Box::new(CoreTerm::Bin(BinOp::And, rf(b), rf(b))), rf(a)), w),
+            15 => (CoreTerm::Bin(BinOp::Eq, Box::new(CoreTerm::Not(rf(b))), rf(a)), 1),
             _ => (CoreTerm::Bin(BinOp::Concat, rf(a), rf(b)), 2 * w),
         };
         // A variable term must have the width of its variable.

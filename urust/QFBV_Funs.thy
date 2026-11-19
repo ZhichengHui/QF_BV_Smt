@@ -2312,8 +2312,8 @@ definition "bits_one" :: \<open>(64 word) \<Rightarrow> ('s, bool list, 'abort, 
   \<rbrakk>\<close>
 
 (* Rust: invert *)
-definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, ((64 word) \<times> (bool list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>invert \<equiv> \<lambda>t k v dv dv2. FunctionBody \<lbrakk>
+definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, ((64 word) \<times> (bool list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>invert \<equiv> \<lambda>t k v m dv dv2. FunctionBody \<lbrakk>
     let n = len(dv2);
     match t {
       CoreTerm_Not(a) \<Rightarrow> {
@@ -2326,29 +2326,30 @@ definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bo
         (ia, bits_concat(vec_from_elem(false, (w - 1_usize) - hi), low))
       },
       CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
-        let ia = ref_index(a, n);
-        let ib = ref_index(b, n);
-        let destr_1 = if k == 3_usize {
-          (ib, ia)
+        let ic = if k == 3_usize {
+          ref_index(b, n)
         } else {
-          (ia, ib)
+          ref_index(a, n)
         };
-        let ic = destr_1.0;
-        let io = destr_1.1;
+        let o_v = if k == 3_usize {
+          eval_term(m, dv, a)
+        } else {
+          eval_term(m, dv, b)
+        };
         match op_v {
           BinOp_Add \<Rightarrow> {
-            let destr_2 = bits_add(v, bits_not(dv[io]), true);
-            let s = destr_2.0;
+            let destr_1 = bits_add(v, bits_not(o_v), true);
+            let s = destr_1.0;
             (ic, s)
           },
           BinOp_Xor \<Rightarrow> {
-            (ic, bits_bitwise(op_v, v, dv[io]))
+            (ic, bits_bitwise(op_v, v, o_v))
           },
           BinOp_Eq \<Rightarrow> {
             if v[0_usize] {
-              (ic, dv[io])
+              (ic, o_v)
             } else {
-              (ic, bits_not(dv[io]))
+              (ic, bits_not(o_v))
             }
           },
           _ \<Rightarrow> {
@@ -2358,7 +2359,7 @@ definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bo
       },
       CoreTerm_Ite(c, a, _) \<Rightarrow> {
         let ia = ref_index(a, n);
-        let mut r = { let init_4 = { let res_3 = []; \<llangle>res_3 :: bool list\<rrangle> }; \<llangle>init_4 :: bool list\<rrangle> };
+        let mut r = { let init_3 = { let res_2 = []; \<llangle>res_2 :: bool list\<rrangle> }; \<llangle>init_3 :: bool list\<rrangle> };
         vec_push(r, bits_eq(v, dv[ia]));
         (ref_index(c, n), * r)
       },
@@ -2395,7 +2396,7 @@ definition "settle" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<R
         * (m[var_index(defs[* j])]) = * v;
         return (* dv, * m);
       };
-      let destr_4 = invert(defs[* j], kind[* j], * v, * dv, dv2);
+      let destr_4 = invert(defs[* j], kind[* j], * v, * m, * dv, dv2);
       let a = destr_4.0;
       let va = destr_4.1;
       * j = a;

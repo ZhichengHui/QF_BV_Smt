@@ -742,26 +742,6 @@ definition "propagate_pass" :: \<open>((Lit list) list) \<Rightarrow> ((bool opt
     (* a, * trail, true)
   \<rbrakk>\<close>
 
-(* Rust: propagate *)
-definition "propagate" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>propagate \<equiv> \<lambda>cs a trail. FunctionBody \<lbrakk>
-    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
-      let n = len(* trail);
-      let destr_3 = propagate_pass(cs, * a, * trail);
-      let a1 = destr_3.0;
-      let t1 = destr_3.1;
-      let ok_v = destr_3.2;
-      if (!ok_v) || (len(t1) == n) {
-        return (a1, t1, ok_v);
-      };
-      * a = a1;
-      * trail = t1;
-    };
-    panic!("unreachable: diverging expression completed")
-  \<rbrakk>\<close>
-
 (* Rust: find_unassigned *)
 definition "find_unassigned" :: \<open>((bool option) list) \<Rightarrow> ('s, (64 word) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>find_unassigned \<equiv> \<lambda>a. FunctionBody \<lbrakk>
@@ -1039,20 +1019,10 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
       * a = a1;
       * trail = t1;
       * q = q1;
-      let mut conflict = !ok_v;
       if ok_v {
         match find_unassigned(* a) {
           None \<Rightarrow> {
-            let destr_12 = propagate(cs, * a, * trail);
-            let a2 = destr_12.0;
-            let t2 = destr_12.1;
-            let ok2 = destr_12.2;
-            if ok2 {
-              return Some(a2);
-            };
-            * a = a2;
-            * trail = t2;
-            * conflict = true;
+            return Some(* a);
           },
           Some(v) \<Rightarrow> {
             vec_push(lim, len(* trail));
@@ -1061,16 +1031,16 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
           }
         }
       };
-      if * conflict {
+      if !ok_v {
         match vec_pop(lim) {
           None \<Rightarrow> {
             return None;
           },
           Some(p) \<Rightarrow> {
             let d = (* trail)[p];
-            let destr_13 = backtrack(* a, * trail, p);
-            let a2 = destr_13.0;
-            let t2 = destr_13.1;
+            let destr_12 = backtrack(* a, * trail, p);
+            let a2 = destr_12.0;
+            let t2 = destr_12.1;
             * a = a2;
             * trail = t2;
             * (a[d.Lit_var]) = Some(d.Lit_neg);

@@ -1807,4 +1807,126 @@ qed
 
 end
 
+subsection \<open>Inverting an operation on bit lists\<close>
+
+lemma bits_nat_inj: \<open>length a = length b \<Longrightarrow> bits_nat a = bits_nat b \<Longrightarrow> a = b\<close>
+  by (rule nth_equalityI) (simp_all, metis bit_bits_nat)
+
+lemma beq_eq: \<open>length a = length b \<Longrightarrow> beq_m a b = (a = b)\<close>
+  using beq_m bits_nat_inj by blast
+
+lemma inv_not: \<open>bnot_m (bnot_m v) = v\<close>
+  by (simp add: bnot_m_def comp_def)
+
+lemma inv_add:
+  assumes \<open>length ob = length v\<close>
+  shows \<open>fst (badd_m (fst (badd_m v (bnot_m ob) True)) ob False) = v\<close>
+    \<open>fst (badd_m ob (fst (badd_m v (bnot_m ob) True)) False) = v\<close>
+    \<open>length (fst (badd_m v (bnot_m ob) True)) = length v\<close>
+proof -
+  let ?w = \<open>length v\<close>
+  let ?a = \<open>fst (badd_m v (bnot_m ob) True)\<close>
+  have lo: \<open>bits_nat ob < 2 ^ ?w\<close> \<open>bits_nat v < 2 ^ ?w\<close> using bits_nat_lt assms by metis+
+  have a: \<open>bits_nat ?a = (bits_nat v + (2 ^ ?w - 1 - bits_nat ob) + 1) mod 2 ^ ?w\<close>
+    using bits_nat_badd[of v \<open>bnot_m ob\<close> True] bits_nat_bnot[of ob] assms by simp
+  have s: \<open>(bits_nat v + (2 ^ ?w - 1 - bits_nat ob) + 1 + bits_nat ob) mod 2 ^ ?w = bits_nat v\<close>
+  proof -
+    have \<open>bits_nat v + (2 ^ ?w - 1 - bits_nat ob) + 1 + bits_nat ob = bits_nat v + 2 ^ ?w\<close> using lo by simp
+    then show ?thesis using lo by simp
+  qed
+  have la: \<open>length ?a = ?w\<close> by simp
+  show \<open>length (fst (badd_m v (bnot_m ob) True)) = length v\<close> by simp
+  have \<open>bits_nat (fst (badd_m ?a ob False)) = bits_nat v\<close>
+    using bits_nat_badd[of ?a ob False] la assms a s by (simp add: mod_add_left_eq)
+  then show \<open>fst (badd_m ?a ob False) = v\<close> using la by (intro bits_nat_inj) simp_all
+  have \<open>bits_nat (fst (badd_m ob ?a False)) = bits_nat v\<close>
+    using bits_nat_badd[of ob ?a False] la assms a s by (simp add: mod_add_right_eq add.commute)
+  then show \<open>fst (badd_m ob ?a False) = v\<close> using la assms by (intro bits_nat_inj) simp_all
+qed
+
+lemma inv_xor:
+  assumes \<open>length ob = length v\<close>
+  shows \<open>bbitw_m BinOp_Xor (bbitw_m BinOp_Xor v ob) ob = v\<close> \<open>bbitw_m BinOp_Xor ob (bbitw_m BinOp_Xor v ob) = v\<close>
+    \<open>length (bbitw_m BinOp_Xor v ob) = length v\<close>
+  using assms by (auto intro!: nth_equalityI simp: nth_bbitw bop_def)
+
+lemma bits_one: \<open>length (bits_one_m w) = w\<close> \<open>0 < w \<Longrightarrow> bits_nat (bits_one_m w) = 1\<close>
+proof -
+  show \<open>length (bits_one_m w) = w\<close> by (simp add: bits_one_m_def)
+  assume w: \<open>0 < w\<close>
+  obtain w' where w': \<open>w = Suc w'\<close> using w by (cases w) auto
+  have z: \<open>bits_nat (replicate n False) = 0\<close> for n by (induction n) simp_all
+  have \<open>bits_one_m w = True # replicate w' False\<close> using w' by (simp add: bits_one_m_def)
+  then show \<open>bits_nat (bits_one_m w) = 1\<close> using z by simp
+qed
+
+lemma inv_mul:
+  assumes \<open>length v = w\<close>
+  shows \<open>bmul_m v (bits_one_m w) = v\<close> \<open>fst (bdivrem_m v (bits_one_m w)) = v\<close>
+proof -
+  have l: \<open>length (bits_one_m w) = length v\<close> using bits_one(1) assms by simp
+  show \<open>bmul_m v (bits_one_m w) = v\<close>
+  proof (cases \<open>w = 0\<close>)
+    case True
+    then show ?thesis using assms bmul_m(1)[OF l[symmetric]] by simp
+  next
+    case False
+    then show ?thesis using bmul_m[OF l[symmetric]] bits_one(2)[of w] assms bits_nat_lt[of v]
+      by (intro bits_nat_inj) simp_all
+  qed
+  show \<open>fst (bdivrem_m v (bits_one_m w)) = v\<close>
+  proof (cases \<open>w = 0\<close>)
+    case True
+    then show ?thesis using assms bdivrem_m(1)[OF l[symmetric]] by simp
+  next
+    case False
+    then show ?thesis using bdivrem_m(1,3)[OF l[symmetric]] bits_one(2)[of w] assms
+      by (intro bits_nat_inj) simp_all
+  qed
+qed
+
+lemma inv_extract:
+  assumes \<open>length v = Suc hi - lo\<close> \<open>lo \<le> hi\<close> \<open>hi < w\<close>
+  shows \<open>bextract_m (bconcat_m (replicate (w - 1 - hi) False) (bconcat_m v (replicate lo False))) hi lo = v\<close>
+    \<open>length (bconcat_m (replicate (w - 1 - hi) False) (bconcat_m v (replicate lo False))) = w\<close>
+proof -
+  show \<open>length (bconcat_m (replicate (w - 1 - hi) False) (bconcat_m v (replicate lo False))) = w\<close>
+    using assms by simp
+  show \<open>bextract_m (bconcat_m (replicate (w - 1 - hi) False) (bconcat_m v (replicate lo False))) hi lo = v\<close>
+    using assms by (intro nth_equalityI) (auto simp: bextract_m_def bconcat_m_def nth_append nth_map_upt simp del: upt_Suc)
+qed
+
+lemma inv_eq:
+  assumes \<open>length v = 1\<close> \<open>0 < length ob\<close>
+  shows \<open>[beq_m (if v ! 0 then ob else bnot_m ob) ob] = v\<close> \<open>[beq_m ob (if v ! 0 then ob else bnot_m ob)] = v\<close>
+    \<open>length (if v ! 0 then ob else bnot_m ob) = length ob\<close>
+proof -
+  have ne: \<open>bnot_m ob \<noteq> ob\<close> using assms(2) by (metis bnot_m_def length_greater_0_conv list.map(2) list.sel(1) neq_Nil_conv)
+  obtain b where v: \<open>v = [b]\<close> using assms(1) by (cases v) auto
+  show \<open>[beq_m (if v ! 0 then ob else bnot_m ob) ob] = v\<close> using ne v by (simp add: beq_eq)
+  show \<open>[beq_m ob (if v ! 0 then ob else bnot_m ob)] = v\<close> using ne v by (auto simp: beq_eq)
+  show \<open>length (if v ! 0 then ob else bnot_m ob) = length ob\<close> by simp
+qed
+
+lemma inv_ite:
+  assumes \<open>length v = 1\<close> \<open>ca \<noteq> cb\<close>
+  shows \<open>(if [beq_m v [ca]] ! 0 then [ca] else [cb]) = v\<close>
+  using assms by (cases v) (auto simp: beq_eq)
+
+lemma eval_m_len:
+  assumes \<open>cwt ws ds t\<close> \<open>map length vs = ws\<close>
+    \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> x < length dv \<and> length (dv ! x) = ds ! x\<close>
+  shows \<open>length (eval_m vs dv t) = cwidth ws ds t\<close>
+proof -
+  define dv' where \<open>dv' = map (\<lambda>x. if x < length dv \<and> length (dv ! x) = ds ! x then dv ! x else replicate (ds ! x) False) [0..<length ds]\<close>
+  have l: \<open>ds = map length dv'\<close> by (rule nth_equalityI) (auto simp: dv'_def)
+  have \<open>eval_m vs dv t = eval_m vs dv' t\<close>
+  proof (rule eval_m_cong)
+    show \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_var x u \<longrightarrow> vs ! x = vs ! x\<close> by simp
+    show \<open>\<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> dv ! x = dv' ! x\<close>
+      using assms(3) cwt_ref_lt[OF assms(1)] by (auto simp: dv'_def)
+  qed
+  then show ?thesis using eval_m_correct[OF assms(1) assms(2)[symmetric] l] by simp
+qed
+
 end

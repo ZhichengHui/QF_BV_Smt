@@ -228,7 +228,7 @@ definition vslot_post ::
    64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
    64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> bool \<Rightarrow> bool \<Rightarrow> bool\<close> where
   \<open>vslot_post cs p nx h a t x s prev p1 nx1 h1 a1 t1 keep okb \<equiv>
-     let c = cs ! (unat s div 2); i = unat (p ! unat s); j = unat (p ! oth (unat s)) in
+     let c = cs ! (unat s div 2); i = unat (p ! unat s); j = unat (p ! unat (if s mod 2 = 0 then s + 1 else s - 1)) in
      if i < length c \<and> j < length c \<and> lit_value_m a (c ! j) \<noteq> Some True then
        (\<exists>k y. unat k < length c \<and> unat k \<noteq> i \<and> unat k \<noteq> j \<and> lit_value_m a (c ! unat k) \<noteq> Some False \<and>
           unat y = lidx (c ! unat k) \<and> (p1, nx1, h1) = mw_m p nx h s prev x k y \<and>
@@ -241,6 +241,56 @@ definition vslot_post ::
            | Status_Satisfied \<Rightarrow> a1 = a \<and> t1 = t \<and> okb
            | Status_Open \<Rightarrow> a1 = a \<and> t1 = t \<and> okb))
      else p1 = p \<and> nx1 = nx \<and> h1 = h \<and> a1 = a \<and> t1 = t \<and> keep \<and> okb\<close>
+
+text \<open>The result of \<^verbatim>\<open>find_watch\<close>: a position other than \<open>i\<close> and \<open>j\<close> whose literal is not false, or
+  none if every other literal is false.\<close>
+definition fw_post :: \<open>bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word option \<Rightarrow> bool\<close> where
+  \<open>fw_post a c i j r \<equiv> case r of
+     None \<Rightarrow> (\<forall>k < length c. k \<noteq> unat i \<and> k \<noteq> unat j \<longrightarrow> lit_value_m a (c ! k) = Some False)
+   | Some k \<Rightarrow> unat k < length c \<and> unat k \<noteq> unat i \<and> unat k \<noteq> unat j \<and> lit_value_m a (c ! unat k) \<noteq> Some False\<close>
+
+text \<open>The paths of \<^verbatim>\<open>visit_slot\<close>; \<open>ow\<close> is the other slot of the clause.\<close>
+definition oslot :: \<open>64 word \<Rightarrow> 64 word \<Rightarrow> bool\<close> where
+  \<open>oslot s ow \<equiv> (s mod 2 = 0 \<and> ow = s + 1) \<or> (s mod 2 = 1 \<and> ow = s - 1)\<close>
+
+lemma oslot_if: \<open>oslot s ow \<Longrightarrow> (if s mod 2 = 0 then s + 1 else s - 1) = ow\<close>
+  unfolding oslot_def by (metis zero_neq_one)
+
+lemma vsp_skip_i:
+  \<open>\<not> unat (p ! unat s) < length (cs ! (unat s div 2)) \<Longrightarrow> vslot_post cs p nx h a t x s prev p nx h a t True True\<close>
+  by (simp add: vslot_post_def Let_def)
+
+lemma vsp_skip_j:
+  \<open>\<not> unat (p ! unat ow) < length (cs ! (unat s div 2)) \<Longrightarrow> oslot s ow \<Longrightarrow>
+   vslot_post cs p nx h a t x s prev p nx h a t True True\<close>
+  by (simp add: vslot_post_def Let_def oslot_if)
+
+lemma vsp_skip_t:
+  \<open>lit_value_m a (cs ! (unat s div 2) ! unat (p ! unat ow)) = Some True \<Longrightarrow> oslot s ow \<Longrightarrow>
+   vslot_post cs p nx h a t x s prev p nx h a t True True\<close>
+  by (simp add: vslot_post_def Let_def oslot_if)
+
+lemma vsp_move:
+  assumes \<open>fw_post a (cs ! (unat s div 2)) (p ! unat s) (p ! unat ow) (Some k)\<close> \<open>oslot s ow\<close>
+    \<open>(p1, nx1, h1) = mw_m p nx h s prev x k y\<close> \<open>unat y = lidx (cs ! (unat s div 2) ! unat k)\<close>
+    \<open>unat (p ! unat s) < length (cs ! (unat s div 2))\<close> \<open>unat (p ! unat ow) < length (cs ! (unat s div 2))\<close>
+    \<open>lit_value_m a (cs ! (unat s div 2) ! unat (p ! unat ow)) \<noteq> Some True\<close>
+  shows \<open>vslot_post cs p nx h a t x s prev p1 nx1 h1 a t False True\<close>
+  using assms unfolding vslot_post_def Let_def oslot_if[OF assms(2)] fw_post_def by auto
+
+lemma vsp_none:
+  assumes \<open>fw_post a (cs ! (unat s div 2)) (p ! unat s) (p ! unat ow) None\<close> \<open>oslot s ow\<close>
+    \<open>unat (p ! unat s) < length (cs ! (unat s div 2))\<close> \<open>unat (p ! unat ow) < length (cs ! (unat s div 2))\<close>
+    \<open>lit_value_m a (cs ! (unat s div 2) ! unat (p ! unat ow)) \<noteq> Some True\<close>
+  shows \<open>status_m a (cs ! (unat s div 2)) None False = Status_Conflict \<Longrightarrow>
+           vslot_post cs p nx h a t x s prev p nx h a t True False\<close>
+    \<open>status_m a (cs ! (unat s div 2)) None False = Status_Unit l \<Longrightarrow>
+           vslot_post cs p nx h a t x s prev p nx h (a[unat (Lit_var l) := Some (\<not> Lit_neg l)]) (t @ [l]) True True\<close>
+    \<open>status_m a (cs ! (unat s div 2)) None False = Status_Satisfied \<Longrightarrow>
+           vslot_post cs p nx h a t x s prev p nx h a t True True\<close>
+    \<open>status_m a (cs ! (unat s div 2)) None False = Status_Open \<Longrightarrow>
+           vslot_post cs p nx h a t x s prev p nx h a t True True\<close>
+  using assms unfolding vslot_post_def Let_def oslot_if[OF assms(2)] fw_post_def by auto
 
 text \<open>The invariant of the loop of \<^verbatim>\<open>visit\<close> over the list of index \<open>x\<close>, whose literal \<open>w\<close> is false,
   from the watches \<open>p0\<close> and the trail \<open>t0\<close>: the list is \<open>K @ R\<close>, where \<open>K\<close> holds the slots visited
@@ -259,7 +309,8 @@ definition vinv ::
 
 text \<open>The facts every step of the visit uses.\<close>
 definition vctx :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> Lit \<Rightarrow> Lit list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
-  \<open>vctx cs n x w t0 h \<equiv> dpll_wf n cs \<and> length h = 2 * n \<and> lidx w = x \<and> lneg w \<in> set t0\<close>
+  \<open>vctx cs n x w t0 h \<equiv> dpll_wf n cs \<and> length h = 2 * n \<and> lidx w = x \<and> lneg w \<in> set t0 \<and>
+     2 * length cs < 2 ^ 64\<close>
 
 lemma oth_oth: \<open>oth (oth s) = s\<close>
   by (auto simp: oth_def)
@@ -272,6 +323,29 @@ lemma oth_div: \<open>oth s div 2 = s div 2\<close>
 
 lemma wact_oth: \<open>wact cs m s \<Longrightarrow> wact cs m (oth s)\<close>
   by (auto simp: wact_def oth_div oth_def elim!: evenE oddE)
+
+lemma oth_word:
+  fixes s :: \<open>64 word\<close>
+  assumes \<open>unat s < 2 * L\<close> \<open>2 * L < 2 ^ 64\<close>
+  shows \<open>unat (if s mod 2 = 0 then s + 1 else s - 1) = oth (unat s)\<close>
+proof -
+  have m: \<open>unat (s mod 2) = unat s mod 2\<close> using unat_mod[of s 2] by simp
+  show ?thesis
+  proof (cases \<open>s mod 2 = 0\<close>)
+    case True
+    then have \<open>even (unat s)\<close> using m by (simp add: even_iff_mod_2_eq_zero)
+    moreover have \<open>unat (s + 1) = Suc (unat s)\<close> using assms by (intro dpll_unat_Suc) simp
+    ultimately show ?thesis using True by (simp add: oth_def)
+  next
+    case False
+    then have \<open>unat (s mod 2) \<noteq> 0\<close> by (simp add: unat_eq_zero)
+    then have o: \<open>odd (unat s)\<close> using m by (simp add: even_iff_mod_2_eq_zero)
+    then have \<open>0 < unat s\<close> by (simp add: odd_pos)
+    then have \<open>1 \<le> s\<close> by (simp add: word_le_nat_alt)
+    then have \<open>unat (s - 1) = unat s - 1\<close> by (simp add: unat_sub)
+    then show ?thesis using False o by (simp add: oth_def)
+  qed
+qed
 
 lemma wl_pos_neq:
   assumes \<open>wl_lists cs m p nx h Ls\<close> \<open>wact cs m s\<close>
@@ -541,6 +615,8 @@ proof -
   define c where \<open>c = cs ! (?s div 2)\<close>
   define i where \<open>i = unat (p ! ?s)\<close>
   define j where \<open>j = unat (p ! oth ?s)\<close>
+  have oj: \<open>unat (if sw mod 2 = 0 then sw + 1 else sw - 1) = oth ?s\<close>
+    using oth_word[of sw \<open>length cs\<close>] assms(2,6) V(1) by (simp add: wl_lists_def vctx_def)
   have sc: \<open>?s div 2 < length cs\<close> using sx(1) by (auto simp: wact_def)
   have lc: \<open>\<forall>m < length c. unat (Lit_var (c ! m)) < n\<close>
   proof (intro allI impI)
@@ -560,7 +636,7 @@ proof -
     using tr_false[OF assms(4), of w] nwt lc il ci by auto
   have lenp: \<open>?s < length p\<close> using V(1) sx(1) unfolding wl_lists_def wact_def by simp
   have N1: \<open>Suc st + length R \<le> length nx\<close> using V(7) R0 by simp
-  note P = assms(3)[unfolded vslot_post_def Let_def, folded c_def i_def j_def]
+  note P = assms(3)[unfolded vslot_post_def Let_def oj, folded c_def i_def j_def]
   have SEMR: \<open>wlit cs p (oth s') \<in> set t \<or> s' \<in> set R\<close>
     if \<open>S \<subseteq> set t0\<close> \<open>WS cs p0 t0 S\<close> \<open>wact cs (length cs) s'\<close> \<open>lneg (wlit cs p s') \<in> insert (lneg w) S\<close>
       \<open>s' \<noteq> ?s\<close> for S s'
@@ -697,6 +773,405 @@ proof -
     using assms(1) unfolding vinv_def by blast
   have \<open>R \<noteq> []\<close> using V(1) assms(2) by auto
   then show ?thesis using V(2) by (cases R) auto
+qed
+
+subsection \<open>The initial watches\<close>
+
+lemma wl_init_empty:
+  assumes \<open>length p = 2 * length cs\<close> \<open>length nx = 2 * length cs\<close> \<open>\<forall>x < length h. length nx \<le> unat (h ! x)\<close>
+  shows \<open>wl_lists cs 0 p nx h (replicate (length h) [])\<close>
+  using assms by (simp add: wl_lists_def wact_def)
+
+text \<open>\<^verbatim>\<open>watch_init\<close> on clause \<open>c\<close> of fewer than two literals.\<close>
+lemma wl_init_short:
+  assumes \<open>wl_lists cs c p nx h Ls\<close> \<open>c < length cs\<close> \<open>\<not> 2 \<le> length (cs ! c)\<close>
+  shows \<open>wl_lists cs (Suc c) p nx h Ls\<close>
+proof -
+  have \<open>wact cs (Suc c) s \<longleftrightarrow> wact cs c s\<close> for s
+  proof
+    assume a: \<open>wact cs (Suc c) s\<close>
+    then have s: \<open>s < 2 * Suc c\<close> \<open>2 \<le> length (cs ! (s div 2))\<close> by (auto simp: wact_def)
+    have \<open>s div 2 \<noteq> c\<close> using s(2) assms(3) by auto
+    then have \<open>s < 2 * c\<close> using s(1) by presburger
+    then show \<open>wact cs c s\<close> using s(2) by (simp add: wact_def)
+  qed (auto simp: wact_def)
+  moreover have \<open>\<forall>c' < Suc c. 2 \<le> length (cs ! c') \<longrightarrow> p ! (2 * c') \<noteq> p ! Suc (2 * c')\<close>
+    using assms(1,3) unfolding wl_lists_def by (metis less_Suc_eq)
+  ultimately show ?thesis using assms(1,2) unfolding wl_lists_def by simp
+qed
+
+text \<open>\<^verbatim>\<open>watch_init\<close> on clause \<open>c\<close> of at least two literals: its slots \<open>2 * c\<close> and \<open>2 * c + 1\<close>
+  watch its first two literals, at the heads of their lists.\<close>
+lemma wl_init_step:
+  assumes L: \<open>wl_lists cs c p nx h Ls\<close> and c: \<open>c < length cs\<close> \<open>2 \<le> length (cs ! c)\<close>
+    and z: \<open>\<forall>s. 2 * c \<le> s \<and> s < 2 * length cs \<longrightarrow> p ! s = 0\<close>
+    and x: \<open>lidx (cs ! c ! 0) = x0\<close> \<open>lidx (cs ! c ! 1) = x1\<close> \<open>x0 < length h\<close> \<open>x1 < length h\<close>
+    and b: \<open>2 * length cs < 2 ^ 64\<close>
+  shows \<open>wl_lists cs (Suc c) (p[Suc (2 * c) := 1])
+     ((nx[2 * c := h ! x0])[Suc (2 * c) := (h[x0 := word_of_nat (2 * c)]) ! x1])
+     ((h[x0 := word_of_nat (2 * c)])[x1 := word_of_nat (Suc (2 * c))])
+     ((Ls[x0 := 2 * c # Ls ! x0])[x1 := Suc (2 * c) # (Ls[x0 := 2 * c # Ls ! x0]) ! x1])\<close>
+proof -
+  let ?s = \<open>2 * c\<close> and ?o = \<open>Suc (2 * c)\<close>
+  let ?p = \<open>p[?o := 1]\<close>
+  let ?h1 = \<open>h[x0 := word_of_nat ?s]\<close>
+  let ?h = \<open>?h1[x1 := word_of_nat ?o]\<close>
+  let ?nx1 = \<open>nx[?s := h ! x0]\<close>
+  let ?nx = \<open>?nx1[?o := ?h1 ! x1]\<close>
+  let ?L1 = \<open>Ls[x0 := ?s # Ls ! x0]\<close>
+  let ?L = \<open>?L1[x1 := ?o # ?L1 ! x1]\<close>
+  have LL: \<open>c \<le> length cs\<close> \<open>length p = 2 * length cs\<close> \<open>length nx = 2 * length cs\<close> \<open>length Ls = length h\<close>
+    \<open>\<forall>s. wact cs c s \<longrightarrow> unat (p ! s) < length (cs ! (s div 2)) \<and> lidx (wlit cs p s) < length h\<close>
+    \<open>\<forall>c' < c. 2 \<le> length (cs ! c') \<longrightarrow> p ! (2 * c') \<noteq> p ! Suc (2 * c')\<close>
+    using L unfolding wl_lists_def by blast+
+  have so: \<open>?s < length nx\<close> \<open>?o < length nx\<close> \<open>?o < length p\<close> using c LL(3,2) by auto
+  have us: \<open>unat (word_of_nat ?s :: 64 word) = ?s\<close> \<open>unat (word_of_nat ?o :: 64 word) = ?o\<close>
+    using b c by (intro unat_of_nat_eq; simp)+
+  have act: \<open>wact cs (Suc c) v \<longleftrightarrow> wact cs c v \<or> v = ?s \<or> v = ?o\<close> for v
+    using c(2) by (auto simp: wact_def)
+  have old: \<open>wact cs c v \<Longrightarrow> v < ?s\<close> for v by (simp add: wact_def)
+  have p0: \<open>p ! ?s = 0\<close> using z c by simp
+  have wl: \<open>wlit cs ?p v = (if v = ?s then cs ! c ! 0 else if v = ?o then cs ! c ! 1 else wlit cs p v)\<close> for v
+    using p0 so(3) by (auto simp: wlit_def nth_list_update)
+  have mem: \<open>\<forall>v. v \<in> set (Ls ! z) \<longleftrightarrow> wact cs c v \<and> lidx (wlit cs p v) = z\<close> if \<open>z < length h\<close> for z
+    using wl_mem[OF L that] by blast
+  have notin: \<open>?s \<notin> set (Ls ! z) \<and> ?o \<notin> set (Ls ! z)\<close> if \<open>z < length h\<close> for z
+    using mem[OF that] old by fastforce
+  have lsegs: \<open>lseg ?nx (unat (h ! z)) (Ls ! z)\<close> if \<open>z < length h\<close> for z
+    using wl_lseg[OF L that] notin[OF that] lseg_upd by simp
+  have lists: \<open>lseg ?nx (unat (?h ! z)) (?L ! z) \<and> distinct (?L ! z) \<and>
+      (\<forall>v. v \<in> set (?L ! z) \<longleftrightarrow> wact cs (Suc c) v \<and> lidx (wlit cs ?p v) = z)\<close> if zl: \<open>z < length h\<close> for z
+  proof -
+    have D: \<open>distinct (Ls ! z)\<close> using wl_lseg[OF L zl] by blast
+    have M: \<open>\<forall>v. v \<in> set (?L ! z) \<longleftrightarrow> v \<in> set (Ls ! z) \<or> (v = ?s \<and> z = x0) \<or> (v = ?o \<and> z = x1)\<close>
+      using zl x(3,4) LL(4) by (auto simp: nth_list_update)
+    have M2: \<open>\<forall>v. v \<in> set (?L ! z) \<longleftrightarrow> wact cs (Suc c) v \<and> lidx (wlit cs ?p v) = z\<close>
+    proof
+      fix v
+      show \<open>v \<in> set (?L ! z) \<longleftrightarrow> wact cs (Suc c) v \<and> lidx (wlit cs ?p v) = z\<close>
+      proof (cases \<open>v = ?s \<or> v = ?o\<close>)
+        case True
+        then show ?thesis using M notin[OF zl] act x(1,2) wl by auto
+      next
+        case False
+        then show ?thesis using M mem[OF zl] act wl by auto
+      qed
+    qed
+    have DL: \<open>distinct (?L ! z)\<close>
+      using D notin[OF zl] zl x(3,4) LL(4) by (auto simp: nth_list_update)
+    have SL: \<open>lseg ?nx (unat (?h ! z)) (?L ! z)\<close>
+    proof (cases \<open>z = x1\<close>)
+      case True
+      have h1: \<open>unat (?h ! z) = ?o\<close> using True x(4) us by simp
+      have n1: \<open>?nx ! ?o = ?h1 ! x1\<close> using so by simp
+      have tail: \<open>lseg ?nx (unat (?h1 ! x1)) (?L1 ! x1)\<close>
+      proof (cases \<open>x1 = x0\<close>)
+        case True
+        have n0: \<open>?nx ! ?s = h ! x0\<close> using so by simp
+        have \<open>?L1 ! x1 = ?s # Ls ! x0\<close> using True x(3) LL(4) by simp
+        then show ?thesis using True us so n0 lsegs[OF x(3)] x(3) by simp
+      next
+        case False
+        have \<open>?L1 ! x1 = Ls ! x1\<close> using False by simp
+        then show ?thesis using False lsegs[OF x(4)] by simp
+      qed
+      have \<open>?L ! z = ?o # ?L1 ! x1\<close> using True x(4) LL(4) by simp
+      then show ?thesis using h1 n1 tail so by simp
+    next
+      case z1: False
+      show ?thesis
+      proof (cases \<open>z = x0\<close>)
+        case True
+        have h0: \<open>unat (?h ! z) = ?s\<close> using True z1 x(3) us by simp
+        have n0: \<open>?nx ! ?s = h ! x0\<close> using so by simp
+        have \<open>?L ! z = ?s # Ls ! x0\<close> using True z1 x(3) LL(4) by simp
+        then show ?thesis using h0 n0 lsegs[OF x(3)] so True by simp
+      next
+        case False
+        have \<open>?L ! z = Ls ! z\<close> \<open>?h ! z = h ! z\<close> using False z1 by simp_all
+        then show ?thesis using lsegs[OF zl] by simp
+      qed
+    qed
+    show ?thesis using SL DL M2 by blast
+  qed
+  have pos: \<open>\<forall>v. wact cs (Suc c) v \<longrightarrow> unat (?p ! v) < length (cs ! (v div 2)) \<and> lidx (wlit cs ?p v) < length ?h\<close>
+  proof (intro allI impI)
+    fix v assume v: \<open>wact cs (Suc c) v\<close>
+    show \<open>unat (?p ! v) < length (cs ! (v div 2)) \<and> lidx (wlit cs ?p v) < length ?h\<close>
+    proof (cases \<open>v = ?s \<or> v = ?o\<close>)
+      case True
+      then show ?thesis using c(2) p0 so(3) wl x by (auto simp: nth_list_update)
+    next
+      case False
+      then have \<open>wact cs c v\<close> using act v by blast
+      then show ?thesis using LL(5) False wl by (auto simp: nth_list_update)
+    qed
+  qed
+  have dis: \<open>\<forall>c' < Suc c. 2 \<le> length (cs ! c') \<longrightarrow> ?p ! (2 * c') \<noteq> ?p ! Suc (2 * c')\<close>
+  proof (intro allI impI)
+    fix c' assume c': \<open>c' < Suc c\<close> \<open>2 \<le> length (cs ! c')\<close>
+    show \<open>?p ! (2 * c') \<noteq> ?p ! Suc (2 * c')\<close>
+    proof (cases \<open>c' = c\<close>)
+      case True
+      then show ?thesis using p0 so(3) by simp
+    next
+      case False
+      then have \<open>c' < c\<close> using c' by simp
+      then show ?thesis using LL(6) c'(2) so(3) by (auto simp: nth_list_update)
+    qed
+  qed
+  show ?thesis unfolding wl_lists_def using c LL(2-4) pos dis lists by simp
+qed
+
+subsection \<open>The invariant of the search\<close>
+
+text \<open>The state of \<^verbatim>\<open>dpll\<close> with the watches \<open>p\<close>, \<open>nx\<close>, \<open>h\<close>, the trail \<open>t\<close> propagated up to \<open>q\<close>,
+  and the decision positions \<open>L\<close>: at each decision position the invariant held when the decision was
+  taken, and it still holds for the prefix of the trail before it.\<close>
+definition wstate ::
+  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> Lit list \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> bool\<close> where
+  \<open>wstate cs p nx h t q L \<equiv> wl_ok cs p nx h \<and> WS cs p t (set (take q t)) \<and> SP cs t \<and> q \<le> length t \<and>
+     (\<forall>k \<in> set L. k \<le> q \<and> WP cs p t k \<and> SP cs (take k t))\<close>
+
+lemma SP_mono: \<open>SP cs t \<Longrightarrow> set t \<subseteq> set t' \<Longrightarrow> SP cs t'\<close>
+  unfolding SP_def by blast
+
+lemma WS_mono: \<open>WS cs p t S \<Longrightarrow> set t \<subseteq> set t' \<Longrightarrow> WS cs p t' S\<close>
+  unfolding WS_def by blast
+
+lemma WP_append: \<open>k \<le> length t \<Longrightarrow> WP cs p (t @ e) k = WP cs p t k\<close>
+  by (simp add: WP_def)
+
+lemma wstate_init: \<open>wl_ok cs p nx h \<Longrightarrow> SP cs t \<Longrightarrow> wstate cs p nx h t 0 []\<close>
+  by (simp add: wstate_def WS_def)
+
+text \<open>After propagation over the watches from \<open>q\<close>, with or without a conflict.\<close>
+lemma wstate_prop:
+  assumes \<open>wstate cs p nx h t q L\<close> \<open>wl_ok cs p1 nx1 h1\<close> \<open>t1 = t @ e\<close> \<open>q \<le> q1\<close> \<open>q1 \<le> length t1\<close>
+    \<open>\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p1 t1 k\<close>
+    \<open>b \<longrightarrow> q1 = length t1 \<and> (WS cs p t (set (take q t)) \<longrightarrow> WS cs p1 t1 (set t1))\<close>
+  shows \<open>wl_ok cs p1 nx1 h1 \<and> SP cs t1 \<and> (\<forall>k \<in> set L. k \<le> length t \<and> WP cs p1 t1 k \<and> SP cs (take k t1)) \<and>
+         (b \<longrightarrow> wstate cs p1 nx1 h1 t1 q1 L \<and> q1 = length t1)\<close>
+proof -
+  have W: \<open>wl_ok cs p nx h\<close> \<open>WS cs p t (set (take q t))\<close> \<open>SP cs t\<close> \<open>q \<le> length t\<close>
+    \<open>\<forall>k \<in> set L. k \<le> q \<and> WP cs p t k \<and> SP cs (take k t)\<close>
+    using assms(1) by (simp_all add: wstate_def)
+  have sp: \<open>SP cs t1\<close> using SP_mono[OF W(3)] assms(3) by simp
+  have L: \<open>\<forall>k \<in> set L. k \<le> length t \<and> WP cs p1 t1 k \<and> SP cs (take k t1)\<close>
+    using W(4,5) assms(3,6) by auto
+  have \<open>b \<longrightarrow> wstate cs p1 nx1 h1 t1 q1 L \<and> q1 = length t1\<close>
+  proof
+    assume b: b
+    have \<open>WS cs p1 t1 (set (take q1 t1))\<close> using assms(7) b W(2) by simp
+    moreover have \<open>\<forall>k \<in> set L. k \<le> q1 \<and> WP cs p1 t1 k \<and> SP cs (take k t1)\<close> using L W(4,5) assms(4) by auto
+    ultimately show \<open>wstate cs p1 nx1 h1 t1 q1 L \<and> q1 = length t1\<close>
+      using assms(2,5,7) b sp by (simp add: wstate_def)
+  qed
+  then show ?thesis using assms(2) sp L by blast
+qed
+
+text \<open>A decision, after propagation without a conflict.\<close>
+lemma wstate_decide:
+  assumes \<open>wstate cs p nx h t (length t) L\<close>
+  shows \<open>wstate cs p nx h (t @ [l]) (length t) (L @ [length t])\<close>
+proof -
+  have W: \<open>wl_ok cs p nx h\<close> \<open>WS cs p t (set t)\<close> \<open>SP cs t\<close>
+    \<open>\<forall>k \<in> set L. k \<le> length t \<and> WP cs p t k \<and> SP cs (take k t)\<close>
+    using assms by (simp_all add: wstate_def)
+  have \<open>WP cs p t (length t)\<close> using W(2) by (simp add: WP_def)
+  then show ?thesis using W SP_mono[OF W(3), of \<open>t @ [l]\<close>] WS_mono[OF W(2), of \<open>t @ [l]\<close>]
+    by (auto simp: wstate_def WP_append)
+qed
+
+text \<open>Backtracking to the last decision position \<open>pp\<close>.\<close>
+lemma wstate_backtrack:
+  assumes \<open>wl_ok cs p nx h\<close> \<open>\<forall>k \<in> set (L @ [pp]). k \<le> length t \<and> WP cs p t k \<and> SP cs (take k t)\<close>
+    \<open>\<forall>k \<in> set L. k < pp\<close>
+  shows \<open>wstate cs p nx h (take pp t @ [d]) pp L\<close>
+proof -
+  have P: \<open>pp \<le> length t\<close> \<open>WP cs p t pp\<close> \<open>SP cs (take pp t)\<close> using assms(2) by auto
+  have \<open>WS cs p (take pp t) (set (take pp t))\<close> using P(2) by (simp add: WP_def)
+  then have ws: \<open>WS cs p (take pp t @ [d]) (set (take pp (take pp t @ [d])))\<close>
+    using WS_mono[of cs p \<open>take pp t\<close> _ \<open>take pp t @ [d]\<close>] P(1) by auto
+  have sp: \<open>SP cs (take pp t @ [d])\<close> using SP_mono[OF P(3), of \<open>take pp t @ [d]\<close>] by auto
+  have LL: \<open>\<forall>k \<in> set L. k \<le> pp \<and> WP cs p (take pp t @ [d]) k \<and> SP cs (take k (take pp t @ [d]))\<close>
+  proof
+    fix k assume k: \<open>k \<in> set L\<close>
+    then have kp: \<open>k < pp\<close> using assms(3) by blast
+    have \<open>WP cs p t k\<close> \<open>SP cs (take k t)\<close> using assms(2) k by auto
+    moreover have \<open>WP cs p (take pp t @ [d]) k = WP cs p t k\<close>
+      using kp P(1) by (simp add: WP_def min_def)
+    moreover have \<open>take k (take pp t @ [d]) = take k t\<close> using kp P(1) by (simp add: min_def)
+    ultimately show \<open>k \<le> pp \<and> WP cs p (take pp t @ [d]) k \<and> SP cs (take k (take pp t @ [d]))\<close>
+      using kp by simp
+  qed
+  have lp: \<open>pp \<le> length (take pp t @ [d])\<close> using P(1) by simp
+  show ?thesis unfolding wstate_def using assms(1) ws sp lp LL by blast
+qed
+
+text \<open>A total assignment reached without a conflict satisfies every clause.\<close>
+lemma wstate_total:
+  assumes \<open>wstate cs p nx h t (length t) L\<close> \<open>tr_ok n a t\<close> \<open>dpll_wf n cs\<close> \<open>\<forall>v < n. a ! v \<noteq> None\<close>
+  shows \<open>cnf_sem (sigma_of a) cs\<close>
+  unfolding cnf_sem_def
+proof
+  fix c assume c: \<open>c \<in> set cs\<close>
+  have W: \<open>wl_ok cs p nx h\<close> \<open>WS cs p t (set t)\<close> \<open>SP cs t\<close> using assms(1) by (simp_all add: wstate_def)
+  have la: \<open>length a = n\<close> using assms(2) by (simp add: tr_ok_def)
+  have lc: \<open>lits_lt n c\<close> using assms(3) c by (simp add: dpll_wf_def)
+  have sem: \<open>lit_sem (sigma_of a) l\<close> if \<open>l \<in> set c\<close> \<open>l \<in> set t\<close> for l
+  proof -
+    have \<open>lit_value_m a l = Some True\<close> using tr_true[OF assms(2)] lc that by (simp add: lits_lt_def)
+    then show ?thesis using dpll_lit_value_sem[OF dpll_agrees_sigma] lc that la by (auto simp: lits_lt_def)
+  qed
+  show \<open>\<exists>l \<in> set c. lit_sem (sigma_of a) l\<close>
+  proof (cases \<open>length c < 2\<close>)
+    case True
+    then show ?thesis using W(3) c sem unfolding SP_def by blast
+  next
+    case False
+    obtain ci where ci: \<open>ci < length cs\<close> \<open>cs ! ci = c\<close> using c by (auto simp: in_set_conv_nth)
+    obtain Ls where Ls: \<open>wl_lists cs (length cs) p nx h Ls\<close> using W(1) by (auto simp: wl_ok_def)
+    let ?s = \<open>2 * ci\<close>
+    have act: \<open>wact cs (length cs) ?s\<close> using ci False by (simp add: wact_def)
+    have pos: \<open>\<forall>s. wact cs (length cs) s \<longrightarrow> unat (p ! s) < length (cs ! (s div 2))\<close>
+      using Ls unfolding wl_lists_def by blast
+    have inc: \<open>wlit cs p s' \<in> set c\<close> if \<open>wact cs (length cs) s'\<close> \<open>s' div 2 = ci\<close> for s'
+      using pos that ci(2) by (auto simp: wlit_def)
+    show ?thesis
+    proof (rule ccontr)
+      assume no: \<open>\<not> (\<exists>l \<in> set c. lit_sem (sigma_of a) l)\<close>
+      have w: \<open>wlit cs p ?s \<in> set c\<close> using inc act by simp
+      then have \<open>lit_value_m a (wlit cs p ?s) \<noteq> None\<close>
+        using lc assms(4) la by (auto simp: lits_lt_def lit_value_m_def split: option.splits)
+      moreover have \<open>lit_value_m a (wlit cs p ?s) \<noteq> Some True\<close>
+        using no w dpll_lit_value_sem[OF dpll_agrees_sigma] lc la by (fastforce simp: lits_lt_def)
+      ultimately have \<open>lit_value_m a (wlit cs p ?s) = Some False\<close> by auto
+      then have \<open>lneg (wlit cs p ?s) \<in> set t\<close> using tr_false[OF assms(2)] w lc by (simp add: lits_lt_def)
+      then have o: \<open>wlit cs p (oth ?s) \<in> set t\<close> using W(2) act unfolding WS_def by blast
+      have \<open>wlit cs p (oth ?s) \<in> set c\<close> using inc wact_oth[OF act] oth_div[of ?s] by simp
+      then show False using no sem o by blast
+    qed
+  qed
+qed
+
+text \<open>The first pass of propagation leaves every clause of fewer than two literals satisfied.\<close>
+lemma status_short: \<open>length c < 2 \<Longrightarrow> status_m a c None False \<noteq> Status_Open\<close>
+  by (cases c rule: remdups_adj.cases) (auto split: option.splits bool.splits)
+
+lemma tpass_SP:
+  assumes \<open>dpll_wf n cs\<close> \<open>tr_ok n a t\<close> \<open>tpass_m cs a t = (a', t', True)\<close>
+  shows \<open>SP cs t'\<close>
+  using assms
+proof (induction cs arbitrary: a t)
+  case Nil
+  then show ?case by (simp add: SP_def)
+next
+  case (Cons c cs)
+  have wf: \<open>lits_lt n c\<close> \<open>dpll_wf n cs\<close> using Cons.prems(1) by (auto simp: dpll_wf_def)
+  have la: \<open>length a = n\<close> using Cons.prems(2) by (simp add: tr_ok_def)
+  show ?case
+  proof (cases \<open>status_m a c None False\<close>)
+    case Status_Conflict
+    then show ?thesis using Cons.prems(3) by simp
+  next
+    case (Status_Unit l)
+    let ?a1 = \<open>a[unat (Lit_var l) := Some (\<not> Lit_neg l)]\<close>
+    have i: \<open>unat (Lit_var l) < n\<close> using dpll_status_Unit_var[OF Status_Unit wf(1)] .
+    have nn: \<open>a ! unat (Lit_var l) = None\<close>
+      using dpll_status_Unit[OF Status_Unit] by (auto simp: lit_value_m_def split: option.splits)
+    have ok1: \<open>tr_ok n ?a1 (t @ [l])\<close> using tr_ok_push[OF Cons.prems(2) i nn] .
+    have p: \<open>tpass_m cs ?a1 (t @ [l]) = (a', t', True)\<close> using Cons.prems(3) Status_Unit by simp
+    have sp: \<open>SP cs t'\<close> using Cons.IH[OF wf(2) ok1 p] .
+    obtain e where e: \<open>t' = (t @ [l]) @ e\<close> using dpll_tpass[OF wf(2) subset_refl ok1 p] by blast
+    have \<open>l \<in> set c\<close> using dpll_status_Unit[OF Status_Unit] by simp
+    then have \<open>length c < 2 \<longrightarrow> (\<exists>l' \<in> set c. l' \<in> set t')\<close> using e by auto
+    then show ?thesis using sp by (simp add: SP_def)
+  next
+    case Status_Satisfied
+    have p: \<open>tpass_m cs a t = (a', t', True)\<close> using Cons.prems(3) Status_Satisfied by simp
+    have sp: \<open>SP cs t'\<close> using Cons.IH[OF wf(2) Cons.prems(2) p] .
+    obtain e where e: \<open>t' = t @ e\<close> using dpll_tpass[OF wf(2) subset_refl Cons.prems(2) p] by blast
+    obtain l where l: \<open>l \<in> set c\<close> \<open>lit_value_m a l = Some True\<close> using dpll_status_Sat[OF Status_Satisfied] by blast
+    then have \<open>l \<in> set t\<close> using tr_true[OF Cons.prems(2)] wf(1) by (simp add: lits_lt_def)
+    then show ?thesis using sp e l(1) by (auto simp: SP_def)
+  next
+    case Status_Open
+    have p: \<open>tpass_m cs a t = (a', t', True)\<close> using Cons.prems(3) Status_Open by simp
+    have sp: \<open>SP cs t'\<close> using Cons.IH[OF wf(2) Cons.prems(2) p] .
+    have \<open>\<not> length c < 2\<close> using status_short Status_Open by blast
+    then show ?thesis using sp by (simp add: SP_def)
+  qed
+qed
+
+subsection \<open>The results of a visit and of propagation over the watches\<close>
+
+text \<open>\<^verbatim>\<open>visit\<close> of the list of index \<open>x\<close> from the watches \<open>p\<close> and the trail \<open>t\<close>: the watch lists stay
+  well formed, the invariant at the prefixes of \<open>t\<close> is kept, and without a conflict a watch false by
+  \<open>S\<close> or by the literal of index \<open>x\<close> (which is false) has a true partner.\<close>
+definition visit_post ::
+  \<open>Lit list list \<Rightarrow> nat \<Rightarrow> 64 word list \<Rightarrow> Lit list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow>
+   Lit list \<Rightarrow> bool \<Rightarrow> bool\<close> where
+  \<open>visit_post cs x p t p1 nx1 h1 t1 b \<equiv> wl_ok cs p1 nx1 h1 \<and> (\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p1 t1 k) \<and>
+     (b \<longrightarrow> (\<forall>w S. lidx w = x \<longrightarrow> lneg w \<in> set t \<longrightarrow> S \<subseteq> set t \<longrightarrow> WS cs p t S \<longrightarrow>
+        WS cs p1 t1 (insert (lneg w) S)))\<close>
+
+lemma visit_post_exit:
+  assumes \<open>vinv cs x w p t p' nx' h' t' s prev st\<close> \<open>length nx' \<le> s\<close> \<open>lidx w = x\<close>
+  shows \<open>visit_post cs x p t p' nx' h' t' b\<close>
+proof -
+  note E = vinv_exit[OF assms(1,2)]
+  have \<open>\<forall>w' S. lidx w' = x \<longrightarrow> lneg w' \<in> set t \<longrightarrow> S \<subseteq> set t \<longrightarrow> WS cs p t S \<longrightarrow>
+        WS cs p' t' (insert (lneg w') S)\<close>
+    using E assms(3) lidx_inj by metis
+  then show ?thesis using E by (simp add: visit_post_def)
+qed
+
+lemma visit_post_conflict:
+  assumes \<open>vinv cs x w p t p' nx' h' t' s prev st\<close>
+    \<open>vslot_post cs p' nx' h' a t' xw sw pw p1 nx1 h1 a1 t1 keep False\<close>
+  shows \<open>visit_post cs x p t p1 nx1 h1 t1 False\<close>
+  using vinv_conflict[OF assms] by (simp add: visit_post_def)
+
+text \<open>The invariant of the loop of \<^verbatim>\<open>wpropagate\<close>, from the watches \<open>p\<close>, the trail \<open>t\<close> and the
+  position \<open>q\<close>.\<close>
+definition wprop_winv ::
+  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> Lit list \<Rightarrow> nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow>
+   Lit list \<Rightarrow> nat \<Rightarrow> bool\<close> where
+  \<open>wprop_winv cs p t q p1 nx1 h1 t1 q1 \<equiv> wl_ok cs p1 nx1 h1 \<and> q \<le> q1 \<and>
+     (\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p1 t1 k) \<and>
+     (WS cs p t (set (take q t)) \<longrightarrow> WS cs p1 t1 (set (take q1 t1)))\<close>
+
+lemma wprop_winv_refl: \<open>wl_ok cs p nx h \<Longrightarrow> wprop_winv cs p t q p nx h t q\<close>
+  by (simp add: wprop_winv_def)
+
+lemma wprop_winv_step:
+  assumes \<open>wprop_winv cs p t q p' nx' h' t' q'\<close> \<open>q' < length t'\<close> \<open>\<exists>e. t = take (length t) t'\<close>
+    \<open>visit_post cs (lidx (lneg (t' ! q'))) p' t' p1 nx1 h1 t1 b\<close> \<open>\<exists>e. t1 = t' @ e\<close> \<open>length t \<le> length t'\<close>
+  shows \<open>(b \<longrightarrow> wprop_winv cs p t q p1 nx1 h1 t1 (Suc q')) \<and>
+         wl_ok cs p1 nx1 h1 \<and> (\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p1 t1 k)\<close>
+proof -
+  have I: \<open>wl_ok cs p' nx' h'\<close> \<open>q \<le> q'\<close> \<open>\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p' t' k\<close>
+    \<open>WS cs p t (set (take q t)) \<longrightarrow> WS cs p' t' (set (take q' t'))\<close>
+    using assms(1) by (simp_all add: wprop_winv_def)
+  have V: \<open>wl_ok cs p1 nx1 h1\<close> \<open>\<forall>k \<le> length t'. WP cs p' t' k \<longrightarrow> WP cs p1 t1 k\<close>
+    \<open>b \<longrightarrow> (\<forall>w S. lidx w = lidx (lneg (t' ! q')) \<longrightarrow> lneg w \<in> set t' \<longrightarrow> S \<subseteq> set t' \<longrightarrow> WS cs p' t' S \<longrightarrow>
+        WS cs p1 t1 (insert (lneg w) S))\<close>
+    using assms(4) by (simp_all add: visit_post_def)
+  have wp: \<open>\<forall>k \<le> length t. WP cs p t k \<longrightarrow> WP cs p1 t1 k\<close> using I(3) V(2) assms(6) by auto
+  obtain e where e: \<open>t1 = t' @ e\<close> using assms(5) by blast
+  have \<open>b \<longrightarrow> (WS cs p t (set (take q t)) \<longrightarrow> WS cs p1 t1 (set (take (Suc q') t1)))\<close>
+  proof (intro impI)
+    assume b: b and ws: \<open>WS cs p t (set (take q t))\<close>
+    have w: \<open>lneg (lneg (t' ! q')) \<in> set t'\<close> using assms(2) by (simp add: lneg_lneg)
+    have \<open>WS cs p' t' (set (take q' t'))\<close> using I(4) ws by simp
+    then have \<open>WS cs p1 t1 (insert (lneg (lneg (t' ! q'))) (set (take q' t')))\<close>
+      using V(3)[rule_format, OF b refl w set_take_subset] by simp
+    moreover have \<open>set (take (Suc q') t1) = insert (t' ! q') (set (take q' t'))\<close>
+      using assms(2) e by (simp add: take_Suc_conv_app_nth)
+    ultimately show \<open>WS cs p1 t1 (set (take (Suc q') t1))\<close> by (simp add: lneg_lneg)
+  qed
+  then show ?thesis using V(1) wp I(2) by (simp add: wprop_winv_def)
 qed
 
 end

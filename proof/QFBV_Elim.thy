@@ -2156,4 +2156,115 @@ qed
 
 end
 
+subsection \<open>The chain below a free definition\<close>
+
+context elim_prob
+begin
+
+primrec below_f :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool\<close> where
+  \<open>below_f 0 j i = (i = j)\<close>
+| \<open>below_f (Suc f) j i = (i = j \<or> (j < en \<and> 2 \<le> kd ! j \<and> below_f f (cons j) i))\<close>
+
+lemma below_f_eq: \<open>j < f \<Longrightarrow> j < f' \<Longrightarrow> below_f f j i = below_f f' j i\<close>
+proof (induction f arbitrary: j f')
+  case 0
+  then show ?case by simp
+next
+  case (Suc g)
+  obtain g' where g': \<open>f' = Suc g'\<close> using Suc.prems by (cases f') auto
+  show ?case
+  proof (cases \<open>j < en \<and> 2 \<le> kd ! j\<close>)
+    case True
+    have \<open>cons j < j\<close> using cons_lt True by blast
+    then show ?thesis using Suc.IH[of \<open>cons j\<close> g'] Suc.prems True g' by simp
+  next
+    case False
+    then show ?thesis using g' by auto
+  qed
+qed
+
+text \<open>\<open>i\<close> is on the chain of consumed operands from \<open>j\<close> down.\<close>
+definition below :: \<open>nat \<Rightarrow> nat \<Rightarrow> bool\<close> where \<open>below j i = below_f (Suc j) j i\<close>
+
+lemma below_self: \<open>below j j\<close>
+  by (simp add: below_def)
+
+lemma below_step: \<open>j < en \<Longrightarrow> 2 \<le> kd ! j \<Longrightarrow> below j i \<longleftrightarrow> i = j \<or> below (cons j) i\<close>
+  using below_f_eq[of \<open>cons j\<close> j \<open>Suc (cons j)\<close> i] cons_lt by (simp add: below_def)
+
+lemma below_stop: \<open>\<not> (j < en \<and> 2 \<le> kd ! j) \<Longrightarrow> below j i \<longleftrightarrow> i = j\<close>
+  by (auto simp: below_def)
+
+lemma below_props: \<open>j < en \<Longrightarrow> below j i \<Longrightarrow> i \<le> j \<and> tp i = tp j\<close>
+proof (induction j rule: less_induct)
+  case (less j)
+  show ?case
+  proof (cases \<open>2 \<le> kd ! j\<close>)
+    case True
+    have c: \<open>cons j < j\<close> using cons_lt less.prems(1) True by blast
+    have tc: \<open>tp (cons j) = tp j\<close> using tp_par[of \<open>cons j\<close>] mk_cons par_cons less.prems(1) True c by simp
+    show ?thesis
+    proof (cases \<open>i = j\<close>)
+      case False
+      then have \<open>below (cons j) i\<close> using below_step[OF less.prems(1) True] less.prems(2) by simp
+      then show ?thesis using less.IH[OF c] c tc less.prems(1) by simp
+    qed simp
+  next
+    case False
+    then show ?thesis using below_stop less.prems by simp
+  qed
+qed
+
+lemma below_cons: \<open>j < en \<Longrightarrow> below j p \<Longrightarrow> p < en \<Longrightarrow> 2 \<le> kd ! p \<Longrightarrow> below j (cons p)\<close>
+proof (induction j rule: less_induct)
+  case (less j)
+  show ?case
+  proof (cases \<open>p = j\<close>)
+    case True
+    then show ?thesis using below_step less.prems below_self by simp
+  next
+    case False
+    then have jj: \<open>2 \<le> kd ! j\<close> using below_stop less.prems by auto
+    have c: \<open>cons j < j\<close> using cons_lt less.prems(1) jj by blast
+    have \<open>below (cons j) p\<close> using below_step[OF less.prems(1) jj] less.prems(2) False by simp
+    then have \<open>below (cons j) (cons p)\<close> using less.IH[OF c] c less.prems by simp
+    then show ?thesis using below_step[OF less.prems(1) jj] by simp
+  qed
+qed
+
+lemma tp_member: \<open>i < en \<Longrightarrow> mk ! i = 1 \<Longrightarrow> 2 \<le> kd ! tp i\<close>
+proof (induction \<open>en - i\<close> arbitrary: i rule: less_induct)
+  case less
+  note P = par[OF less.prems]
+  show ?case
+  proof (cases \<open>mk ! par i = 1\<close>)
+    case True
+    have \<open>en - par i < en - i\<close> using P less.prems by (meson diff_less_mono2)
+    then show ?thesis using less.hyps[of \<open>par i\<close>] P True tp_par[OF less.prems] by simp
+  next
+    case False
+    then show ?thesis using tp_par[OF less.prems] tp_non[of \<open>par i\<close>] P by simp
+  qed
+qed
+
+text \<open>Every definition whose top is \<open>t\<close> is on the chain below \<open>t\<close>.\<close>
+lemma tree_below: \<open>i < en \<Longrightarrow> below (tp i) i\<close>
+proof (induction \<open>en - i\<close> arbitrary: i rule: less_induct)
+  case less
+  show ?case
+  proof (cases \<open>mk ! i = 1\<close>)
+    case True
+    note P = par[OF less.prems True]
+    have \<open>en - par i < en - i\<close> using P less.prems by (meson diff_less_mono2)
+    then have \<open>below (tp (par i)) (par i)\<close> using less.hyps[of \<open>par i\<close>] P by simp
+    then have \<open>below (tp (par i)) (cons (par i))\<close> using below_cons tp_props P by blast
+    then show ?thesis using P tp_par[OF less.prems True] by simp
+  next
+    case False
+    then show ?thesis using tp_non[OF less.prems] below_self by simp
+  qed
+qed
+
+end
+
 end

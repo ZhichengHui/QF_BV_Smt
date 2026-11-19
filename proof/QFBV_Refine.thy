@@ -1550,7 +1550,8 @@ subsection \<open>The fuel bound\<close>
 
 definition fb_set :: \<open>CoreProblem \<Rightarrow> nat set\<close> where
   \<open>fb_set p \<equiv>
-     {fst (fst (encode_m p)) + 2, length (snd (fst (encode_m p))) + 2, length (cvar_widths p) + 2,
+     {fst (fst (encode_m p)) + 2, length (snd (fst (encode_m p))) + 2,
+      2 * (fst (fst (encode_m p)) + length (snd (fst (encode_m p)))), length (cvar_widths p) + 2,
       length (CoreProblem_defs p) + 2, length (CoreProblem_asserts p) + 2} \<union>
      set (map (\<lambda>w. w + 2) (cvar_widths p)) \<union>
      set (map (\<lambda>c. length c + 2) (snd (fst (encode_m p)))) \<union>

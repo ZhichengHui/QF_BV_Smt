@@ -4,8 +4,8 @@
 //! FixedSizeBitVectors and the logic QF_BV; `Term`). The solver first rewrites it, following the
 //! definitions of SMT-LIB, into the core language `CoreTerm` of fifteen basic operations
 //! (`lower_problem`); it then bit-blasts the core problem into a CNF formula with the Tseitin
-//! encoding and decides the CNF formula with DPLL (unit propagation and chronological
-//! backtracking). It answers either `Sat` with a model or `Unsat`.
+//! encoding and decides the CNF formula with DPLL (unit propagation over two watched literals per
+//! clause, and chronological backtracking). It answers either `Sat` with a model or `Unsat`.
 //!
 //! Booleans are bit-vectors of width 1 (1 is true). A bit-vector is a list of bits with the
 //! least significant bit first.
@@ -736,30 +736,218 @@ fn read_model(a: &Vec<Option<bool>>, vars: &Vec<Vec<Lit>>) -> Vec<Vec<bool>> {
     m
 }
 
+// Watched literals. Each clause of at least two literals watches two of them; slot `2c + k` is
+// the watch `k` of clause `c`. `pos[s]` is the position in its clause of the literal that slot `s`
+// watches, `next[s]` the next slot in the list of the same literal, and `head[lit_index(l)]` the
+// first slot of the list of literal `l`. A link at or above `next.len()` ends a list. The watches
+// only guide propagation: every unit or conflict they point to is confirmed by `clause_status`.
+
+fn lit_index(l: Lit) -> usize {
+    if l.neg {
+        2 * l.var + 1
+    } else {
+        2 * l.var
+    }
+}
+
+/// The watch lists of the clauses over `n` variables: every clause of at least two literals watches
+/// its first two.
+fn watch_init(cs: &Vec<Vec<Lit>>, n: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
+    let m = cs.len();
+    let mut pos: Vec<usize> = vec![0; 2 * m];
+    let mut next: Vec<usize> = vec![2 * m; 2 * m];
+    let mut head: Vec<usize> = vec![2 * m; 2 * n];
+    let mut c: usize = 0;
+    while c < m {
+        if cs[c].len() >= 2 {
+            let s = 2 * c;
+            pos[s + 1] = 1;
+            let x0 = lit_index(cs[c][0]);
+            next[s] = head[x0];
+            head[x0] = s;
+            let x1 = lit_index(cs[c][1]);
+            next[s + 1] = head[x1];
+            head[x1] = s + 1;
+        }
+        c += 1;
+    }
+    (pos, next, head)
+}
+
+/// A position of the clause, other than `i` and `j`, whose literal is not false.
+fn find_watch(a: &Vec<Option<bool>>, c: &Vec<Lit>, i: usize, j: usize) -> Option<usize> {
+    let mut k: usize = 0;
+    while k < c.len() {
+        if k != i && k != j && lit_value(a, c[k]) != Some(false) {
+            return Some(k);
+        }
+        k += 1;
+    }
+    None
+}
+
+fn set_at(v: Vec<usize>, i: usize, e: usize) -> Vec<usize> {
+    let mut v = v;
+    v[i] = e;
+    v
+}
+
+/// Moves the watch of slot `s` to position `k` of its clause, whose literal has index `y`: unlinks
+/// the slot from the list of the literal of index `x` (after slot `prev`, or at its head) and links
+/// it at the head of the list of `y`.
+fn move_watch(pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, s: usize, prev: usize, x: usize, k: usize, y: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
+    let ns = next[s];
+    let pos = set_at(pos, s, k);
+    if prev < next.len() {
+        let next = set_at(next, prev, ns);
+        let hy = head[y];
+        (pos, set_at(next, s, hy), set_at(head, y, s))
+    } else {
+        let head = set_at(head, x, ns);
+        let hy = head[y];
+        (pos, set_at(next, s, hy), set_at(head, y, s))
+    }
+}
+
+/// Visits slot `s` of the list of the literal of index `x`, which has become false (`prev` is the
+/// slot before it in the list). If the other watched literal of the clause is true, the slot stays;
+/// otherwise its watch moves to another literal that is not false, if there is one, and else the
+/// clause is unit (its literal is assigned and pushed on the trail) or in conflict. The first flag
+/// tells whether the slot stays on the list, the second is false on a conflict.
+fn visit_slot(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, x: usize, s: usize, prev: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, bool, bool) {
+    let mut a = a;
+    let mut trail = trail;
+    let c = s / 2;
+    let o = if s % 2 == 0 { s + 1 } else { s - 1 };
+    let i = pos[s];
+    let j = pos[o];
+    if i < cs[c].len() && j < cs[c].len() && lit_value(&a, cs[c][j]) != Some(true) {
+        match find_watch(&a, &cs[c], i, j) {
+            Some(k) => {
+                let y = lit_index(cs[c][k]);
+                let (p1, n1, h1) = move_watch(pos, next, head, s, prev, x, k, y);
+                return (p1, n1, h1, a, trail, false, true);
+            }
+            None => match clause_status(&a, &cs[c]) {
+                Status::Conflict => return (pos, next, head, a, trail, true, false),
+                Status::Unit(l) => {
+                    a[l.var] = Some(!l.neg);
+                    trail.push(l);
+                }
+                Status::Satisfied => {}
+                Status::Open => {}
+            },
+        }
+    }
+    (pos, next, head, a, trail, true, true)
+}
+
+/// Visits the clauses that watch the literal of index `x`, which has become false, slot by slot
+/// (`visit_slot`). The flag is false on a conflict, which ends the visit.
+fn visit(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, x: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, bool) {
+    let mut pos = pos;
+    let mut next = next;
+    let mut head = head;
+    let mut a = a;
+    let mut trail = trail;
+    let nil = next.len();
+    let mut s = head[x];
+    let mut prev = nil;
+    let mut steps: usize = 0;
+    while s < nil && steps < nil {
+        steps += 1;
+        let ns = next[s];
+        let (p1, n1, h1, a1, t1, keep, ok) = visit_slot(cs, pos, next, head, a, trail, x, s, prev);
+        pos = p1;
+        next = n1;
+        head = h1;
+        a = a1;
+        trail = t1;
+        if !ok {
+            return (pos, next, head, a, trail, false);
+        }
+        if keep {
+            prev = s;
+        }
+        s = ns;
+    }
+    (pos, next, head, a, trail, true)
+}
+
+/// Unit propagation over the watches: visits the clauses watching the negation of every trail
+/// entry from position `q` on. The flag is false on a conflict.
+fn wpropagate(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, q: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, usize, bool) {
+    let mut pos = pos;
+    let mut next = next;
+    let mut head = head;
+    let mut a = a;
+    let mut trail = trail;
+    let mut q = q;
+    while q < trail.len() {
+        let x = lit_index(lit_neg(trail[q]));
+        q += 1;
+        let (p1, n1, h1, a1, t1, ok) = visit(cs, pos, next, head, a, trail, x);
+        pos = p1;
+        next = n1;
+        head = h1;
+        a = a1;
+        trail = t1;
+        if !ok {
+            return (pos, next, head, a, trail, q, false);
+        }
+    }
+    (pos, next, head, a, trail, q, true)
+}
+
 /// A total assignment of the `n` variables that satisfies the clauses, if there is one.
 ///
 /// The search assigns in place and records the true literals in order on the trail; `lim` holds
 /// the trail positions of the decisions, so that the decision level of an entry is the number of
-/// decisions at or before it. On a conflict the last decision is undone with every entry after it
-/// and its negation is pushed as an implied entry (chronological backtracking).
+/// decisions at or before it. A pass over the clauses first assigns the unit clauses; then the
+/// watches propagate the trail entries from position `q` on. On a conflict the last decision is
+/// undone with every entry after it and its negation is pushed as an implied entry (chronological
+/// backtracking). A total assignment is checked against every clause before it is returned.
 fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
-    let mut a: Vec<Option<bool>> = vec![None; n];
-    let mut trail: Vec<Lit> = Vec::new();
+    let (pos0, next0, head0) = watch_init(cs, n);
+    let mut pos = pos0;
+    let mut next = next0;
+    let mut head = head0;
+    let (a0, t0, ok0) = propagate_pass(cs, vec![None; n], Vec::new());
+    if !ok0 {
+        return None;
+    }
+    let mut a: Vec<Option<bool>> = a0;
+    let mut trail: Vec<Lit> = t0;
     let mut lim: Vec<usize> = Vec::new();
+    let mut q: usize = 0;
     loop {
-        let (a1, t1, ok) = propagate(cs, a, trail);
+        let (p1, n1, h1, a1, t1, q1, ok) = wpropagate(cs, pos, next, head, a, trail, q);
+        pos = p1;
+        next = n1;
+        head = h1;
         a = a1;
         trail = t1;
+        q = q1;
+        let mut conflict = !ok;
         if ok {
             match find_unassigned(&a) {
-                None => return Some(a),
+                None => {
+                    let (a2, t2, ok2) = propagate(cs, a, trail);
+                    if ok2 {
+                        return Some(a2);
+                    }
+                    a = a2;
+                    trail = t2;
+                    conflict = true;
+                }
                 Some(v) => {
                     lim.push(trail.len());
                     a[v] = Some(true);
                     trail.push(Lit { var: v, neg: false });
                 }
             }
-        } else {
+        }
+        if conflict {
             match lim.pop() {
                 None => return None,
                 Some(p) => {
@@ -769,6 +957,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     trail = t2;
                     a[d.var] = Some(d.neg);
                     trail.push(lit_neg(d));
+                    q = p;
                 }
             }
         }

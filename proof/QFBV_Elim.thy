@@ -1508,4 +1508,157 @@ qed
 
 end
 
+subsection \<open>A model of the problem gives a model of the eliminated problem\<close>
+
+lemma bzext_take: \<open>length a \<le> w \<Longrightarrow> take (length a) (bzext_m a w) = a\<close>
+  by (rule nth_equalityI) (simp_all add: bzext_m_def)
+
+lemma bzext_id: \<open>length a = w \<Longrightarrow> bzext_m a w = a\<close>
+  by (rule nth_equalityI) (simp_all add: bzext_m_def)
+
+lemma bextract_take: \<open>Suc hi \<le> length a \<Longrightarrow> bextract_m a hi 0 = take (Suc hi) a\<close>
+  by (rule nth_equalityI) (simp_all add: bextract_m_def nth_map_upt del: upt_Suc)
+
+lemma cwt_ref_lt: \<open>cwt ws ds t \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> is_ref x u \<Longrightarrow> x < length ds\<close>
+  using wt_sub[of ws ds t u] by (cases u) (auto simp: is_ref_def)
+
+lemma cwt_var_lt: \<open>cwt ws ds t \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> is_var x u \<Longrightarrow> x < length ws\<close>
+  using wt_sub[of ws ds t u] by (cases u) (auto simp: is_var_def)
+
+text \<open>The values of the definitions under an assignment: each is the value of its term.\<close>
+lemma eval_defs_props:
+  assumes \<open>cdefs_wt ws [] D\<close> \<open>ws = map length m\<close>
+  shows \<open>map length (eval_defs_from m [] D) = cdef_widths ws [] D\<close>
+    \<open>j < length D \<Longrightarrow> eval_defs_from m [] D ! j = eval_m m (eval_defs_from m [] D) (D ! j)\<close>
+proof -
+  show \<open>map length (eval_defs_from m [] D) = cdef_widths ws [] D\<close>
+    using eval_defs_from[OF assms(1,2), of \<open>[]\<close>] by simp
+  assume j: \<open>j < length D\<close>
+  have w: \<open>cwt ws (cdef_widths ws [] (take j D)) (D ! j)\<close> using cdefs_wt_nth[OF assms(1) j] .
+  have l: \<open>length (cdef_widths ws [] (take j D)) = j\<close> using j by (simp add: cdef_widths_length)
+  have \<open>eval_m m (take j (eval_defs_from m [] D)) (D ! j) = eval_m m (eval_defs_from m [] D) (D ! j)\<close>
+    using cwt_ref_lt[OF w] l eval_defs_len[of m \<open>[]\<close> D] j by (intro eval_m_cong) auto
+  then show \<open>eval_defs_from m [] D ! j = eval_m m (eval_defs_from m [] D) (D ! j)\<close>
+    using eval_defs_nth[OF j] by simp
+qed
+
+lemma csat_bits:
+  assumes \<open>cproblem_wt p\<close> \<open>map length m = cvar_widths p\<close>
+  shows \<open>csatisfies p m \<longleftrightarrow> (\<forall>t \<in> set (CoreProblem_asserts p). bits_nat (eval_m m (eval_defs_m p m) t) = 1)\<close>
+proof -
+  let ?ws = \<open>cvar_widths p\<close> and ?D = \<open>CoreProblem_defs p\<close>
+  have dw: \<open>cdefs_wt ?ws [] ?D\<close> using assms(1) by (simp add: cproblem_wt_def Let_def)
+  note E = eval_defs_m_correct[OF dw assms(2)[symmetric]]
+  have H: \<open>bits_nat (eval_m m (eval_defs_m p m) t) =
+      ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t\<close>
+    if \<open>t \<in> set (CoreProblem_asserts p)\<close> for t
+  proof -
+    have \<open>cwt ?ws (cdef_widths ?ws [] ?D) t\<close> using assms(1) that by (simp add: cproblem_wt_def Let_def)
+    note C = eval_m_correct[OF this assms(2)[symmetric] conjunct1[OF E, symmetric]]
+    show ?thesis using conjunct2[OF C] conjunct2[OF E] by (simp only:)
+  qed
+  show ?thesis
+    unfolding csatisfies_def Let_def
+  proof (intro iffI ballI)
+    fix t assume A: \<open>\<forall>t \<in> set (CoreProblem_asserts p).
+      ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
+      and t: \<open>t \<in> set (CoreProblem_asserts p)\<close>
+    have \<open>ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
+      using A t by blast
+    with H[OF t] show \<open>bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close> by (rule trans)
+  next
+    fix t assume A: \<open>\<forall>t \<in> set (CoreProblem_asserts p). bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close>
+      and t: \<open>t \<in> set (CoreProblem_asserts p)\<close>
+    have \<open>bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close> using A t by blast
+    with H[OF t, symmetric]
+    show \<open>ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
+      by (rule trans)
+  qed
+qed
+
+context elim_prob
+begin
+
+definition isleaf :: \<open>nat \<Rightarrow> bool\<close> where
+  \<open>isleaf x = (\<exists>l<en. kd ! l = 1 \<and> is_var x (eD ! l))\<close>
+
+definition ldef :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>ldef x = (SOME l. l < en \<and> kd ! l = 1 \<and> is_var x (eD ! l))\<close>
+
+lemma ldef: \<open>isleaf x \<Longrightarrow> ldef x < en \<and> kd ! ldef x = 1 \<and> is_var x (eD ! ldef x)\<close>
+  unfolding isleaf_def ldef_def by (rule someI_ex)
+
+text \<open>The variable of a leaf occurs in its definition only.\<close>
+lemma leaf_var_unique:
+  assumes \<open>l < en\<close> \<open>kd ! l = 1\<close> \<open>is_var x (eD ! l)\<close> \<open>k < en\<close> \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_var x u\<close>
+  shows \<open>k = l\<close>
+proof -
+  obtain i where i: \<open>eD ! l = CoreTerm_Var i\<close> \<open>vcnt (eD @ eA) (unat i) = 1\<close> using kd_1[OF assms(1,2)] by blast
+  have x: \<open>x = unat i\<close> using assms(3) i(1) by (simp add: is_var_def)
+  show ?thesis using var_unique[of x k l u \<open>eD ! l\<close>] i x assms by (simp add: csubterms_self)
+qed
+
+lemma leaf_var_not_A:
+  assumes \<open>l < en\<close> \<open>kd ! l = 1\<close> \<open>is_var x (eD ! l)\<close> \<open>t \<in> set eA\<close> \<open>u \<in> set (csubterms t)\<close> \<open>is_var x u\<close>
+  shows False
+proof -
+  obtain i where i: \<open>eD ! l = CoreTerm_Var i\<close> \<open>vcnt (eD @ eA) (unat i) = 1\<close> using kd_1[OF assms(1,2)] by blast
+  have x: \<open>x = unat i\<close> using assms(3) i(1) by (simp add: is_var_def)
+  show False using var_not_A[of x l \<open>eD ! l\<close> t u] i x assms by (simp add: csubterms_self)
+qed
+
+text \<open>A consumed definition is referred to by its parent only.\<close>
+lemma member_ref:
+  assumes \<open>x < en\<close> \<open>mk ! x = 1\<close> \<open>k < en\<close> \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_ref x u\<close>
+  shows \<open>k = par x\<close>
+proof -
+  note P = par[OF assms(1,2)]
+  obtain u' where u': \<open>u' \<in> set (csubterms (eD ! par x))\<close> \<open>is_ref x u'\<close> using kd_cons[of \<open>par x\<close>] P by auto
+  have \<open>rcnt (eD @ eA) x = 1\<close> using kd_cons[of \<open>par x\<close>] P by auto
+  then show ?thesis using ref_unique[of x k \<open>par x\<close> u u'] P assms u' by simp
+qed
+
+lemma member_not_A:
+  assumes \<open>x < en\<close> \<open>mk ! x = 1\<close> \<open>t \<in> set eA\<close> \<open>u \<in> set (csubterms t)\<close> \<open>is_ref x u\<close>
+  shows False
+proof -
+  note P = par[OF assms(1,2)]
+  obtain u' where u': \<open>u' \<in> set (csubterms (eD ! par x))\<close> \<open>is_ref x u'\<close> using kd_cons[of \<open>par x\<close>] P by auto
+  have \<open>rcnt (eD @ eA) x = 1\<close> using kd_cons[of \<open>par x\<close>] P by auto
+  then show False using ref_not_A[of x \<open>par x\<close> u' t u] P assms u' by simp
+qed
+
+lemma kd0_not_member: \<open>j < en \<Longrightarrow> kd ! j = 0 \<Longrightarrow> mk ! j \<noteq> 1\<close>
+  using mk_char(1) kd_cons by fastforce
+
+text \<open>The variable at the bottom of the chain of a free definition.\<close>
+definition lvar :: \<open>nat \<Rightarrow> nat\<close> where \<open>lvar j = var_index_m (eD ! leaf j)\<close>
+
+lemma lvar:
+  assumes \<open>j < en\<close> \<open>kd ! j \<noteq> 0\<close>
+  shows \<open>lvar j < length ews \<and> ews ! lvar j = eds ! leaf j \<and> isleaf (lvar j) \<and> ldef (lvar j) = leaf j \<and>
+    eD ! leaf j = CoreTerm_Var (word_of_nat (lvar j))\<close>
+proof -
+  note L = leaf_props[OF assms]
+  have ll: \<open>leaf j < en\<close> using L assms(1) by simp
+  obtain i where i: \<open>eD ! leaf j = CoreTerm_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF ll] L by blast
+  have lv: \<open>lvar j = unat i\<close> using i by (simp add: lvar_def var_index_m_def)
+  have iv: \<open>is_var (lvar j) (eD ! leaf j)\<close> using i lv by (simp add: is_var_def)
+  have il: \<open>isleaf (lvar j)\<close> using ll L iv by (auto simp: isleaf_def)
+  have \<open>ldef (lvar j) = leaf j\<close>
+    using ldef[OF il] leaf_var_unique[OF ll _ iv, of \<open>ldef (lvar j)\<close> \<open>eD ! ldef (lvar j)\<close>] L csubterms_self by auto
+  moreover have \<open>ews ! lvar j = eds ! leaf j\<close> using eds_nth[OF ll] i lv by simp
+  ultimately show ?thesis using i lv il by simp
+qed
+
+definition m2_of :: \<open>bool list list \<Rightarrow> bool list list\<close> where
+  \<open>m2_of m = map (\<lambda>x. if isleaf x then bzext_m (eval_defs_m q m ! tp (ldef x)) (ews ! x) else m ! x) [0..<length ews]\<close>
+
+theorem elim_complete:
+  assumes \<open>cis_model q m\<close>
+  shows \<open>cis_model q2 (m2_of m)\<close>
+  sorry
+
+end
+
 end

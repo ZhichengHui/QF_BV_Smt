@@ -2,6 +2,10 @@ theory QFBV_Proof
   imports QFBV_Refine QFBV_Eval QFBV_Encode QFBV_Dpll QFBV_Bound QFBV_LowerRefine QFBV_LowerBound QFBV_LowerCount QFBV_ElimSpec
 begin
 
+text \<open>The proofs below use the equations of \<^const>\<open>lower_m\<close> of \<^verbatim>\<open>QFBV_LowerRefine\<close>; importing
+  \<^verbatim>\<open>QFBV_ElimSpec\<close> (through \<^verbatim>\<open>QFBV_Elim\<close>) brings back the original ones.\<close>
+declare lower_m.simps(4-13) [simp del]
+
 lemma lin1: \<open>1 \<le> w + 1\<close> for w :: nat
   by simp
 
@@ -1326,12 +1330,19 @@ proof (cases \<open>problem_wt p\<close>)
   have unsat: \<open>\<forall>m. \<not> cis_model q2 m \<Longrightarrow> \<forall>m. \<not> is_model p m\<close> using EF(5) cm by blast
   have sat: \<open>cis_model q2 m2 \<Longrightarrow> recon_pre urust_fuel q kd mk q2 m2 \<and> is_model p (reconstruct_m q kd mk q2 m2)\<close> for m2
     using EF(6) cm by blast
+  have SP: \<open>map unat kind = kd \<Longrightarrow> map unat mark = mk \<Longrightarrow> cis_model q2 m2 \<Longrightarrow>
+      recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2\<close>
+    \<open>map unat kind = kd \<Longrightarrow> map unat mark = mk \<Longrightarrow> cis_model q2 m2 \<Longrightarrow>
+      is_model p (reconstruct_m q (map unat kind) (map unat mark) q2 m2)\<close> for kind mark :: \<open>64 word list\<close> and m2
+    using sat[of m2] by simp_all
+  have F64: \<open>fuel_bound q < 18446744073709551616\<close> using EF(1) by simp
   show ?thesis
     apply (crush_boot f: solve_def contract: solve_contract_def)
     apply (crush_base specs add: lower_problem_spec elim_spec solve_core_spec[OF sz2 EF(4) df] reconstruct_spec
         contracts add: lower_problem_contract_def elim_contract_def csolve_contract_def reconstruct_contract_def
-        simp add: lp_pre_def True assms q cwt fq EF(1) EF(2) e)
-    using unsat sat by (auto split: Answer.splits)
+        simp add: lp_pre_def True assms q cwt fq F64 EF(2) e SP unsat split: Answer.splits)
+    apply (all \<open>use unsat sat in \<open>auto split: Answer.splits\<close>\<close>)
+    done
 next
   case False
   then have F: \<open>problem_wt p = False\<close> by simp

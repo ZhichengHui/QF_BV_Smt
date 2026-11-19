@@ -1766,10 +1766,4 @@ qed
 
 end
 
-
-text \<open>The rewriting rules of \<^verbatim>\<open>QFBV_LowerRefine\<close> for \<^const>\<open>lower_m\<close>, as the theories importing this
-  one expect them (the merge with \<^verbatim>\<open>QFBV_Elim\<close> brings back the equations it removes).\<close>
-declare lower_m.simps(4-13) [simp del]
-declare lower_m_simps' [simp]
-
 end

@@ -276,4 +276,226 @@ lemma occ_res:
       \<open>CoreProblem_defs q @ CoreProblem_asserts q\<close>]
   by (simp_all add: occ_res_def del: vcnt_simps rcnt_simps)
 
+subsection \<open>The analysis loop\<close>
+
+lemma ana_fold:
+  assumes \<open>k \<le> length D\<close>
+    \<open>foldl (elim_step ws D vc rc) ([], [], replicate (length D) 0, []) [0..<k] = (dw, kind, mark, defs)\<close>
+  shows \<open>dw = cdef_widths ws [] (take k D) \<and> length kind = k \<and> length mark = length D \<and> length defs = k \<and>
+    (\<forall>i<k. kind ! i = free_kind_m D (take i dw) vc rc (take i kind) (D ! i) \<and>
+       defs ! i = (if 2 \<le> kind ! i then rewrite_m (take i dw) (consumed_m (D ! i) (kind ! i) (length D)) (dw ! i)
+                   else D ! i))\<close>
+  using assms
+proof (induction k arbitrary: dw kind mark defs)
+  case 0
+  then show ?case by auto
+next
+  case (Suc k)
+  obtain dw0 kind0 mark0 defs0 where s0:
+    \<open>foldl (elim_step ws D vc rc) ([], [], replicate (length D) 0, []) [0..<k] = (dw0, kind0, mark0, defs0)\<close>
+    by (cases \<open>foldl (elim_step ws D vc rc) ([], [], replicate (length D) 0, []) [0..<k]\<close>)
+  have IH: \<open>dw0 = cdef_widths ws [] (take k D) \<and> length kind0 = k \<and> length mark0 = length D \<and> length defs0 = k \<and>
+    (\<forall>i<k. kind0 ! i = free_kind_m D (take i dw0) vc rc (take i kind0) (D ! i) \<and>
+       defs0 ! i = (if 2 \<le> kind0 ! i then rewrite_m (take i dw0) (consumed_m (D ! i) (kind0 ! i) (length D)) (dw0 ! i)
+                   else D ! i))\<close>
+    using Suc.IH[OF _ s0] Suc.prems(1) by simp
+  have st: \<open>elim_step ws D vc rc (dw0, kind0, mark0, defs0) k = (dw, kind, mark, defs)\<close>
+    using Suc.prems(2) s0 by simp
+  have lk: \<open>length dw0 = k\<close> using IH Suc.prems(1) by (simp add: cdef_widths_length min_def)
+  have cw: \<open>cdef_widths ws [] (take (Suc k) D) = dw0 @ [cwidth ws dw0 (D ! k)]\<close>
+    using IH Suc.prems(1) by (simp add: take_Suc_conv_app_nth cdef_widths_append)
+  show ?case
+  proof -
+    let ?c = \<open>free_kind_m D dw0 vc rc kind0 (D ! k)\<close>
+    have e: \<open>dw = dw0 @ [cwidth ws dw0 (D ! k)] \<and> kind = kind0 @ [?c] \<and> length mark = length D \<and>
+      defs = defs0 @ [if 2 \<le> ?c then rewrite_m dw0 (consumed_m (D ! k) ?c (length D)) (cwidth ws dw0 (D ! k)) else D ! k]\<close>
+      using st IH by (auto simp: elim_step_def Let_def split: if_splits)
+    have A: \<open>\<forall>i<Suc k. kind ! i = free_kind_m D (take i dw) vc rc (take i kind) (D ! i) \<and>
+       defs ! i = (if 2 \<le> kind ! i then rewrite_m (take i dw) (consumed_m (D ! i) (kind ! i) (length D)) (dw ! i) else D ! i)\<close>
+    proof (intro allI impI)
+      fix i assume i: \<open>i < Suc k\<close>
+      show \<open>kind ! i = free_kind_m D (take i dw) vc rc (take i kind) (D ! i) \<and>
+       defs ! i = (if 2 \<le> kind ! i then rewrite_m (take i dw) (consumed_m (D ! i) (kind ! i) (length D)) (dw ! i) else D ! i)\<close>
+      proof (cases \<open>i < k\<close>)
+        case True
+        then show ?thesis using IH e lk by (simp add: nth_append)
+      next
+        case False
+        then have \<open>i = k\<close> using i by simp
+        then show ?thesis using IH e lk by (simp add: nth_append)
+      qed
+    qed
+    show ?thesis using e IH cw lk A by simp
+  qed
+qed
+
+lemma fo_ref:
+  assumes \<open>free_once_m kind rc (ref_index_m a (length kind))\<close>
+  shows \<open>\<exists>i. a = CoreTerm_Ref i \<and> free_once_m kind rc (unat i)\<close>
+  using assms by (cases a) (simp_all add: ref_index_m_def free_once_m_def)
+
+lemma fo_ref_eq: \<open>free_once_m kind rc (ref_index_m a (length kind)) \<Longrightarrow> length kind \<le> N \<Longrightarrow>
+    ref_index_m a N = ref_index_m a (length kind)\<close>
+  by (cases a) (simp_all add: ref_index_m_def free_once_m_def)
+
+lemma free_kind_le: \<open>free_kind_m D dw vc rc kind t \<le> 4\<close>
+  unfolding free_kind_m_def Let_def by (cases t) (auto split: BinOp_split)
+
+lemma free_kind_simps:
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Const bs) = 0\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Var i) = (if vc ! unat i = 1 then 1 else 0)\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Ref i) = 0\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Not a) =
+     (if free_once_m kind rc (ref_index_m a (length kind)) then 2 else 0)\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Extract hi lo a) =
+     (if free_once_m kind rc (ref_index_m a (length kind)) then 2 else 0)\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Ite x a b) =
+     (if free_once_m kind rc (ref_index_m x (length kind)) \<and> ref_index_m a (length kind) < length kind \<and>
+         ref_index_m b (length kind) < length kind \<and>
+         bit_const_m (D ! ref_index_m a (length kind)) < 2 \<and> bit_const_m (D ! ref_index_m b (length kind)) < 2 \<and>
+         bit_const_m (D ! ref_index_m a (length kind)) \<noteq> bit_const_m (D ! ref_index_m b (length kind))
+      then 2 else 0)\<close>
+  by (simp_all add: free_kind_m_def Let_def)
+
+lemma free_kind_Bin:
+  \<open>free_kind_m D dw vc rc kind (CoreTerm_Bin op a b) =
+     (let ia = ref_index_m a (length kind); ib = ref_index_m b (length kind); fo = free_once_m kind rc in
+      if op = BinOp_Add \<or> op = BinOp_Xor then (if fo ia then 2 else if fo ib then 3 else 0)
+      else if op = BinOp_Eq then (if fo ia \<and> 0 < dw ! ia then 2 else if fo ib \<and> 0 < dw ! ib then 3 else 0)
+      else if op = BinOp_Mul \<or> op = BinOp_Udiv then (if fo ia \<and> fo ib \<and> ia \<noteq> ib then 4 else 0)
+      else 0)\<close>
+  by (cases op) (simp_all add: free_kind_m_def Let_def)
+
+lemma free_kind_1:
+  assumes h: \<open>free_kind_m D dw vc rc kind t = 1\<close>
+  shows \<open>\<exists>i. t = CoreTerm_Var i \<and> vc ! unat i = 1\<close>
+proof (cases t)
+  case (CoreTerm_Bin op a b)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2, 3, 4}\<close> unfolding CoreTerm_Bin free_kind_Bin Let_def by simp
+  then show ?thesis using h by simp
+next
+  case (CoreTerm_Ite x a b)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTerm_Ite free_kind_simps by simp
+  then show ?thesis using h by simp
+next
+  case (CoreTerm_Not a)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTerm_Not free_kind_simps by simp
+  then show ?thesis using h by simp
+next
+  case (CoreTerm_Extract hi lo a)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTerm_Extract free_kind_simps by simp
+  then show ?thesis using h by simp
+next
+  case (CoreTerm_Const bs)
+  then show ?thesis using h by (simp only: free_kind_simps)
+next
+  case (CoreTerm_Ref i)
+  then show ?thesis using h by (simp only: free_kind_simps)
+next
+  case (CoreTerm_Var i)
+  have \<open>(if vc ! unat i = 1 then 1 else 0) = (1::nat)\<close> using h free_kind_simps(2)[of D dw vc rc kind i] CoreTerm_Var by simp
+  then have \<open>vc ! unat i = 1\<close> by (cases \<open>vc ! unat i = 1\<close>) simp_all
+  then show ?thesis using CoreTerm_Var by blast
+qed
+
+text \<open>The free definitions of kind 2 to 4, by their shapes.\<close>
+lemma free_kind_shape:
+  assumes \<open>c = free_kind_m D dw vc rc kind t\<close> \<open>2 \<le> c\<close>
+  shows \<open>(\<exists>a. t = CoreTerm_Not (CoreTerm_Ref a) \<and> c = 2 \<and> free_once_m kind rc (unat a))
+    \<or> (\<exists>hi lo a. t = CoreTerm_Extract hi lo (CoreTerm_Ref a) \<and> c = 2 \<and> free_once_m kind rc (unat a))
+    \<or> (\<exists>op a b. t = CoreTerm_Bin op a b \<and> (op = BinOp_Add \<or> op = BinOp_Xor) \<and>
+         (c = 2 \<and> (\<exists>i. a = CoreTerm_Ref i \<and> free_once_m kind rc (unat i)) \<or>
+          c = 3 \<and> (\<exists>i. b = CoreTerm_Ref i \<and> free_once_m kind rc (unat i))))
+    \<or> (\<exists>a b. t = CoreTerm_Bin BinOp_Eq a b \<and>
+         (c = 2 \<and> (\<exists>i. a = CoreTerm_Ref i \<and> free_once_m kind rc (unat i) \<and> 0 < dw ! unat i) \<or>
+          c = 3 \<and> (\<exists>i. b = CoreTerm_Ref i \<and> free_once_m kind rc (unat i) \<and> 0 < dw ! unat i)))
+    \<or> (\<exists>op a b. t = CoreTerm_Bin op (CoreTerm_Ref a) (CoreTerm_Ref b) \<and> (op = BinOp_Mul \<or> op = BinOp_Udiv) \<and> c = 4 \<and>
+         free_once_m kind rc (unat a) \<and> free_once_m kind rc (unat b) \<and> unat a \<noteq> unat b)
+    \<or> (\<exists>x a b. t = CoreTerm_Ite (CoreTerm_Ref x) (CoreTerm_Ref a) (CoreTerm_Ref b) \<and> c = 2 \<and>
+         free_once_m kind rc (unat x) \<and> unat a < length kind \<and> unat b < length kind \<and>
+         bit_const_m (D ! unat a) < 2 \<and> bit_const_m (D ! unat b) < 2 \<and> bit_const_m (D ! unat a) \<noteq> bit_const_m (D ! unat b))\<close>
+proof -
+  let ?fo = \<open>free_once_m kind rc\<close> and ?n = \<open>length kind\<close>
+  have ri: \<open>ref_index_m a ?n < ?n \<Longrightarrow> \<exists>i. a = CoreTerm_Ref i \<and> unat i = ref_index_m a ?n\<close> for a
+    by (cases a) (simp_all add: ref_index_m_def)
+  show ?thesis
+  proof (cases t)
+    case (CoreTerm_Not a)
+    then have fo: \<open>?fo (ref_index_m a ?n)\<close> and c: \<open>c = 2\<close>
+      using assms unfolding CoreTerm_Not free_kind_simps by (simp_all split: if_splits)
+    obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF fo] by blast
+    show ?thesis using CoreTerm_Not i c by simp
+  next
+    case (CoreTerm_Extract hi lo a)
+    then have fo: \<open>?fo (ref_index_m a ?n)\<close> and c: \<open>c = 2\<close>
+      using assms unfolding CoreTerm_Extract free_kind_simps by (simp_all split: if_splits)
+    obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF fo] by blast
+    show ?thesis using CoreTerm_Extract i c by simp
+  next
+    case (CoreTerm_Ite x a b)
+    then have fo: \<open>?fo (ref_index_m x ?n)\<close> and c: \<open>c = 2\<close>
+      and ia: \<open>ref_index_m a ?n < ?n\<close> and ib: \<open>ref_index_m b ?n < ?n\<close>
+      and bc: \<open>bit_const_m (D ! ref_index_m a ?n) < 2\<close> \<open>bit_const_m (D ! ref_index_m b ?n) < 2\<close>
+        \<open>bit_const_m (D ! ref_index_m a ?n) \<noteq> bit_const_m (D ! ref_index_m b ?n)\<close>
+      using assms unfolding CoreTerm_Ite free_kind_simps by (simp_all split: if_splits)
+    obtain ix where x: \<open>x = CoreTerm_Ref ix\<close> \<open>?fo (unat ix)\<close> using fo_ref[OF fo] by blast
+    obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>unat i = ref_index_m a ?n\<close> using ri[OF ia] by blast
+    obtain j where j: \<open>b = CoreTerm_Ref j\<close> \<open>unat j = ref_index_m b ?n\<close> using ri[OF ib] by blast
+    show ?thesis using CoreTerm_Ite x i j c ia ib bc by auto
+  next
+    case (CoreTerm_Bin op a b)
+    let ?ia = \<open>ref_index_m a ?n\<close> and ?ib = \<open>ref_index_m b ?n\<close>
+    have cv: \<open>c = (if op = BinOp_Add \<or> op = BinOp_Xor then (if ?fo ?ia then 2 else if ?fo ?ib then 3 else 0)
+      else if op = BinOp_Eq then (if ?fo ?ia \<and> 0 < dw ! ?ia then 2 else if ?fo ?ib \<and> 0 < dw ! ?ib then 3 else 0)
+      else if op = BinOp_Mul \<or> op = BinOp_Udiv then (if ?fo ?ia \<and> ?fo ?ib \<and> ?ia \<noteq> ?ib then 4 else 0)
+      else 0)\<close>
+      using assms(1) unfolding CoreTerm_Bin free_kind_Bin Let_def .
+    consider (ax) \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> | (eq) \<open>op = BinOp_Eq\<close> | (md) \<open>op = BinOp_Mul \<or> op = BinOp_Udiv\<close>
+      | (other) \<open>\<not> (op = BinOp_Add \<or> op = BinOp_Xor)\<close> \<open>op \<noteq> BinOp_Eq\<close> \<open>\<not> (op = BinOp_Mul \<or> op = BinOp_Udiv)\<close>
+      by blast
+    then show ?thesis
+    proof cases
+      case ax
+      show ?thesis
+      proof (cases \<open>?fo ?ia\<close>)
+        case True
+        then show ?thesis using cv ax fo_ref[OF True] CoreTerm_Bin by auto
+      next
+        case False
+        then have \<open>?fo ?ib\<close> using cv ax assms(2) by (auto split: if_splits)
+        then show ?thesis using cv ax False fo_ref[of kind rc b] CoreTerm_Bin by auto
+      qed
+    next
+      case eq
+      show ?thesis
+      proof (cases \<open>?fo ?ia \<and> 0 < dw ! ?ia\<close>)
+        case True
+        then show ?thesis using cv eq fo_ref[of kind rc a] CoreTerm_Bin by (auto simp: ref_index_m_def)
+      next
+        case False
+        then have \<open>?fo ?ib \<and> 0 < dw ! ?ib\<close> using cv eq assms(2) by (auto split: if_splits)
+        then show ?thesis using cv eq False fo_ref[of kind rc b] CoreTerm_Bin by (auto simp: ref_index_m_def)
+      qed
+    next
+      case md
+      then have f: \<open>?fo ?ia\<close> \<open>?fo ?ib\<close> \<open>?ia \<noteq> ?ib\<close> and c: \<open>c = 4\<close> using cv assms(2) by (auto split: if_splits)
+      obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF f(1)] by blast
+      obtain j where j: \<open>b = CoreTerm_Ref j\<close> \<open>?fo (unat j)\<close> using fo_ref[OF f(2)] by blast
+      show ?thesis using CoreTerm_Bin md i j c f(3) by (auto simp: ref_index_m_def)
+    next
+      case other
+      then show ?thesis using cv assms(2) by simp
+    qed
+  next
+    case (CoreTerm_Const bs)
+    then show ?thesis using assms unfolding CoreTerm_Const free_kind_simps by simp
+  next
+    case (CoreTerm_Ref i)
+    then show ?thesis using assms unfolding CoreTerm_Ref free_kind_simps by simp
+  next
+    case (CoreTerm_Var i)
+    then show ?thesis using assms unfolding CoreTerm_Var free_kind_simps by (simp split: if_splits)
+  qed
+qed
+
 end

@@ -40,6 +40,23 @@ lemma wfit_simps:
   \<open>wfit ws ds t \<Longrightarrow> cwidth ws ds t < 2 ^ 64\<close>
   using csubterms_self[of t] by (auto simp: wfit_def)
 
+lemma wfit_iff:
+  \<open>wfit ws ds (CoreTerm_Not a) \<longleftrightarrow> cwidth ws ds a < 2 ^ 64 \<and> wfit ws ds a\<close>
+  \<open>wfit ws ds (CoreTerm_Bin op a b) \<longleftrightarrow> cwidth ws ds (CoreTerm_Bin op a b) < 2 ^ 64 \<and> wfit ws ds a \<and> wfit ws ds b\<close>
+  \<open>wfit ws ds (CoreTerm_Extract hi lo a) \<longleftrightarrow> unat hi - unat lo + 1 < 2 ^ 64 \<and> wfit ws ds a\<close>
+  \<open>wfit ws ds (CoreTerm_Ite c a b) \<longleftrightarrow> cwidth ws ds a < 2 ^ 64 \<and> wfit ws ds c \<and> wfit ws ds a \<and> wfit ws ds b\<close>
+  by (auto simp: wfit_def)
+
+lemma unat_small:
+  fixes w :: \<open>64 word\<close>
+  shows \<open>unat w = 1 \<longleftrightarrow> w = 1\<close> \<open>unat w = 2 \<longleftrightarrow> w = 2\<close> \<open>unat w = 3 \<longleftrightarrow> w = 3\<close>
+    \<open>unat w = 4 \<longleftrightarrow> w = 4\<close> \<open>unat w = Suc 0 \<longleftrightarrow> w = 1\<close>
+  by (auto simp: word_unat_eq_iff)
+
+text \<open>The constants of \<open>t\<close> have fewer than \<open>2 ^ 64\<close> bits.\<close>
+definition cfit :: \<open>CoreTerm \<Rightarrow> bool\<close> where
+  \<open>cfit t \<equiv> \<forall>bs. t = CoreTerm_Const bs \<longrightarrow> length bs < 2 ^ 64\<close>
+
 subsection \<open>Preconditions of the reconstruction\<close>
 
 text \<open>What the body of \<^verbatim>\<open>invert\<close> needs: indices in bounds, the operand it evaluates within
@@ -604,7 +621,10 @@ definition bump_contract :: \<open>64 word list \<Rightarrow> 64 word \<Rightarr
 
 lemma bump_spec [crush_specs]:
   shows \<open>\<Gamma>; bump c i \<Turnstile>\<^sub>F bump_contract c i\<close>
-  sorry
+  apply (crush_boot f: bump_def contract: bump_contract_def)
+  apply (crush_base simp add: word_less_nat_alt)
+  apply (auto simp: bump_m_def map_update unat_word_ariths nth_map)
+  done
 
 definition count_occ_contract ::
   \<open>nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word list \<times> 64 word list \<times> tnil, 'abort) function_contract\<close> where
@@ -617,11 +637,64 @@ definition count_occ_contract ::
 lemma count_occ_rec_step_spec:
   assumes IH: \<open>\<And>vc rc t. \<Gamma>; R vc rc t \<Turnstile>\<^sub>F count_occ_contract k vc rc t\<close>
   shows \<open>\<Gamma>; count_occ_rec_step R vc rc t \<Turnstile>\<^sub>F count_occ_contract (Suc k) vc rc t\<close>
-  sorry
+proof (cases t)
+  case (CoreTerm_Const bs)
+  show ?thesis unfolding CoreTerm_Const
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Var i)
+  show ?thesis unfolding CoreTerm_Var
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Ref i)
+  show ?thesis unfolding CoreTerm_Ref
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Not a)
+  show ?thesis unfolding CoreTerm_Not
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Bin op a b)
+  show ?thesis unfolding CoreTerm_Bin
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Extract hi lo a)
+  show ?thesis unfolding CoreTerm_Extract
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Ite c a b)
+  show ?thesis unfolding CoreTerm_Ite
+    apply (crush_boot f: count_occ_rec_step_def contract: count_occ_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+qed
 
 lemma count_occ_rec_spec:
   shows \<open>\<Gamma>; (count_occ_rec_step ^^ k) g vc rc t \<Turnstile>\<^sub>F count_occ_contract k vc rc t\<close>
-  sorry
+proof (induction k arbitrary: vc rc t)
+  case 0
+  show ?case
+    apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
+    apply (subst wp_sstriple_iff)
+    apply (simp add: count_occ_contract_def Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    done
+next
+  case (Suc k)
+  show ?case
+    unfolding funpow.simps(2) comp_def by (rule count_occ_rec_step_spec) (rule Suc.IH)
+qed
 
 lemma count_occ_spec [crush_specs]:
   shows \<open>\<Gamma>; count_occ vc rc t \<Turnstile>\<^sub>F count_occ_contract urust_fuel vc rc t\<close>
@@ -637,11 +710,81 @@ definition term_width_contract ::
 lemma term_width_rec_step_spec:
   assumes IH: \<open>\<And>ws dw t. \<Gamma>; R ws dw t \<Turnstile>\<^sub>F term_width_contract k ws dw t\<close>
   shows \<open>\<Gamma>; term_width_rec_step R ws dw t \<Turnstile>\<^sub>F term_width_contract (Suc k) ws dw t\<close>
-  sorry
+proof (cases t)
+  case (CoreTerm_Const bs)
+  show ?thesis unfolding CoreTerm_Const
+  proof (crush_boot f: term_width_rec_step_def contract: term_width_contract_def, goal_cases)
+    case 1
+    have L: \<open>length bs < 2 ^ 64\<close> using 1 wfit_simps(5)[of \<open>map unat ws\<close> \<open>map unat dw\<close> \<open>CoreTerm_Const bs\<close>] by simp
+    note 1 L
+    then show ?case by (crush_base inline: len_def simp add: unat_of_nat_eq)
+  qed
+next
+  case (CoreTerm_Var i)
+  show ?thesis unfolding CoreTerm_Var
+    apply (crush_boot f: term_width_rec_step_def contract: term_width_contract_def)
+    apply (crush_base simp add: nth_map)
+    done
+next
+  case (CoreTerm_Ref i)
+  show ?thesis unfolding CoreTerm_Ref
+    apply (crush_boot f: term_width_rec_step_def contract: term_width_contract_def)
+    apply (crush_base simp add: nth_map)
+    done
+next
+  case (CoreTerm_Not a)
+  show ?thesis unfolding CoreTerm_Not
+  proof (crush_boot f: term_width_rec_step_def contract: term_width_contract_def, goal_cases)
+    case 1
+    have W: \<open>wfit (map unat ws) (map unat dw) a\<close> using 1 wfit_simps(1) by blast
+    note 1 W
+    then show ?case by (crush_base specs add: IH)
+  qed
+next
+  case (CoreTerm_Bin op a b)
+  show ?thesis unfolding CoreTerm_Bin
+    apply (cases op)
+    apply (all \<open>crush_boot f: term_width_rec_step_def contract: term_width_contract_def\<close>)
+    apply (all \<open>crush_base specs add: IH simp add: wfit_iff unat_word_ariths\<close>)
+    done
+next
+  case (CoreTerm_Extract hi lo a)
+  show ?thesis unfolding CoreTerm_Extract
+  proof (crush_boot f: term_width_rec_step_def contract: term_width_contract_def, goal_cases)
+    case 1
+    have W: \<open>cwidth (map unat ws) (map unat dw) a < 2 ^ 64\<close> using 1 wfit_simps(3,5) by blast
+    have E: \<open>unat lo \<le> unat hi\<close> \<open>unat hi < cwidth (map unat ws) (map unat dw) a\<close> using 1 by simp_all
+    have U: \<open>unat (hi - lo) = unat hi - unat lo\<close> using E(1) by (simp add: unat_sub word_le_nat_alt)
+    have V: \<open>unat (hi - lo + 1) = unat hi - unat lo + 1\<close> using U E W by (simp add: unat_word_ariths)
+    have X: \<open>unat hi - unat lo < 18446744073709551615\<close> using E W by simp
+    note 1 E U V X
+    then show ?case by (crush_base simp add: word_le_nat_alt)
+  qed
+next
+  case (CoreTerm_Ite c a b)
+  show ?thesis unfolding CoreTerm_Ite
+  proof (crush_boot f: term_width_rec_step_def contract: term_width_contract_def, goal_cases)
+    case 1
+    have W: \<open>wfit (map unat ws) (map unat dw) a\<close> using 1 wfit_simps(4) by blast
+    note 1 W
+    then show ?case by (crush_base specs add: IH)
+  qed
+qed
 
 lemma term_width_rec_spec:
   shows \<open>\<Gamma>; (term_width_rec_step ^^ k) g ws dw t \<Turnstile>\<^sub>F term_width_contract k ws dw t\<close>
-  sorry
+proof (induction k arbitrary: ws dw t)
+  case 0
+  show ?case
+    apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
+    apply (subst wp_sstriple_iff)
+    apply (simp add: term_width_contract_def Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    done
+next
+  case (Suc k)
+  show ?case
+    unfolding funpow.simps(2) comp_def by (rule term_width_rec_step_spec) (rule Suc.IH)
+qed
 
 lemma term_width_spec [crush_specs]:
   shows \<open>\<Gamma>; term_width ws dw t \<Turnstile>\<^sub>F term_width_contract urust_fuel ws dw t\<close>
@@ -656,16 +799,17 @@ definition ref_index_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightar
 
 lemma ref_index_spec [crush_specs]:
   shows \<open>\<Gamma>; ref_index t n \<Turnstile>\<^sub>F ref_index_contract t n\<close>
-  sorry
+  by (cases t; crush_boot f: ref_index_def contract: ref_index_contract_def; crush_base simp add: ref_index_m_def)
 
 definition bit_const_contract :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bit_const_contract t \<equiv>
-     make_function_contract can_alloc_reference
+     make_function_contract (can_alloc_reference \<star> \<langle>cfit t\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = bit_const_m t\<rangle>)\<close>
 
 lemma bit_const_spec [crush_specs]:
   shows \<open>\<Gamma>; bit_const t \<Turnstile>\<^sub>F bit_const_contract t\<close>
-  sorry
+  by (cases t; crush_boot f: bit_const_def contract: bit_const_contract_def;
+      crush_base inline: len_def simp add: bit_const_m_def cfit_def unat_of_nat_eq word_unat_eq_iff)
 
 definition free_once_contract :: \<open>64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word \<Rightarrow> ('s, bool, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>free_once_contract kind rc i \<equiv>
@@ -674,7 +818,9 @@ definition free_once_contract :: \<open>64 word list \<Rightarrow> 64 word list 
 
 lemma free_once_spec [crush_specs]:
   shows \<open>\<Gamma>; free_once kind rc i \<Turnstile>\<^sub>F free_once_contract kind rc i\<close>
-  sorry
+  apply (crush_boot f: free_once_def contract: free_once_contract_def)
+  apply (crush_base inline: len_def simp add: free_once_m_def word_less_nat_alt unat_of_nat_eq unat_small unat_gt_0)
+  done
 
 definition consumed_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>consumed_contract t k n \<equiv>
@@ -683,7 +829,7 @@ definition consumed_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarr
 
 lemma consumed_spec [crush_specs]:
   shows \<open>\<Gamma>; consumed t k n \<Turnstile>\<^sub>F consumed_contract t k n\<close>
-  sorry
+  by (cases t; crush_boot f: consumed_def contract: consumed_contract_def; crush_base simp add: consumed_m_def unat_small)
 
 definition second_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>second_contract t n \<equiv>
@@ -692,7 +838,7 @@ definition second_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarrow
 
 lemma second_spec [crush_specs]:
   shows \<open>\<Gamma>; second t n \<Turnstile>\<^sub>F second_contract t n\<close>
-  sorry
+  by (cases t; crush_boot f: second_def contract: second_contract_def; crush_base simp add: second_m_def)
 
 definition copy_op_contract :: \<open>BinOp \<Rightarrow> ('s, BinOp, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>copy_op_contract op \<equiv>
@@ -700,7 +846,7 @@ definition copy_op_contract :: \<open>BinOp \<Rightarrow> ('s, BinOp, 'abort) fu
 
 lemma copy_op_spec [crush_specs]:
   shows \<open>\<Gamma>; copy_op op \<Turnstile>\<^sub>F copy_op_contract op\<close>
-  sorry
+  by (cases op; crush_boot f: copy_op_def contract: copy_op_contract_def; crush_base)
 
 definition var_index_contract :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>var_index_contract t \<equiv>
@@ -709,7 +855,7 @@ definition var_index_contract :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'ab
 
 lemma var_index_spec [crush_specs]:
   shows \<open>\<Gamma>; var_index t \<Turnstile>\<^sub>F var_index_contract t\<close>
-  sorry
+  by (cases t; crush_boot f: var_index_def contract: var_index_contract_def; crush_base simp add: var_index_m_def)
 
 definition bits_one_contract :: \<open>64 word \<Rightarrow> ('s, bool list, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_one_contract w \<equiv>
@@ -718,7 +864,9 @@ definition bits_one_contract :: \<open>64 word \<Rightarrow> ('s, bool list, 'ab
 
 lemma bits_one_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_one w \<Turnstile>\<^sub>F bits_one_contract w\<close>
-  sorry
+  apply (crush_boot f: bits_one_def contract: bits_one_contract_def)
+  apply (crush_base simp add: bits_one_m_def word_less_nat_alt)
+  done
 
 definition copy_term_contract :: \<open>nat \<Rightarrow> CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>copy_term_contract k t \<equiv>
@@ -728,11 +876,64 @@ definition copy_term_contract :: \<open>nat \<Rightarrow> CoreTerm \<Rightarrow>
 lemma copy_term_rec_step_spec:
   assumes IH: \<open>\<And>t. \<Gamma>; R t \<Turnstile>\<^sub>F copy_term_contract k t\<close>
   shows \<open>\<Gamma>; copy_term_rec_step R t \<Turnstile>\<^sub>F copy_term_contract (Suc k) t\<close>
-  sorry
+proof (cases t)
+  case (CoreTerm_Const bs)
+  show ?thesis unfolding CoreTerm_Const
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+next
+  case (CoreTerm_Var i)
+  show ?thesis unfolding CoreTerm_Var
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+next
+  case (CoreTerm_Ref i)
+  show ?thesis unfolding CoreTerm_Ref
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+next
+  case (CoreTerm_Not a)
+  show ?thesis unfolding CoreTerm_Not
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+next
+  case (CoreTerm_Bin op a b)
+  show ?thesis unfolding CoreTerm_Bin
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+next
+  case (CoreTerm_Extract hi lo a)
+  show ?thesis unfolding CoreTerm_Extract
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+next
+  case (CoreTerm_Ite c a b)
+  show ?thesis unfolding CoreTerm_Ite
+    apply (crush_boot f: copy_term_rec_step_def contract: copy_term_contract_def)
+    apply (crush_base specs add: IH)
+    done
+qed
 
 lemma copy_term_rec_spec:
   shows \<open>\<Gamma>; (copy_term_rec_step ^^ k) g t \<Turnstile>\<^sub>F copy_term_contract k t\<close>
-  sorry
+proof (induction k arbitrary: t)
+  case 0
+  show ?case
+    apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
+    apply (subst wp_sstriple_iff)
+    apply (simp add: copy_term_contract_def Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    done
+next
+  case (Suc k)
+  show ?case
+    unfolding funpow.simps(2) comp_def by (rule copy_term_rec_step_spec) (rule Suc.IH)
+qed
 
 lemma copy_term_spec [crush_specs]:
   shows \<open>\<Gamma>; copy_term t \<Turnstile>\<^sub>F copy_term_contract urust_fuel t\<close>
@@ -746,11 +947,64 @@ definition mark_live_contract :: \<open>nat \<Rightarrow> bool list \<Rightarrow
 lemma mark_live_rec_step_spec:
   assumes IH: \<open>\<And>live t. \<Gamma>; R live t \<Turnstile>\<^sub>F mark_live_contract k live t\<close>
   shows \<open>\<Gamma>; mark_live_rec_step R live t \<Turnstile>\<^sub>F mark_live_contract (Suc k) live t\<close>
-  sorry
+proof (cases t)
+  case (CoreTerm_Const bs)
+  show ?thesis unfolding CoreTerm_Const
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Var i)
+  show ?thesis unfolding CoreTerm_Var
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Ref i)
+  show ?thesis unfolding CoreTerm_Ref
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Not a)
+  show ?thesis unfolding CoreTerm_Not
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Bin op a b)
+  show ?thesis unfolding CoreTerm_Bin
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Extract hi lo a)
+  show ?thesis unfolding CoreTerm_Extract
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+next
+  case (CoreTerm_Ite c a b)
+  show ?thesis unfolding CoreTerm_Ite
+    apply (crush_boot f: mark_live_rec_step_def contract: mark_live_contract_def)
+    apply (crush_base specs add: IH simp add: cidx_simps)
+    done
+qed
 
 lemma mark_live_rec_spec:
   shows \<open>\<Gamma>; (mark_live_rec_step ^^ k) g live t \<Turnstile>\<^sub>F mark_live_contract k live t\<close>
-  sorry
+proof (induction k arbitrary: live t)
+  case 0
+  show ?case
+    apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
+    apply (subst wp_sstriple_iff)
+    apply (simp add: mark_live_contract_def Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    done
+next
+  case (Suc k)
+  show ?case
+    unfolding funpow.simps(2) comp_def by (rule mark_live_rec_step_spec) (rule Suc.IH)
+qed
 
 lemma mark_live_spec [crush_specs]:
   shows \<open>\<Gamma>; mark_live live t \<Turnstile>\<^sub>F mark_live_contract urust_fuel live t\<close>
@@ -777,7 +1031,7 @@ definition free_kind_contract :: \<open>CoreTerm list \<Rightarrow> 64 word list
   [crush_contracts]: \<open>free_kind_contract D dw vc rc kind t \<equiv>
      make_function_contract
        (can_alloc_reference \<star> \<langle>length kind \<le> length rc \<and> length kind < 2 ^ 64 \<and> length dw = length kind \<and>
-          length kind \<le> length D \<and> (\<forall>i. t = CoreTerm_Var i \<longrightarrow> unat i < length vc)\<rangle>)
+          length kind \<le> length D \<and> (\<forall>i. t = CoreTerm_Var i \<longrightarrow> unat i < length vc) \<and> (\<forall>d \<in> set D. cfit d)\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = free_kind_m D (map unat dw) (map unat vc) (map unat rc) (map unat kind) t\<rangle>)\<close>
 
 lemma free_kind_spec [crush_specs]:

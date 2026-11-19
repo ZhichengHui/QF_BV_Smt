@@ -1122,4 +1122,193 @@ lemma D2_wt: \<open>j < en \<Longrightarrow> cwt ews (take j eds) (D2 ! j) \<and
 
 end
 
+subsection \<open>The eliminated problem is well-sorted and no larger\<close>
+
+lemma csubterms_hd: \<open>\<exists>r. csubterms t = t # r\<close>
+  by (cases t) simp_all
+
+lemma weight_mem: \<open>u \<in> set (csubterms t) \<Longrightarrow> (cwidth ws ds u + 1) ^ 2 \<le> cterm_weight ws ds t\<close>
+  unfolding cterm_weight_def by (rule member_le_sum_list) auto
+
+lemma weight_two:
+  assumes \<open>u \<in> set (csubterms t)\<close> \<open>u \<noteq> t\<close>
+  shows \<open>(cwidth ws ds t + 1) ^ 2 + (cwidth ws ds u + 1) ^ 2 \<le> cterm_weight ws ds t\<close>
+proof -
+  obtain r where r: \<open>csubterms t = t # r\<close> using csubterms_hd by blast
+  have \<open>u \<in> set r\<close> using assms r by simp
+  then have \<open>(cwidth ws ds u + 1) ^ 2 \<le> sum_list (map (\<lambda>u. (cwidth ws ds u + 1) ^ 2) r)\<close>
+    by (intro member_le_sum_list) auto
+  then show ?thesis using r by (simp add: cterm_weight_def)
+qed
+
+lemma tbound_mem: \<open>u \<in> set (csubterms t) \<Longrightarrow> 2 * cwidth ws ds u + 2 \<le> tbound ws ds t\<close>
+  unfolding tbound_def by (rule le_trans[OF _ max.cobounded2]) (rule Max_ge; simp)
+
+lemma tbound_size: \<open>Suc (size t) \<le> tbound ws ds t\<close>
+  unfolding tbound_def by simp
+
+lemma size_pos: \<open>u \<in> set (csubterms t) \<Longrightarrow> u \<noteq> t \<Longrightarrow> 1 \<le> size t\<close>
+  by (cases t) simp_all
+
+lemma ccount_atom: \<open>ccount ws ds (CoreTerm_Ref i) = 0\<close> \<open>ccount ws ds (CoreTerm_Const bs) = 0\<close>
+  \<open>ccount ws ds (CoreTerm_Extract hi lo (CoreTerm_Ref i)) = 0\<close>
+  by (simp_all add: ccount_def ncost_def)
+
+lemma sum_list_map_nth_le:
+  assumes \<open>length xs = length ys\<close> \<open>\<forall>j < length xs. f (xs ! j) \<le> g (ys ! j)\<close>
+  shows \<open>sum_list (map f xs) \<le> (sum_list (map g ys) :: nat)\<close>
+proof -
+  have \<open>sum_list (map f xs) = (\<Sum>j<length xs. f (xs ! j))\<close> by (simp add: sum_list_sum_nth atLeast0LessThan)
+  also have \<open>\<dots> \<le> (\<Sum>j<length xs. g (ys ! j))\<close> using assms(2) by (intro sum_mono) simp
+  also have \<open>\<dots> = sum_list (map g ys)\<close> using assms(1) by (simp add: sum_list_sum_nth atLeast0LessThan)
+  finally show ?thesis .
+qed
+
+context elim_prob
+begin
+
+definition \<open>q2 = fst (elim_m q)\<close>
+
+lemma q2_parts: \<open>CoreProblem_widths q2 = CoreProblem_widths q\<close> \<open>CoreProblem_defs q2 = D2\<close> \<open>CoreProblem_asserts q2 = eA\<close>
+  by (simp_all add: q2_def elim_m_def D2_def eA_def)
+
+lemma q2_ws: \<open>cvar_widths q2 = ews\<close>
+  by (simp add: cvar_widths_def q2_parts ews_def)
+
+lemma D2_defs: \<open>cdefs_wt ews [] D2 \<and> cdef_widths ews [] D2 = eds\<close>
+  by (rule cdefs_wt_I) (simp_all add: D2(1) len_eds D2_wt)
+
+theorem q2_wt: \<open>cproblem_wt q2\<close>
+  using D2_defs wt_A by (simp add: cproblem_wt_def Let_def q2_ws q2_parts)
+
+lemma cwidth_eD: \<open>j < en \<Longrightarrow> cwidth ews eds (eD ! j) = eds ! j\<close>
+proof -
+  assume j: \<open>j < en\<close>
+  have \<open>eds = take j eds @ drop j eds\<close> by simp
+  then show ?thesis using wt_width_app[OF wt_D[OF j], of \<open>drop j eds\<close>] eds_nth[OF j] by simp
+qed
+
+lemma cwidth_D2: \<open>j < en \<Longrightarrow> cwidth ews eds (D2 ! j) = eds ! j\<close>
+proof -
+  assume j: \<open>j < en\<close>
+  have \<open>eds = take j eds @ drop j eds\<close> by simp
+  then show ?thesis using wt_width_app[OF conjunct1[OF D2_wt[OF j]], of \<open>drop j eds\<close>] D2_wt[OF j] by simp
+qed
+
+text \<open>The consumed operand occurs as a proper subterm.\<close>
+lemma cons_sub:
+  assumes \<open>j < en\<close> \<open>2 \<le> kd ! j\<close>
+  shows \<open>CoreTerm_Ref (word_of_nat (cons j)) \<in> set (csubterms (eD ! j)) \<and> CoreTerm_Ref (word_of_nat (cons j)) \<noteq> eD ! j\<close>
+proof -
+  obtain u where u: \<open>u \<in> set (csubterms (eD ! j))\<close> \<open>is_ref (cons j) u\<close> using kd_cons[OF assms] by blast
+  obtain i where i: \<open>u = CoreTerm_Ref i\<close> \<open>unat i = cons j\<close> using u(2) by (cases u) (auto simp: is_ref_def)
+  have \<open>word_of_nat (cons j) = i\<close> using i(2) by (metis word_unat.Rep_inverse)
+  moreover have \<open>eD ! j \<noteq> CoreTerm_Ref i\<close>
+    using assms ana(5)[OF assms(1)] free_kind_simps(3)[of eD \<open>take j eds\<close> evc erc \<open>take j kd\<close> i] by auto
+  ultimately show ?thesis using u i by auto
+qed
+
+lemma D2_size:
+  assumes j: \<open>j < en\<close>
+  shows \<open>cterm_weight ews eds (D2 ! j) \<le> cterm_weight ews eds (eD ! j) \<and>
+    ccount ews eds (D2 ! j) \<le> ccount ews eds (eD ! j) \<and> tbound ews eds (D2 ! j) \<le> tbound ews eds (eD ! j)\<close>
+proof -
+  have self: \<open>eD ! j \<in> set (csubterms (eD ! j))\<close> using csubterms_self .
+  have w: \<open>cwidth ews eds (eD ! j) = eds ! j\<close> using cwidth_eD[OF j] .
+  consider (dead) \<open>\<not> live ! j\<close> | (keep) \<open>live ! j\<close> \<open>\<not> 2 \<le> kd ! j\<close> | (rw) \<open>live ! j\<close> \<open>2 \<le> kd ! j\<close> by blast
+  then show ?thesis
+  proof cases
+    case dead
+    then have e: \<open>D2 ! j = CoreTerm_Const (replicate (eds ! j) False)\<close> using D2(3)[OF j] by simp
+    show ?thesis
+      using weight_mem[OF self, of ews eds] tbound_mem[OF self, of ews eds] tbound_size[of \<open>eD ! j\<close> ews eds] w
+      unfolding e by (simp add: cterm_weight_def ccount_atom tbound_def)
+  next
+    case keep
+    then show ?thesis using D2(3)[OF j] ana(6)[OF j] by simp
+  next
+    case rw
+    let ?c = \<open>cons j\<close>
+    let ?r = \<open>CoreTerm_Ref (word_of_nat ?c) :: CoreTerm\<close>
+    note cs = cons_sub[OF j rw(2)]
+    have c: \<open>?c < j\<close> using cons_lt[OF j rw(2)] .
+    have cu: \<open>unat (word_of_nat ?c :: 64 word) = ?c\<close> using unat_nat c j by simp
+    have tk: \<open>take j eds ! ?c = eds ! ?c\<close> using c j len_eds by simp
+    have wr: \<open>cwidth ews eds ?r = eds ! ?c\<close> using cu by simp
+    have W2: \<open>(eds ! j + 1) ^ 2 + (eds ! ?c + 1) ^ 2 \<le> cterm_weight ews eds (eD ! j)\<close>
+      using weight_two[OF cs[THEN conjunct1] cs[THEN conjunct2], of ews eds] w wr by simp
+    have T1: \<open>2 * eds ! ?c + 2 \<le> tbound ews eds (eD ! j)\<close> using tbound_mem[OF cs[THEN conjunct1], of ews eds] wr by simp
+    have T2: \<open>2 * eds ! j + 2 \<le> tbound ews eds (eD ! j)\<close> using tbound_mem[OF self, of ews eds] w by simp
+    have T3: \<open>2 \<le> tbound ews eds (eD ! j)\<close>
+      using tbound_size[of \<open>eD ! j\<close> ews eds] size_pos[OF cs[THEN conjunct1] cs[THEN conjunct2]] by simp
+    have d: \<open>D2 ! j = rewrite_m (take j eds) ?c (eds ! j)\<close> using D2(3)[OF j] ana(6)[OF j] rw by simp
+    note W = kd_width[OF j rw(2)]
+    show ?thesis
+    proof (cases \<open>eds ! ?c = eds ! j\<close>)
+      case True
+      then have \<open>D2 ! j = ?r\<close> using d tk by (simp add: rewrite_m_def)
+      then show ?thesis using W2 T1 True wr
+        by (simp add: cterm_weight_def ccount_atom tbound_def)
+    next
+      case False
+      obtain hi :: \<open>64 word\<close> where hi: \<open>hi = word_of_nat (eds ! j - 1)\<close> by blast
+      then have e: \<open>D2 ! j = CoreTerm_Extract hi 0 ?r\<close> using d tk False by (simp add: rewrite_m_def)
+      have hu: \<open>unat hi = eds ! j - 1\<close>
+        unfolding hi by (rule unat_of_nat_eq) (use W False in simp)
+      have w1: \<open>1 \<le> eds ! j\<close> using W False by simp
+      show ?thesis using W2 T1 T2 T3 wr hu w1 unfolding e
+        by (simp add: cterm_weight_def ccount_atom tbound_def)
+    qed
+  qed
+qed
+
+theorem elim_csize: \<open>csize_bound q2 \<le> csize_bound q\<close>
+proof -
+  have \<open>sum_list (map (cterm_weight ews eds) D2) \<le> sum_list (map (cterm_weight ews eds) eD)\<close>
+    by (rule sum_list_map_nth_le) (simp_all add: D2(1) en_def D2_size)
+  then show ?thesis
+    using D2_defs D2(1) by (simp add: csize_bound_def Let_def q2_ws q2_parts ews_def eds_def eD_def eA_def en_def)
+qed
+
+theorem elim_fuel_lt:
+  assumes \<open>2 + sum_list (cvar_widths q) + length (CoreProblem_asserts q) +
+     sum_list (map (ccount (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblem_defs q)))
+                   (CoreProblem_defs q @ CoreProblem_asserts q)) < 2 ^ 63\<close>
+    \<open>length (cvar_widths q) < 2 ^ 63\<close> \<open>length (CoreProblem_defs q) < 2 ^ 63\<close>
+    \<open>length (CoreProblem_asserts q) < 2 ^ 63\<close>
+    \<open>\<forall>t \<in> set (CoreProblem_defs q @ CoreProblem_asserts q).
+       tbound (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblem_defs q)) t < 2 ^ 63\<close>
+  shows \<open>fuel_bound q2 < 2 ^ 64\<close>
+proof (rule fuel_bound_lt)
+  have cc: \<open>sum_list (map (ccount ews eds) D2) \<le> sum_list (map (ccount ews eds) eD)\<close>
+    by (rule sum_list_map_nth_le) (simp_all add: D2(1) en_def D2_size)
+  show \<open>cproblem_wt q2\<close> by (rule q2_wt)
+  show \<open>2 + sum_list (cvar_widths q2) + length (CoreProblem_asserts q2) +
+     sum_list (map (ccount (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblem_defs q2)))
+                   (CoreProblem_defs q2 @ CoreProblem_asserts q2)) < 2 ^ 63\<close>
+    using assms(1) cc D2_defs by (simp add: q2_ws q2_parts ews_def eds_def eD_def eA_def)
+  show \<open>length (cvar_widths q2) < 2 ^ 63\<close> using assms(2) by (simp add: q2_ws ews_def)
+  show \<open>length (CoreProblem_defs q2) < 2 ^ 63\<close> using assms(3) D2(1) by (simp add: q2_parts en_def eD_def)
+  show \<open>length (CoreProblem_asserts q2) < 2 ^ 63\<close> using assms(4) by (simp add: q2_parts eA_def)
+  show \<open>\<forall>t \<in> set (CoreProblem_defs q2 @ CoreProblem_asserts q2).
+       tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblem_defs q2)) t < 2 ^ 63\<close>
+  proof
+    fix t assume t: \<open>t \<in> set (CoreProblem_defs q2 @ CoreProblem_asserts q2)\<close>
+    have T: \<open>\<forall>t \<in> set (eD @ eA). tbound ews eds t < 2 ^ 63\<close>
+      using assms(5) by (simp add: ews_def eds_def eD_def eA_def)
+    show \<open>tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblem_defs q2)) t < 2 ^ 63\<close>
+    proof (cases \<open>t \<in> set eA\<close>)
+      case True
+      then show ?thesis using T D2_defs by (simp add: q2_ws q2_parts)
+    next
+      case False
+      then obtain j where j: \<open>j < en\<close> \<open>t = D2 ! j\<close> using t D2(1) by (auto simp: q2_parts in_set_conv_nth)
+      have \<open>tbound ews eds (eD ! j) < 2 ^ 63\<close> using T j(1) by (simp add: en_def)
+      then show ?thesis using D2_size[OF j(1)] D2_defs j by (simp add: q2_ws q2_parts)
+    qed
+  qed
+qed
+
+end
+
 end

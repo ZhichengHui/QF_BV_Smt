@@ -498,4 +498,118 @@ proof -
   qed
 qed
 
+subsection \<open>Counting references\<close>
+
+lemma rcnt_sum: \<open>rcnt ts x = sum_list (map (\<lambda>t. rcnt [t] x) ts)\<close>
+  by (induction ts) (simp_all add: rcnt_Cons[where ts = \<open>_ # _\<close>] rcnt_def)
+
+lemma rcnt_pos: \<open>u \<in> set (csubterms t) \<Longrightarrow> is_ref x u \<Longrightarrow> 0 < rcnt [t] x\<close>
+  by (auto simp: rcnt_def filter_empty_conv)
+
+lemma rcnt_le: \<open>t \<in> set ts \<Longrightarrow> rcnt [t] x \<le> rcnt ts x\<close>
+  unfolding rcnt_sum[of ts] by (rule member_le_sum_list) auto
+
+text \<open>A definition referred to once is referred to by one term only.\<close>
+lemma rcnt1_unique:
+  assumes \<open>rcnt ts x = 1\<close> \<open>i < length ts\<close> \<open>j < length ts\<close>
+    \<open>u \<in> set (csubterms (ts ! i))\<close> \<open>is_ref x u\<close> \<open>u' \<in> set (csubterms (ts ! j))\<close> \<open>is_ref x u'\<close>
+  shows \<open>i = j\<close>
+proof (rule ccontr)
+  assume ne: \<open>i \<noteq> j\<close>
+  let ?f = \<open>\<lambda>k. rcnt [ts ! k] x\<close>
+  have \<open>rcnt ts x = (\<Sum>k<length ts. ?f k)\<close>
+    unfolding rcnt_sum[of ts] by (simp add: sum_list_sum_nth atLeast0LessThan)
+  moreover have \<open>(\<Sum>k\<in>{i, j}. ?f k) \<le> (\<Sum>k<length ts. ?f k)\<close>
+    using assms(2,3) by (intro sum_mono2) auto
+  moreover have \<open>0 < ?f i\<close> \<open>0 < ?f j\<close> using rcnt_pos assms(4-7) by blast+
+  ultimately show False using ne assms(1) by simp
+qed
+
+lemma rcnt_Bin: \<open>rcnt [CoreTerm_Bin op a b] x = rcnt [a] x + rcnt [b] x\<close>
+  by (simp add: rcnt_def is_ref_def)
+
+lemma rcnt_Ref: \<open>rcnt [CoreTerm_Ref i] x = (if unat i = x then 1 else 0)\<close>
+  by (simp add: rcnt_def is_ref_def)
+
+subsection \<open>The analysis of a problem\<close>
+
+locale elim_prob =
+  fixes q :: CoreProblem
+  assumes wt: \<open>cproblem_wt q\<close> and nlt: \<open>length (CoreProblem_defs q) < 2 ^ 64\<close>
+begin
+
+definition \<open>eD = CoreProblem_defs q\<close>
+definition \<open>eA = CoreProblem_asserts q\<close>
+definition \<open>ews = cvar_widths q\<close>
+definition \<open>eds = cdef_widths ews [] eD\<close>
+definition \<open>en = length eD\<close>
+definition \<open>evc = fst (occ_res q)\<close>
+definition \<open>erc = snd (occ_res q)\<close>
+definition \<open>kd = fst (snd (ana_res q))\<close>
+definition \<open>mk = fst (snd (snd (ana_res q)))\<close>
+definition \<open>d1 = snd (snd (snd (ana_res q)))\<close>
+definition \<open>cons k = consumed_m (eD ! k) (kd ! k) en\<close>
+definition \<open>sec k = second_m (eD ! k) en\<close>
+
+lemma ana:
+  shows \<open>fst (ana_res q) = eds\<close> \<open>length kd = en\<close> \<open>length mk = en\<close> \<open>length d1 = en\<close>
+    \<open>k < en \<Longrightarrow> kd ! k = free_kind_m eD (take k eds) evc erc (take k kd) (eD ! k)\<close>
+    \<open>k < en \<Longrightarrow> d1 ! k = (if 2 \<le> kd ! k then rewrite_m (take k eds) (cons k) (eds ! k) else eD ! k)\<close>
+proof -
+  obtain dw kind mark defs where r: \<open>ana_res q = (dw, kind, mark, defs)\<close> by (cases \<open>ana_res q\<close>)
+  have \<open>foldl (elim_step ews eD evc erc) ([], [], replicate (length eD) 0, []) [0..<length eD] = (dw, kind, mark, defs)\<close>
+    using r by (simp add: ana_res_def ews_def eD_def evc_def erc_def Let_def)
+  note F = ana_fold[OF order_refl this]
+  show \<open>fst (ana_res q) = eds\<close> \<open>length kd = en\<close> \<open>length mk = en\<close> \<open>length d1 = en\<close>
+    using F r by (simp_all add: eds_def kd_def mk_def d1_def en_def)
+  show \<open>k < en \<Longrightarrow> kd ! k = free_kind_m eD (take k eds) evc erc (take k kd) (eD ! k)\<close>
+    using F r by (simp add: eds_def kd_def en_def)
+  show \<open>k < en \<Longrightarrow> d1 ! k = (if 2 \<le> kd ! k then rewrite_m (take k eds) (cons k) (eds ! k) else eD ! k)\<close>
+    using F r by (simp add: eds_def kd_def d1_def en_def cons_def)
+qed
+
+lemma len_eds: \<open>length eds = en\<close>
+  by (simp add: eds_def en_def cdef_widths_length)
+
+lemma take_eds: \<open>k \<le> en \<Longrightarrow> take k eds = cdef_widths ews [] (take k eD)\<close>
+proof -
+  assume k: \<open>k \<le> en\<close>
+  have \<open>eds = cdef_widths ews (cdef_widths ews [] (take k eD)) (drop k eD)\<close>
+    using cdef_widths_append[of ews \<open>[]\<close> \<open>take k eD\<close> \<open>drop k eD\<close>] by (simp add: eds_def)
+  then obtain e where \<open>eds = cdef_widths ews [] (take k eD) @ e\<close> using cdef_widths_prefix by metis
+  then show ?thesis using k by (simp add: cdef_widths_length en_def)
+qed
+
+lemma dwt: \<open>cdefs_wt ews [] eD\<close>
+  using wt by (simp add: cproblem_wt_def Let_def ews_def eD_def)
+
+lemma wt_D: \<open>k < en \<Longrightarrow> cwt ews (take k eds) (eD ! k)\<close>
+  using cdefs_wt_nth[OF dwt, of k] take_eds[of k] by (simp add: en_def)
+
+lemma wt_D': \<open>k < en \<Longrightarrow> cwt ews eds (eD ! k)\<close>
+  using cdefs_wt_each[OF dwt, of k] by (simp add: en_def eds_def)
+
+lemma eds_nth: \<open>k < en \<Longrightarrow> eds ! k = cwidth ews (take k eds) (eD ! k)\<close>
+proof -
+  assume k: \<open>k < en\<close>
+  have \<open>take (Suc k) eds = take k eds @ [cwidth ews (take k eds) (eD ! k)]\<close>
+    using take_eds[of \<open>Suc k\<close>] take_eds[of k] k
+    by (simp add: take_Suc_conv_app_nth en_def cdef_widths_append)
+  then show ?thesis using k len_eds by (metis nth_take lessI nth_append_length length_take min.absorb4 less_imp_le_nat)
+qed
+
+lemma wt_A: \<open>t \<in> set eA \<Longrightarrow> cwt ews eds t \<and> cwidth ews eds t = 1\<close>
+  using wt by (simp add: cproblem_wt_def Let_def ews_def eds_def eA_def eD_def)
+
+lemma wsub: \<open>cwt ws ds t \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> cwt ws ds u\<close>
+  by (rule wt_sub)
+
+lemma ref_lt_D: \<open>k < en \<Longrightarrow> u \<in> set (csubterms (eD ! k)) \<Longrightarrow> is_ref x u \<Longrightarrow> x < k\<close>
+  using wsub[OF wt_D] len_eds by (cases u) (fastforce simp: is_ref_def)+
+
+lemma ref_lt_A: \<open>t \<in> set eA \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> is_ref x u \<Longrightarrow> x < en\<close>
+  using wsub[OF conjunct1[OF wt_A]] len_eds by (cases u) (fastforce simp: is_ref_def)+
+
+end
+
 end

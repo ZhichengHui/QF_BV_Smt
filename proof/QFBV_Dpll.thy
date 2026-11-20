@@ -44,28 +44,32 @@ lemma wpw_exit:
   by (simp add: wprop_winv_def wprop_wpost_def)
 
 definition dpll_wpropagate_contract ::
-  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word \<Rightarrow>
-   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> 64 word \<times> bool \<times> tnil, 'abort) function_contract\<close> where
-  [crush_contracts]: \<open>dpll_wpropagate_contract cs p nx h a t q \<equiv>
+  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow>
+   64 word list \<Rightarrow> 64 word \<Rightarrow>
+   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> 64 word list \<times> 64 word \<times>
+     bool \<times> 64 word \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>dpll_wpropagate_contract cs p nx h a t rs q \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
           \<langle>dpll_wpre cs (length a) p nx h \<and> length a + 2 \<le> urust_fuel \<and> tr_ok (length a) a t \<and>
-           unat q \<le> length t \<and> wl_ok cs p nx h\<rangle>)
+           unat q \<le> length t \<and> wl_ok cs p nx h \<and> length rs = length t \<and> lends nx h\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (p1, nx1, h1, a1, t1, q1, b, _) \<Rightarrow>
+          \<langle>case r of (p1, nx1, h1, a1, t1, rs1, q1, b, cf, _) \<Rightarrow>
              dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             unat q1 \<le> length t1 \<and> wprop_wpost cs p t (unat q) p1 nx1 h1 t1 (unat q1) b\<rangle>)\<close>
+             unat q1 \<le> length t1 \<and> wprop_wpost cs p t (unat q) p1 nx1 h1 t1 (unat q1) b \<and>
+             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat cf)) \<and> lends nx1 h1\<rangle>)\<close>
 
 lemma dpll_wpropagate_spec [crush_specs]:
-  shows \<open>\<Gamma>; wpropagate cs p nx h a t q \<Turnstile>\<^sub>F dpll_wpropagate_contract cs p nx h a t q\<close>
+  shows \<open>\<Gamma>; wpropagate cs p nx h a t rs q \<Turnstile>\<^sub>F dpll_wpropagate_contract cs p nx h a t rs q\<close>
   apply (crush_boot f: wpropagate_def contract: dpll_wpropagate_contract_def)
   apply (crush_base inline: len_def simp add: dpll_wpre_def)
-  subgoal for p_ref nx_ref h_ref a_ref t_ref q_ref
+  subgoal for p_ref nx_ref h_ref a_ref t_ref r_ref q_ref
     apply (ucincl_discharge\<open>
       rule_tac
-        INV=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gq q'.
+        INV=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gr rs' gq q'.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p' \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx' \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h' \<star>
-               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q' \<star>
+               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs' \<star>
+               q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q' \<star>
                can_alloc_reference \<star>
                \<langle>dpll_wpre cs (length a) p' nx' h' \<and> length h' = length h \<and>
                 length a' = length a \<and> tr_ok (length a) a' t' \<and> wprop_inv cs t (length a) a' t' \<and>
@@ -73,21 +77,23 @@ lemma dpll_wpropagate_spec [crush_specs]:
                    unat (Lit_var (t' ! j)) < length a) \<and>
                 length t' \<le> length a \<and> unat q' \<le> length t' \<and>
                 (unat q' < length t' \<longrightarrow> length a - unat q' \<le> k) \<and>
-                wprop_winv cs p t (unat q) p' nx' h' t' (unat q')\<rangle>\<close> and
-        INV'=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gq q'.
+                wprop_winv cs p t (unat q) p' nx' h' t' (unat q') \<and> rext cs t rs t' rs' \<and> lends nx' h'\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gr rs' gq q'.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p' \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx' \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h' \<star>
-               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q' \<star>
+               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs' \<star>
+               q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q' \<star>
                can_alloc_reference \<star>
                \<langle>dpll_wpre cs (length a) p' nx' h' \<and> length h' = length h \<and>
                 length a' = length a \<and> tr_ok (length a) a' t' \<and> wprop_inv cs t (length a) a' t' \<and>
                 (\<forall>j < length t'. 2 * unat (Lit_var (t' ! j)) < 18446744073709551615 \<and>
                    unat (Lit_var (t' ! j)) < length a) \<and>
                 length t' \<le> length a \<and> unat q' < length t' \<and> length a - unat q' \<le> Suc k \<and>
-                wprop_winv cs p t (unat q) p' nx' h' t' (unat q')\<rangle>\<close> and
+                wprop_winv cs p t (unat q) p' nx' h' t' (unat q') \<and> rext cs t rs t' rs' \<and> lends nx' h'\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (p1, nx1, h1, a1, t1, q1, b, _) \<Rightarrow>
+          \<langle>case r of (p1, nx1, h1, a1, t1, rs1, q1, b, cf, _) \<Rightarrow>
              dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             unat q1 \<le> length t1 \<and> wprop_wpost cs p t (unat q) p1 nx1 h1 t1 (unat q1) b\<rangle>\<close> and
+             unat q1 \<le> length t1 \<and> wprop_wpost cs p t (unat q) p1 nx1 h1 t1 (unat q1) b \<and>
+             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat cf)) \<and> lends nx1 h1\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: prod.splits tnil.splits inline: lit_neg_def
@@ -98,8 +104,9 @@ lemma dpll_wpropagate_spec [crush_specs]:
     apply (all \<open>(frule wpw_step, assumption, assumption, (simp add: lidx_def lneg_def; fail), assumption,
         assumption)?\<close>)
     apply (all \<open>(frule (2) wpw_exit)?\<close>)
+    apply (all \<open>(frule (3) rext_step)?\<close>)
     apply (auto simp add: dpll_wpre_def wprop_post_def unat_of_nat_eq
-        intro: tb_var tb_dbl tr_ok_length wprop_refl wprop_winv_refl winv_wl wpw_exit')
+        intro: tb_var tb_dbl tr_ok_length wprop_refl wprop_winv_refl winv_wl wpw_exit' rext_refl dest: rext_len)
     done
   done
 
@@ -323,6 +330,52 @@ lemma dpll_cs_ok_wcs:
   unfolding dpll_cs_ok_def wcs_ok_def
   by (fastforce simp: lits_lt_def dest: nth_mem)
 
+definition dpll_cut_contract :: \<open>64 word list \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word list, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>dpll_cut_contract v p \<equiv>
+     make_function_contract
+       (can_alloc_reference \<star> \<langle>unat p \<le> length v \<and> length v + 2 \<le> urust_fuel \<and> length v < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = take (unat p) v\<rangle>)\<close>
+
+lemma cut_step:
+  assumes \<open>r = take (length r) v\<close>
+  shows \<open>butlast r = take (length r - Suc 0) v\<close>
+proof -
+  have \<open>length r \<le> length v\<close> using arg_cong[OF assms, of length] by simp
+  then have \<open>butlast (take (length r) v) = take (length r - 1) v\<close> by (rule butlast_take)
+  then show ?thesis by (metis assms One_nat_def)
+qed
+
+lemma cut_exit: \<open>r = take (length r) v \<Longrightarrow> unat p \<le> length r \<Longrightarrow> \<not> unat p < length r \<Longrightarrow> r = take (unat p) v\<close>
+  by (metis le_neq_implies_less)
+
+lemma cut_len:
+  assumes \<open>r = take (length r) v\<close> \<open>length v < 18446744073709551616\<close>
+  shows \<open>unat (word64_of_nat (length r)) = length r\<close>
+proof -
+  have \<open>length r \<le> length v\<close> using arg_cong[OF assms(1), of length] by simp
+  then show ?thesis using assms(2) by (simp add: unat_of_nat_eq)
+qed
+
+lemma dpll_cut_spec [crush_specs]:
+  shows \<open>\<Gamma>; cut v p \<Turnstile>\<^sub>F dpll_cut_contract v p\<close>
+  apply (crush_boot f: cut_def contract: dpll_cut_contract_def)
+  apply (crush_base inline: len_def)
+  subgoal for v_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>k. \<Squnion>gv v'. v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v' \<star> can_alloc_reference \<star>
+               \<langle>v' = take (length v') v \<and> unat p \<le> length v' \<and> length v' - unat p \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gv v'. v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v' \<star> can_alloc_reference \<star>
+               \<langle>v' = take (length v') v \<and> unat p < length v' \<and> length v' - unat p \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base wp split: option.splits inline: vec_pop_def simp add: word_less_nat_alt)
+    apply (all \<open>(frule (1) cut_len)?\<close>)
+    apply (auto dest: cut_step cut_exit simp add: unat_of_nat_eq)
+    done
+  done
+
 definition dpll_top_contract :: \<open>Lit list list \<Rightarrow> 64 word \<Rightarrow> ('s, bool option list option, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_top_contract cs n \<equiv>
      make_function_contract
@@ -339,23 +392,23 @@ lemma dpll_top_spec [crush_specs]:
   shows \<open>\<Gamma>; dpll cs n \<Turnstile>\<^sub>F dpll_top_contract cs n\<close>
   apply (crush_boot f: dpll_def contract: dpll_top_contract_def)
   apply (crush_base split: prod.splits tnil.splits simp add: dpll_cs_ok_def)
-  subgoal for p0 nx0 h0 p_ref nx_ref h_ref a0 t0 ok0 a_ref t_ref l_ref q_ref
+  subgoal for p0 nx0 h0 p_ref nx_ref h_ref a0 t0 r0 ok0 a_ref t_ref r_ref l_ref q_ref
     apply (ucincl_discharge\<open>
       rule_tac
-        INV=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h ga a gt t gl lim gq q.
+        INV=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h ga a gt t gr rs gl lim gq q.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h \<star>
-               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>lim \<star>
+               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>lim \<star>
                q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q \<star> can_alloc_reference \<star>
                \<langle>dstate cs (unat n) a t (map unat lim) \<and> 3 ^ unat n - meas (unat n) (length t) (map unat lim) < k \<and>
                 dpll_wpre cs (unat n) p nx h \<and> length a = unat n \<and> tr_ok (unat n) a t \<and> unat q \<le> length t \<and>
-                wstate cs p nx h t (unat q) (map unat lim)\<rangle>\<close> and
-        INV'=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h ga a gt t gl lim gq q.
+                wstate cs p nx h t (unat q) (map unat lim) \<and> length rs = length t \<and> lends nx h\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h ga a gt t gr rs gl lim gq q.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h \<star>
-               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>lim \<star>
+               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>lim \<star>
                q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q \<star> can_alloc_reference \<star>
                \<langle>dstate cs (unat n) a t (map unat lim) \<and> 3 ^ unat n - meas (unat n) (length t) (map unat lim) < Suc k \<and>
                 dpll_wpre cs (unat n) p nx h \<and> length a = unat n \<and> tr_ok (unat n) a t \<and> unat q \<le> length t \<and>
-                wstate cs p nx h t (unat q) (map unat lim)\<rangle>\<close> and
+                wstate cs p nx h t (unat q) (map unat lim) \<and> length rs = length t \<and> lends nx h\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of
              None \<Rightarrow> \<not> (\<exists>\<sigma>. cnf_sem \<sigma> cs)
@@ -373,10 +426,11 @@ lemma dpll_top_spec [crush_specs]:
     apply (all \<open>(frule (2) dpll_bt_idx)?\<close>)
     apply (all \<open>(frule (1) dpll_init')?\<close>)
     apply (all \<open>(frule wprop_post_len)?\<close>)
+    apply (all \<open>((drule rext_len)+)?\<close>)
     apply (auto simp add: dpll_wpre_def intro: dpll_cs_ok_wcs[unfolded dpll_cs_ok_def] dstate_tr[THEN conjunct1]
-        less_imp_diff_less tr_ok_lenA dpll_wst_init wstate_wl dest: dpll_wunsat1)
+        less_imp_diff_less tr_ok_lenA dpll_wst_init wstate_wl tr_ok_init dest: dpll_wunsat1)
     done
-  using dpll_init' by blast
+  using dpll_init' tr_ok_init by blast+
 
 
 end

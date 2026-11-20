@@ -655,27 +655,6 @@ fn clause_status(a: &Vec<Option<bool>>, c: &Vec<Lit>) -> Status {
     }
 }
 
-/// One pass of unit propagation over the clauses: assigns the literal of every unit clause in
-/// place and pushes it on the trail. The flag is false on a conflict, which ends the pass.
-fn propagate_pass(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>) -> (Vec<Option<bool>>, Vec<Lit>, bool) {
-    let mut a = a;
-    let mut trail = trail;
-    let mut i: usize = 0;
-    while i < cs.len() {
-        match clause_status(&a, &cs[i]) {
-            Status::Conflict => return (a, trail, false),
-            Status::Unit(l) => {
-                a[l.var] = Some(!l.neg);
-                trail.push(l);
-            }
-            Status::Satisfied => {}
-            Status::Open => {}
-        }
-        i += 1;
-    }
-    (a, trail, true)
-}
-
 fn find_unassigned(a: &Vec<Option<bool>>) -> Option<usize> {
     let mut i: usize = 0;
     while i < a.len() {
@@ -720,10 +699,35 @@ fn read_model(a: &Vec<Option<bool>>, vars: &Vec<Vec<Lit>>) -> Vec<Vec<bool>> {
     m
 }
 
+/// One pass of unit propagation over the clauses: assigns the literal of every unit clause in
+/// place and pushes it on the trail, and the index of the clause on the reasons `rs`. The flag is
+/// false on a conflict, which ends the pass.
+fn propagate_pass(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>, rs: Vec<usize>) -> (Vec<Option<bool>>, Vec<Lit>, Vec<usize>, bool) {
+    let mut a = a;
+    let mut trail = trail;
+    let mut rs = rs;
+    let mut i: usize = 0;
+    while i < cs.len() {
+        match clause_status(&a, &cs[i]) {
+            Status::Conflict => return (a, trail, rs, false),
+            Status::Unit(l) => {
+                a[l.var] = Some(!l.neg);
+                trail.push(l);
+                rs.push(i);
+            }
+            Status::Satisfied => {}
+            Status::Open => {}
+        }
+        i += 1;
+    }
+    (a, trail, rs, true)
+}
+
 // Watched literals. Each clause of at least two literals watches two of them; slot `2c + k` is
 // the watch `k` of clause `c`. `pos[s]` is the position in its clause of the literal that slot `s`
 // watches, `next[s]` the next slot in the list of the same literal, and `head[lit_index(l)]` the
-// first slot of the list of literal `l`. A link at or above `next.len()` ends a list. Every unit or
+// first slot of the list of literal `l`. A link at or above `next.len()` ends a list; the lists end
+// with `usize::MAX`, so that they stay well formed when the slots of learned clauses are appended. Every unit or
 // conflict the watches point to is also confirmed by `clause_status`.
 
 fn lit_index(l: Lit) -> usize {
@@ -739,8 +743,8 @@ fn lit_index(l: Lit) -> usize {
 fn watch_init(cs: &Vec<Vec<Lit>>, n: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>) {
     let m = cs.len();
     let mut pos: Vec<usize> = vec![0; 2 * m];
-    let mut next: Vec<usize> = vec![2 * m; 2 * m];
-    let mut head: Vec<usize> = vec![2 * m; 2 * n];
+    let mut next: Vec<usize> = vec![usize::MAX; 2 * m];
+    let mut head: Vec<usize> = vec![usize::MAX; 2 * n];
     let mut c: usize = 0;
     while c < m {
         if cs[c].len() >= 2 {
@@ -796,11 +800,13 @@ fn move_watch(pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, s: usize, pre
 /// Visits slot `s` of the list of the literal of index `x`, which has become false (`prev` is the
 /// slot before it in the list). If the other watched literal of the clause is true, the slot stays;
 /// otherwise its watch moves to another literal that is not false, if there is one, and else the
-/// clause is unit (its literal is assigned and pushed on the trail) or in conflict. The first flag
+/// clause is unit (its literal is assigned and pushed on the trail, the clause on the reasons) or in
+/// conflict. The first flag
 /// tells whether the slot stays on the list, the second is false on a conflict.
-fn visit_slot(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, x: usize, s: usize, prev: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, bool, bool) {
+fn visit_slot(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, rs: Vec<usize>, x: usize, s: usize, prev: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, Vec<usize>, bool, bool) {
     let mut a = a;
     let mut trail = trail;
+    let mut rs = rs;
     let c = s / 2;
     let o = if s % 2 == 0 { s + 1 } else { s - 1 };
     let i = pos[s];
@@ -810,30 +816,33 @@ fn visit_slot(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<u
             Some(k) => {
                 let y = lit_index(cs[c][k]);
                 let (p1, n1, h1) = move_watch(pos, next, head, s, prev, x, k, y);
-                return (p1, n1, h1, a, trail, false, true);
+                return (p1, n1, h1, a, trail, rs, false, true);
             }
             None => match clause_status(&a, &cs[c]) {
-                Status::Conflict => return (pos, next, head, a, trail, true, false),
+                Status::Conflict => return (pos, next, head, a, trail, rs, true, false),
                 Status::Unit(l) => {
                     a[l.var] = Some(!l.neg);
                     trail.push(l);
+                    rs.push(c);
                 }
                 Status::Satisfied => {}
                 Status::Open => {}
             },
         }
     }
-    (pos, next, head, a, trail, true, true)
+    (pos, next, head, a, trail, rs, true, true)
 }
 
 /// Visits the clauses that watch the literal of index `x`, which has become false, slot by slot
-/// (`visit_slot`). The flag is false on a conflict, which ends the visit.
-fn visit(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, x: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, bool) {
+/// (`visit_slot`). The flag is false on a conflict, which ends the visit; the last result is then
+/// the index of the clause in conflict.
+fn visit(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, rs: Vec<usize>, x: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, Vec<usize>, bool, usize) {
     let mut pos = pos;
     let mut next = next;
     let mut head = head;
     let mut a = a;
     let mut trail = trail;
+    let mut rs = rs;
     let nil = next.len();
     let mut s = head[x];
     let mut prev = nil;
@@ -841,54 +850,69 @@ fn visit(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>
     while s < nil && steps < nil {
         steps += 1;
         let ns = next[s];
-        let (p1, n1, h1, a1, t1, keep, ok) = visit_slot(cs, pos, next, head, a, trail, x, s, prev);
+        let (p1, n1, h1, a1, t1, r1, keep, ok) = visit_slot(cs, pos, next, head, a, trail, rs, x, s, prev);
         pos = p1;
         next = n1;
         head = h1;
         a = a1;
         trail = t1;
+        rs = r1;
         if !ok {
-            return (pos, next, head, a, trail, false);
+            return (pos, next, head, a, trail, rs, false, s / 2);
         }
         if keep {
             prev = s;
         }
         s = ns;
     }
-    (pos, next, head, a, trail, true)
+    (pos, next, head, a, trail, rs, true, 0)
 }
 
 /// Unit propagation over the watches: visits the clauses watching the negation of every trail
-/// entry from position `q` on. The flag is false on a conflict.
-fn wpropagate(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, q: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, usize, bool) {
+/// entry from position `q` on. The flag is false on a conflict; the last result is then the index
+/// of the clause in conflict.
+fn wpropagate(cs: &Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, a: Vec<Option<bool>>, trail: Vec<Lit>, rs: Vec<usize>, q: usize) -> (Vec<usize>, Vec<usize>, Vec<usize>, Vec<Option<bool>>, Vec<Lit>, Vec<usize>, usize, bool, usize) {
     let mut pos = pos;
     let mut next = next;
     let mut head = head;
     let mut a = a;
     let mut trail = trail;
+    let mut rs = rs;
     let mut q = q;
     while q < trail.len() {
         let x = lit_index(lit_neg(trail[q]));
         q += 1;
-        let (p1, n1, h1, a1, t1, ok) = visit(cs, pos, next, head, a, trail, x);
+        let (p1, n1, h1, a1, t1, r1, ok, cf) = visit(cs, pos, next, head, a, trail, rs, x);
         pos = p1;
         next = n1;
         head = h1;
         a = a1;
         trail = t1;
+        rs = r1;
         if !ok {
-            return (pos, next, head, a, trail, q, false);
+            return (pos, next, head, a, trail, rs, q, false, cf);
         }
     }
-    (pos, next, head, a, trail, q, true)
+    (pos, next, head, a, trail, rs, q, true, 0)
+}
+
+/// Removes the entries of `v` from position `p` on.
+fn cut(v: Vec<usize>, p: usize) -> Vec<usize> {
+    let mut v = v;
+    while p < v.len() {
+        v.pop();
+    }
+    v
 }
 
 /// A total assignment of the `n` variables that satisfies the clauses, if there is one.
 ///
 /// The search assigns in place and records the true literals in order on the trail; `lim` holds
 /// the trail positions of the decisions, so that the decision level of an entry is the number of
-/// decisions at or before it. A pass over the clauses first assigns the unit clauses; then the
-/// watches propagate the trail entries from position `q` on. On a conflict the last decision is
+/// decisions at or before it. `rs` holds the reason of every trail entry: the clause that implied
+/// it, or 0 for a decision or a flipped decision (not used yet). A pass over the clauses first
+/// assigns the unit clauses; then the watches propagate the trail entries from position `q` on. On
+/// a conflict the last decision is
 /// undone with every entry after it and its negation is pushed as an implied entry (chronological
 /// backtracking). The watches are complete (every clause of at least two literals that is not
 /// satisfied watches two literals that are not false, or its unit literal is still to be
@@ -898,21 +922,23 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut pos = pos0;
     let mut next = next0;
     let mut head = head0;
-    let (a0, t0, ok0) = propagate_pass(cs, vec![None; n], Vec::new());
+    let (a0, t0, r0, ok0) = propagate_pass(cs, vec![None; n], Vec::new(), Vec::new());
     if !ok0 {
         return None;
     }
     let mut a: Vec<Option<bool>> = a0;
     let mut trail: Vec<Lit> = t0;
+    let mut rs: Vec<usize> = r0;
     let mut lim: Vec<usize> = Vec::new();
     let mut q: usize = 0;
     loop {
-        let (p1, n1, h1, a1, t1, q1, ok) = wpropagate(cs, pos, next, head, a, trail, q);
+        let (p1, n1, h1, a1, t1, r1, q1, ok, _cf) = wpropagate(cs, pos, next, head, a, trail, rs, q);
         pos = p1;
         next = n1;
         head = h1;
         a = a1;
         trail = t1;
+        rs = r1;
         q = q1;
         if ok {
             match find_unassigned(&a) {
@@ -921,6 +947,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     lim.push(trail.len());
                     a[v] = Some(true);
                     trail.push(Lit { var: v, neg: false });
+                    rs.push(0);
                 }
             }
         }
@@ -932,8 +959,10 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     let (a2, t2) = backtrack(a, trail, p);
                     a = a2;
                     trail = t2;
+                    rs = cut(rs, p);
                     a[d.var] = Some(d.neg);
                     trail.push(lit_neg(d));
+                    rs.push(0);
                     q = p;
                 }
             }

@@ -424,6 +424,9 @@ lemma lends_addw:
   shows \<open>lends (nx[i := h ! x0, j := h[x0 := 2 * r] ! x1]) (h[x0 := 2 * r, x1 := 2 * r + 1])\<close>
   using lends_add[OF assms(1) _ _ assms(5,6)] unat64_dbl_lt[OF assms(2,3)] assms(2,4) by simp
 
+lemma len2_ne: \<open>2 \<le> length xs \<Longrightarrow> xs \<noteq> []\<close>
+  by auto
+
 lemma xlt:
   \<open>\<forall>i < length cs. \<forall>j < length (cs ! i). 2 * lv (cs ! i ! j) < M \<and> lv (cs ! i ! j) < N \<Longrightarrow>
    length h = 2 * N \<Longrightarrow> i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow>
@@ -523,6 +526,7 @@ lemma dpll_watch_init_spec [crush_specs]:
     apply (all \<open>(rule lends_init)?\<close>)
     apply (all \<open>(rule lends_addw, assumption, assumption, assumption, assumption)?\<close>)
     apply (all \<open>((rule xlt[THEN conjunct1] xlt[THEN conjunct2]), assumption, assumption, assumption, simp)?\<close>)
+    apply (all \<open>(rule len2_ne, assumption)?\<close>)
     done
   apply (auto simp add: unat_of_nat_eq)
   done
@@ -700,6 +704,29 @@ next
   then show ?thesis using False assms(1) by (simp add: mw_m_def Let_def)
 qed
 
+lemma lends_mwv:
+  assumes \<open>(p1, nx1, h1) = mw_m p nx h s prev x k y\<close> \<open>lends nx h\<close> \<open>unat s < length nx\<close>
+    \<open>\<forall>i < length cs. \<forall>j < length (cs ! i). Suc (2 * lv (cs ! i ! j)) < 2 * N\<close> \<open>length h = 2 * N\<close>
+    \<open>i < length cs\<close> \<open>j < length (cs ! i)\<close>
+    \<open>unat y = 2 * lv (cs ! i ! j) \<or> unat y = Suc (2 * lv (cs ! i ! j))\<close>
+  shows \<open>lends nx1 h1\<close>
+proof -
+  have \<open>unat y < length h\<close> using assms(4-8) by fastforce
+  then show ?thesis using lends_mw[OF assms(1-3)] by blast
+qed
+
+lemma lends_mwv0:
+  \<open>(p1, nx1, h1) = mw_m p nx h s prev x k y \<Longrightarrow> unat y = 2 * lv (cs ! i ! j) \<Longrightarrow> lends nx h \<Longrightarrow>
+   unat s < length nx \<Longrightarrow> \<forall>i < length cs. \<forall>j < length (cs ! i). Suc (2 * lv (cs ! i ! j)) < 2 * N \<Longrightarrow>
+   length h = 2 * N \<Longrightarrow> i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow> lends nx1 h1\<close>
+  using lends_mwv[of p1 nx1 h1 p nx h s prev x k y cs N i j] by simp
+
+lemma lends_mwv1:
+  \<open>(p1, nx1, h1) = mw_m p nx h s prev x k y \<Longrightarrow> unat y = Suc (2 * lv (cs ! i ! j)) \<Longrightarrow> lends nx h \<Longrightarrow>
+   unat s < length nx \<Longrightarrow> \<forall>i < length cs. \<forall>j < length (cs ! i). Suc (2 * lv (cs ! i ! j)) < 2 * N \<Longrightarrow>
+   length h = 2 * N \<Longrightarrow> i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow> lends nx1 h1\<close>
+  using lends_mwv[of p1 nx1 h1 p nx h s prev x k y cs N i j] by simp
+
 definition dpll_visit_slot_contract ::
   \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow>
    64 word list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
@@ -752,10 +779,14 @@ lemma dpll_visit_slot_spec [crush_specs]:
   apply (all \<open>(rule vsp_none(3); assumption)?\<close>)
   apply (all \<open>(rule vsp_none(4); assumption)?\<close>)
   apply (all \<open>(frule var_bnd2)?\<close>)
-  apply (all \<open>(frule lends_mw, assumption, simp, (simp add: lidx_def; fail))?\<close>)
+  apply (all \<open>(intro conjI impI)?\<close>)
+  apply (all \<open>(rule rext_refl, assumption)?\<close>)
+  apply (all \<open>(rule vs_unit_r, assumption, assumption, assumption, assumption, assumption, simp add: unat_div)?\<close>)
+  apply (all \<open>(rule vs_cfl, assumption, assumption, assumption, assumption)?\<close>)
   apply (auto simp add: fw_post_def
-      intro: vs_refl vs_conflict vs_unit vs_unit_var w_odd[THEN conjunct1] w_odd[THEN conjunct2] w_even
-        rext_refl vs_unit_r vs_cfl)
+      intro: vs_refl vs_conflict vs_unit vs_unit_var w_odd[THEN conjunct1] w_odd[THEN conjunct2] w_even)
+  apply (all \<open>((rule lends_mwv0 lends_mwv1), assumption, assumption, assumption, (simp; fail), assumption,
+      assumption, assumption, assumption)?\<close>)
   done
 
 text \<open>The invariant of the loop of \<^verbatim>\<open>visit\<close> for the false literal of index \<open>x\<close>.\<close>

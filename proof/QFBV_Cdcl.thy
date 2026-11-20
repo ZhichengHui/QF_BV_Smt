@@ -90,6 +90,9 @@ lemma lneg_inj: \<open>lneg l = lneg l' \<Longrightarrow> l = l'\<close>
 lemma lv_lneg: \<open>lv (lneg l) = lv l\<close>
   by (simp add: lneg_def)
 
+lemma cdcl_lit_sem_lneg: \<open>lit_sem \<sigma> (lneg l) = (\<not> lit_sem \<sigma> l)\<close>
+  by (simp add: lit_sem_def lneg_def)
+
 subsection \<open>The analysis\<close>
 
 text \<open>The marked entries of the current level below position \<open>i\<close>.\<close>
@@ -255,9 +258,6 @@ next
   show ?case using IH S1 by auto
 qed
 
-
-lemma cdcl_lit_sem_lneg: \<open>lit_sem \<sigma> (lneg l) = (\<not> lit_sem \<sigma> l)\<close>
-  by (simp add: lit_sem_def lneg_def)
 
 lemma cur_empty: \<open>cur t st st sn = {}\<close>
   by (simp add: cur_def)
@@ -467,6 +467,697 @@ proof -
   qed
 qed
 
+
+lemma notin_prefix: \<open>i < length t \<Longrightarrow> k \<le> i \<Longrightarrow> t ! i \<notin> set (take k t)\<close>
+proof
+  assume i: \<open>i < length t\<close> \<open>k \<le> i\<close> and m: \<open>t ! i \<in> set (take k t)\<close>
+  then obtain i' where \<open>i' < length (take k t)\<close> \<open>take k t ! i' = t ! i\<close> by (auto simp: in_set_conv_nth)
+  then have \<open>i' < k\<close> \<open>i' < length t\<close> \<open>t ! i' = t ! i\<close> by auto
+  then show False using var_inj[of i' i] i by simp
+qed
+
 end
+
+
+subsection \<open>The backjump\<close>
+
+text \<open>\<^verbatim>\<open>second_watch\<close>: the position after the first of a literal of the clause \<open>c\<close> whose trail
+  position is the highest (the first such one), swapped to position 1.\<close>
+definition sw_pos :: \<open>nat list \<Rightarrow> Lit list \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>sw_pos tp c m \<equiv> foldl (\<lambda>b k. if tp ! lv (c ! b) < tp ! lv (c ! k) then k else b) 1 [2..<m]\<close>
+
+definition sw_m :: \<open>nat list \<Rightarrow> Lit list \<Rightarrow> Lit list\<close> where
+  \<open>sw_m tp c \<equiv> let b = sw_pos tp c (length c) in c[1 := c ! b, b := c ! 1]\<close>
+
+text \<open>\<^verbatim>\<open>level_of\<close>: the number of decision positions at or below \<open>p\<close>.\<close>
+definition level_of_m :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>level_of_m L p \<equiv> length (takeWhile (\<lambda>x. x \<le> p) L)\<close>
+
+text \<open>\<^verbatim>\<open>add_clause_watched\<close>.\<close>
+definition acw_m ::
+  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> Lit list \<Rightarrow>
+   Lit list list \<times> 64 word list \<times> 64 word list \<times> 64 word list\<close> where
+  \<open>acw_m db p nx h c \<equiv>
+     let s = length nx; p1 = p @ [0, 1]; nx1 = nx @ [- 1, - 1] in
+     if 2 \<le> length c then
+       let x0 = lidx (c ! 0); nx2 = nx1[s := h ! x0]; h2 = h[x0 := word_of_nat s];
+           x1 = lidx (c ! 1); nx3 = nx2[Suc s := h2 ! x1]; h3 = h2[x1 := word_of_nat (Suc s)]
+       in (db @ [c], p1, nx3, h3)
+     else (db @ [c], p1, nx1, h)\<close>
+
+text \<open>\<^verbatim>\<open>set_pos\<close>.\<close>
+definition set_pos_m :: \<open>nat list \<Rightarrow> Lit list \<Rightarrow> nat \<Rightarrow> nat list\<close> where
+  \<open>set_pos_m tp t k \<equiv> foldl (\<lambda>tp j. tp[lv (t ! j) := j]) tp [k..<length t]\<close>
+
+lemma sw_pos_max:
+  assumes \<open>2 \<le> length c\<close> \<open>m \<le> length c\<close>
+  shows \<open>1 \<le> sw_pos tp c m \<and> sw_pos tp c m < length c \<and> (m \<le> 2 \<longrightarrow> sw_pos tp c m = 1) \<and>
+         (\<forall>k. 1 \<le> k \<and> k < m \<longrightarrow> tp ! lv (c ! k) \<le> tp ! lv (c ! sw_pos tp c m))\<close>
+  using assms(2)
+proof (induction m)
+  case 0
+  then show ?case using assms(1) by (simp add: sw_pos_def)
+next
+  case (Suc m)
+  show ?case
+  proof (cases \<open>2 \<le> m\<close>)
+    case False
+    then have \<open>Suc m \<le> 2\<close> by simp
+    then have \<open>[2..<Suc m] = []\<close> by simp
+    then have e: \<open>sw_pos tp c (Suc m) = 1\<close> by (simp add: sw_pos_def)
+    have \<open>\<forall>k. 1 \<le> k \<and> k < Suc m \<longrightarrow> k = 1\<close> using False by auto
+    then show ?thesis using e assms(1) by auto
+  next
+    case True
+    have u: \<open>[2..<Suc m] = [2..<m] @ [m]\<close> using True by simp
+    have IH: \<open>1 \<le> sw_pos tp c m\<close> \<open>sw_pos tp c m < length c\<close>
+      \<open>\<forall>k. 1 \<le> k \<and> k < m \<longrightarrow> tp ! lv (c ! k) \<le> tp ! lv (c ! sw_pos tp c m)\<close>
+      using Suc by auto
+    have e: \<open>sw_pos tp c (Suc m) = (if tp ! lv (c ! sw_pos tp c m) < tp ! lv (c ! m) then m else sw_pos tp c m)\<close>
+      unfolding sw_pos_def using u by simp
+    show ?thesis using IH e Suc.prems True by (auto simp: less_Suc_eq)
+  qed
+qed
+
+lemma set_swap: \<open>i < length xs \<Longrightarrow> j < length xs \<Longrightarrow> set (xs[i := xs ! j, j := xs ! i]) = set xs\<close>
+  by (metis mset_eq_setD mset_swap)
+
+lemma sw_m_facts:
+  assumes \<open>2 \<le> length c\<close>
+  shows \<open>length (sw_m tp c) = length c \<and> sw_m tp c ! 0 = c ! 0 \<and> set (sw_m tp c) = set c \<and>
+         set (tl (sw_m tp c)) = set (tl c) \<and>
+         (\<forall>k. 1 \<le> k \<and> k < length c \<longrightarrow> tp ! lv (sw_m tp c ! k) \<le> tp ! lv (sw_m tp c ! 1))\<close>
+proof -
+  let ?b = \<open>sw_pos tp c (length c)\<close>
+  note B = sw_pos_max[OF assms order_refl, of tp]
+  let ?c = \<open>c[1 := c ! ?b, ?b := c ! 1]\<close>
+  have c: \<open>sw_m tp c = ?c\<close> by (simp add: sw_m_def Let_def)
+  have l: \<open>length ?c = length c\<close> by simp
+  have z: \<open>?c ! 0 = c ! 0\<close> using B by (simp add: nth_list_update)
+  have s: \<open>set ?c = set c\<close> using set_swap[of 1 c ?b] B assms by simp
+  have ms: \<open>mset ?c = mset c\<close> using B assms by (simp add: mset_swap)
+  have ne: \<open>c \<noteq> []\<close> \<open>?c \<noteq> []\<close> using assms by auto
+  have \<open>mset (?c ! 0 # tl ?c) = mset (c ! 0 # tl c)\<close>
+    using ms ne by (metis hd_Cons_tl hd_conv_nth)
+  then have \<open>mset (tl ?c) = mset (tl c)\<close> using z by simp
+  then have s1: \<open>set (tl ?c) = set (tl c)\<close> by (metis set_mset_mset)
+  have m: \<open>tp ! lv (?c ! k) \<le> tp ! lv (?c ! 1)\<close> if \<open>1 \<le> k\<close> \<open>k < length c\<close> for k
+  proof -
+    have one: \<open>?c ! 1 = c ! ?b\<close> using B assms by (cases \<open>?b = 1\<close>) (auto simp: nth_list_update)
+    have \<open>?c ! k = c ! k \<or> ?c ! k = c ! 1 \<or> ?c ! k = c ! ?b\<close> using that B by (auto simp: nth_list_update)
+    moreover have mx: \<open>\<forall>k'. 1 \<le> k' \<and> k' < length c \<longrightarrow> tp ! lv (c ! k') \<le> tp ! lv (c ! ?b)\<close> using B by blast
+    moreover have \<open>1 < length c\<close> using assms by simp
+    ultimately show ?thesis using one that by auto
+  qed
+  show ?thesis using c l z s s1 m by simp
+qed
+
+lemma level_of_facts:
+  assumes \<open>sorted_wrt (<) L\<close> \<open>L \<noteq> []\<close> \<open>p < last L\<close>
+  shows \<open>level_of_m L p < length L \<and> p < L ! level_of_m L p \<and> (\<forall>x \<in> set (take (level_of_m L p) L). x \<le> p)\<close>
+proof -
+  let ?j = \<open>level_of_m L p\<close>
+  have tw: \<open>take ?j L = takeWhile (\<lambda>x. x \<le> p) L\<close> by (metis level_of_m_def takeWhile_eq_take)
+  have lt: \<open>?j < length L\<close>
+  proof (rule ccontr)
+    assume \<open>\<not> ?j < length L\<close>
+    then have \<open>?j = length L\<close> using length_takeWhile_le[of _ L] unfolding level_of_m_def by (meson le_antisym not_le)
+    then have \<open>takeWhile (\<lambda>x. x \<le> p) L = L\<close> using tw by simp
+    then have \<open>\<forall>x \<in> set L. x \<le> p\<close> by (metis set_takeWhileD)
+    then show False using assms(2,3) last_in_set[OF assms(2)] by fastforce
+  qed
+  have \<open>\<not> L ! ?j \<le> p\<close> unfolding level_of_m_def
+    by (rule nth_length_takeWhile) (use lt in \<open>simp add: level_of_m_def\<close>)
+  moreover have \<open>\<forall>x \<in> set (take ?j L). x \<le> p\<close> using tw by (metis set_takeWhileD)
+  ultimately show ?thesis using lt by simp
+qed
+
+lemma meas_fewer: \<open>set L2 \<subseteq> set L1 \<Longrightarrow> meas n m L1 \<le> meas n m L2\<close>
+  unfolding meas_def by (rule sum_mono) auto
+
+text \<open>A backjump to the decision position \<open>L ! j\<close>, where an implied entry is pushed, increases the
+  measure.\<close>
+lemma meas_backjump:
+  assumes \<open>sorted_wrt (<) L\<close> \<open>j < length L\<close> \<open>L ! j < m\<close> \<open>m \<le> n\<close>
+  shows \<open>meas n m L < meas n (Suc (L ! j)) (take j L)\<close>
+proof -
+  have \<open>set (take j L @ [L ! j]) \<subseteq> set L\<close> using assms(2) by (auto dest: in_set_takeD)
+  then have \<open>meas n m L \<le> meas n m (take j L @ [L ! j])\<close> by (rule meas_fewer)
+  moreover have \<open>\<forall>q \<in> set (take j L). q < L ! j\<close>
+    using assms(1,2) by (auto simp: in_set_conv_nth sorted_wrt_iff_nth_less)
+  ultimately show ?thesis using meas_backtrack[of \<open>take j L\<close> \<open>L ! j\<close> m n] assms(3,4) by linarith
+qed
+
+subsection \<open>Appending a clause with its watches\<close>
+
+text \<open>Every link of the lists is a slot or the end \<open>2 ^ 64 - 1\<close>.\<close>
+definition lends :: \<open>64 word list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
+  \<open>lends nx h \<equiv> \<forall>y \<in> set nx \<union> set h. unat y < length nx \<or> unat y = 2 ^ 64 - 1\<close>
+
+lemma lseg_app:
+  assumes \<open>lseg nx s xs\<close> \<open>s < length nx \<or> s = 2 ^ 64 - 1\<close>
+    \<open>\<forall>y \<in> set nx. unat y < length nx \<or> unat y = 2 ^ 64 - 1\<close> \<open>length (nx @ e) \<le> 2 ^ 64 - 1\<close>
+  shows \<open>lseg (nx @ e) s xs\<close>
+  using assms(1,2)
+proof (induction xs arbitrary: s)
+  case Nil
+  then show ?case using assms(4) by auto
+next
+  case (Cons y ys)
+  have y: \<open>s = y\<close> \<open>y < length nx\<close> \<open>lseg nx (unat (nx ! y)) ys\<close> using Cons.prems(1) by simp_all
+  have \<open>unat (nx ! y) < length nx \<or> unat (nx ! y) = 2 ^ 64 - 1\<close> using assms(3) y(2) by simp
+  then show ?case using Cons.IH[OF y(3)] y by (simp add: nth_append)
+qed
+
+lemma wl_lists_p:
+  assumes \<open>wl_lists cs m p nx h Ls\<close> \<open>length p' = length p\<close>
+    \<open>\<forall>s. wact cs m s \<longrightarrow> p' ! s = p ! s\<close>
+  shows \<open>wl_lists cs m p' nx h Ls\<close>
+proof -
+  have w: \<open>wlit cs p' s = wlit cs p s\<close> if \<open>wact cs m s\<close> for s using assms(3) that by (simp add: wlit_def)
+  have \<open>p' ! (2 * c) = p ! (2 * c) \<and> p' ! Suc (2 * c) = p ! Suc (2 * c)\<close> if \<open>c < m\<close> \<open>2 \<le> length (cs ! c)\<close> for c
+    using assms(3) that by (simp add: wact_def)
+  then show ?thesis using assms(1,2) w assms(3) unfolding wl_lists_def by auto
+qed
+
+lemma wl_lists_app:
+  assumes L: \<open>wl_lists db (length db) p nx h Ls\<close> and E: \<open>lends nx h\<close> \<open>length nx + 2 \<le> 2 ^ 64 - 1\<close>
+    and e: \<open>length e = 2\<close>
+  shows \<open>wl_lists (db @ [c]) (length db) (p @ e) (nx @ [- 1, - 1]) h Ls\<close>
+proof -
+  have W: \<open>length p = 2 * length db\<close> \<open>length nx = 2 * length db\<close> \<open>length Ls = length h\<close>
+    \<open>\<forall>s. wact db (length db) s \<longrightarrow> unat (p ! s) < length (db ! (s div 2)) \<and> lidx (wlit db p s) < length h\<close>
+    \<open>\<forall>c < length db. 2 \<le> length (db ! c) \<longrightarrow> p ! (2 * c) \<noteq> p ! Suc (2 * c)\<close>
+    \<open>\<forall>x < length h. lseg nx (unat (h ! x)) (Ls ! x) \<and> distinct (Ls ! x) \<and>
+        (\<forall>s. s \<in> set (Ls ! x) \<longleftrightarrow> wact db (length db) s \<and> lidx (wlit db p s) = x)\<close>
+    using L unfolding wl_lists_def by blast+
+  have act: \<open>wact (db @ [c]) (length db) s \<longleftrightarrow> wact db (length db) s\<close> for s
+    by (auto simp: wact_def nth_append)
+  have wl: \<open>wlit (db @ [c]) (p @ e) s = wlit db p s\<close> if \<open>wact db (length db) s\<close> for s
+    using that W(1) by (auto simp: wact_def wlit_def nth_append)
+  have pe: \<open>(p @ e) ! s = p ! s\<close> if \<open>s < 2 * length db\<close> for s using that W(1) by (simp add: nth_append)
+  have ends: \<open>\<forall>y \<in> set nx. unat y < length nx \<or> unat y = 2 ^ 64 - 1\<close> using E(1) by (simp add: lends_def)
+  have ls: \<open>lseg (nx @ [- 1, - 1]) (unat (h ! x)) (Ls ! x)\<close> if \<open>x < length h\<close> for x
+  proof -
+    have \<open>unat (h ! x) < length nx \<or> unat (h ! x) = 2 ^ 64 - 1\<close> using E(1) that by (simp add: lends_def)
+    then show ?thesis using lseg_app[of nx _ _ \<open>[- 1, - 1]\<close>] W(6) that ends E(2) by simp
+  qed
+  have pos: \<open>\<forall>c' < length db. 2 \<le> length ((db @ [c]) ! c') \<longrightarrow> (p @ e) ! (2 * c') \<noteq> (p @ e) ! Suc (2 * c')\<close>
+    using W(5) pe by (simp add: nth_append)
+  have \<open>\<forall>s. wact (db @ [c]) (length db) s \<longrightarrow> unat ((p @ e) ! s) < length ((db @ [c]) ! (s div 2)) \<and>
+      lidx (wlit (db @ [c]) (p @ e) s) < length h\<close>
+    using W(4) act wl pe by (auto simp: wact_def nth_append)
+  then show ?thesis using W act wl ls pos e unfolding wl_lists_def by auto
+qed
+
+lemma acw_facts:
+  assumes \<open>wl_ok db p nx h\<close> \<open>lends nx h\<close> \<open>2 * length db + 4 < 2 ^ 64\<close> \<open>\<forall>l \<in> set c. lidx l < length h\<close>
+    \<open>acw_m db p nx h c = (db', p', nx', h')\<close>
+  shows \<open>wl_ok db' p' nx' h' \<and> lends nx' h' \<and> length h' = length h \<and> db' = db @ [c] \<and> p' = p @ [0, 1] \<and>
+         length nx' = length nx + 2\<close>
+proof -
+  obtain Ls where L: \<open>wl_lists db (length db) p nx h Ls\<close> using assms(1) by (auto simp: wl_ok_def)
+  have lp: \<open>length p = 2 * length db\<close> \<open>length nx = 2 * length db\<close> using L by (simp_all add: wl_lists_def)
+  let ?c = \<open>length db\<close>
+  let ?s = \<open>length nx\<close>
+  have b: \<open>length nx + 2 \<le> 2 ^ 64 - 1\<close> using assms(3) lp by simp
+  note L0 = wl_lists_app[OF L assms(2) b, of \<open>[0, 0]\<close> c]
+  have L1: \<open>wl_lists (db @ [c]) (length db) (p @ [0, 0]) (nx @ [- 1, - 1]) h Ls\<close> using L0 by simp
+  have nl: \<open>length (nx @ [- 1, - 1 :: 64 word]) = ?s + 2\<close> by simp
+  have us: \<open>unat (word_of_nat ?s :: 64 word) = ?s\<close> \<open>unat (word_of_nat (Suc ?s) :: 64 word) = Suc ?s\<close>
+    using b by (intro unat_of_nat_eq; simp)+
+  have E0: \<open>\<forall>y \<in> set nx \<union> set h. unat y < length nx \<or> unat y = 2 ^ 64 - 1\<close> using assms(2) by (simp add: lends_def)
+  have m1: \<open>unat (- 1 :: 64 word) = 2 ^ 64 - 1\<close> by (simp add: unat_minus_one_word)
+  have E1: \<open>unat y < length nx \<or> unat y = 2 ^ 64 - 1\<close> if \<open>y \<in> set nx \<or> y \<in> set h\<close> for y
+    using E0 that by blast
+  show ?thesis
+  proof (cases \<open>2 \<le> length c\<close>)
+    case False
+    have r: \<open>db' = db @ [c]\<close> \<open>p' = p @ [0, 1]\<close> \<open>nx' = nx @ [- 1, - 1]\<close> \<open>h' = h\<close>
+      using assms(5) False by (auto simp: acw_m_def Let_def)
+    have \<open>wl_lists (db @ [c]) (Suc ?c) (p @ [0, 1]) (nx @ [- 1, - 1]) h Ls\<close>
+    proof -
+      have \<open>wl_lists (db @ [c]) (Suc ?c) (p @ [0, 0]) (nx @ [- 1, - 1]) h Ls\<close>
+        using wl_init_short[OF L1] False by simp
+      moreover have \<open>wact (db @ [c]) (Suc ?c) s \<Longrightarrow> s < 2 * ?c\<close> for s using False
+        by (auto simp: wact_def nth_append less_Suc_eq split: if_splits)
+      ultimately show ?thesis using wl_lists_p[of \<open>db @ [c]\<close> \<open>Suc ?c\<close> \<open>p @ [0, 0]\<close>] False lp
+        by (auto simp: nth_append less_Suc_eq)
+    qed
+    moreover have \<open>lends (nx @ [- 1, - 1]) h\<close> unfolding lends_def
+    proof
+      fix y assume \<open>y \<in> set (nx @ [- 1, - 1]) \<union> set h\<close>
+      then have \<open>y \<in> set nx \<or> y \<in> set h \<or> y = - 1\<close> by auto
+      then show \<open>unat y < length (nx @ [- 1, - 1]) \<or> unat y = 2 ^ 64 - 1\<close> using E1 m1 by fastforce
+    qed
+    ultimately show ?thesis using r by (auto simp: wl_ok_def)
+  next
+    case True
+    let ?x0 = \<open>lidx (c ! 0)\<close> and ?x1 = \<open>lidx (c ! 1)\<close>
+    have \<open>c ! 0 \<in> set c\<close> \<open>c ! 1 \<in> set c\<close> using True by (auto intro!: nth_mem)
+    then have x: \<open>?x0 < length h\<close> \<open>?x1 < length h\<close> using assms(4) by blast+
+    have z: \<open>\<forall>s. 2 * ?c \<le> s \<and> s < 2 * length (db @ [c]) \<longrightarrow> (p @ [0, 0]) ! s = 0\<close>
+    proof (intro allI impI)
+      fix s assume \<open>2 * ?c \<le> s \<and> s < 2 * length (db @ [c])\<close>
+      then have \<open>s = 2 * ?c \<or> s = Suc (2 * ?c)\<close> by auto
+      then show \<open>(p @ [0, 0]) ! s = 0\<close> using lp by (auto simp: nth_append)
+    qed
+    have bb: \<open>2 * length (db @ [c]) < 2 ^ 64\<close> using assms(3) by simp
+    have x': \<open>lidx ((db @ [c]) ! ?c ! 0) < length h\<close> \<open>lidx ((db @ [c]) ! ?c ! 1) < length h\<close> using x by simp_all
+    have cc: \<open>?c < length (db @ [c])\<close> \<open>2 \<le> length ((db @ [c]) ! ?c)\<close> using True by simp_all
+    note S = wl_init_step[OF L1 cc z refl refl x' bb]
+    have pq: \<open>(p @ [0, 0])[Suc (2 * ?c) := 1] = p @ [0, 1]\<close> using lp by (simp add: list_update_append)
+    have r: \<open>db' = db @ [c]\<close> \<open>p' = p @ [0, 1]\<close>
+      \<open>nx' = ((nx @ [- 1, - 1])[?s := h ! ?x0])[Suc ?s := (h[?x0 := word_of_nat ?s]) ! ?x1]\<close>
+      \<open>h' = (h[?x0 := word_of_nat ?s])[?x1 := word_of_nat (Suc ?s)]\<close>
+      using assms(5) True by (auto simp: acw_m_def Let_def)
+    have W: \<open>wl_ok db' p' nx' h'\<close> using S True r pq lp unfolding wl_ok_def by (auto simp: nth_append)
+    have hs: \<open>set (h[?x0 := word_of_nat ?s]) \<subseteq> insert (word_of_nat ?s) (set h)\<close> by (rule set_update_subset_insert)
+    have hs2: \<open>set h' \<subseteq> insert (word_of_nat (Suc ?s)) (insert (word_of_nat ?s) (set h))\<close>
+      using r(4) hs set_update_subset_insert by fastforce
+    have ns: \<open>set nx' \<subseteq> set nx \<union> {- 1} \<union> set h \<union> insert (word_of_nat ?s) (set h)\<close>
+    proof -
+      have \<open>set ((nx @ [- 1, - 1])[?s := h ! ?x0]) \<subseteq> insert (h ! ?x0) (set nx \<union> {- 1})\<close>
+        using set_update_subset_insert by fastforce
+      moreover have \<open>(h[?x0 := word_of_nat ?s]) ! ?x1 \<in> insert (word_of_nat ?s) (set h)\<close>
+        using hs x by (metis length_list_update nth_mem subsetD)
+      ultimately show ?thesis using r(3) set_update_subset_insert x(1) by fastforce
+    qed
+    have ln': \<open>length nx' = ?s + 2\<close> using r(3) by simp
+    have \<open>lends nx' h'\<close> unfolding lends_def
+    proof
+      fix y assume \<open>y \<in> set nx' \<union> set h'\<close>
+      then have \<open>y \<in> set nx \<union> set h \<or> y = - 1 \<or> y = word_of_nat ?s \<or> y = word_of_nat (Suc ?s)\<close>
+        using ns hs2 by blast
+      then show \<open>unat y < length nx' \<or> unat y = 2 ^ 64 - 1\<close> using E1 ln' us m1 by fastforce
+    qed
+    then show ?thesis using W r ln' by simp
+  qed
+qed
+
+text \<open>The invariants of the watches after a clause is appended with \<open>acw_m\<close>.\<close>
+lemma WS_app:
+  assumes \<open>length p = 2 * length db\<close> \<open>WS db p t S\<close>
+    \<open>2 \<le> length c \<longrightarrow> (lneg (c ! 0) \<in> S \<longrightarrow> c ! 1 \<in> set t) \<and> (lneg (c ! 1) \<in> S \<longrightarrow> c ! 0 \<in> set t)\<close>
+  shows \<open>WS (db @ [c]) (p @ [0, 1]) t S\<close>
+  unfolding WS_def
+proof (intro allI impI)
+  fix s assume a: \<open>wact (db @ [c]) (length (db @ [c])) s\<close> and f: \<open>lneg (wlit (db @ [c]) (p @ [0, 1]) s) \<in> S\<close>
+  show \<open>wlit (db @ [c]) (p @ [0, 1]) (oth s) \<in> set t\<close>
+  proof (cases \<open>s < 2 * length db\<close>)
+    case True
+    have o: \<open>oth s < 2 * length db\<close> using True by (auto simp: oth_def)
+    have w: \<open>wlit (db @ [c]) (p @ [0, 1]) s' = wlit db p s'\<close> if \<open>s' < 2 * length db\<close> for s'
+      using that assms(1) by (auto simp: wlit_def nth_append)
+    have \<open>s div 2 < length db\<close> using True by linarith
+    then have \<open>wact db (length db) s\<close> using a True by (auto simp: wact_def nth_append)
+    then show ?thesis using assms(2) f w[OF True] w[OF o] unfolding WS_def by metis
+  next
+    case False
+    then have s: \<open>s = 2 * length db \<or> s = Suc (2 * length db)\<close> using a by (auto simp: wact_def)
+    have lc: \<open>2 \<le> length c\<close> using a s by (auto simp: wact_def nth_append)
+    have w0: \<open>wlit (db @ [c]) (p @ [0, 1]) (2 * length db) = c ! 0\<close>
+      and w1: \<open>wlit (db @ [c]) (p @ [0, 1]) (Suc (2 * length db)) = c ! 1\<close>
+      using assms(1) by (simp_all add: wlit_def nth_append)
+    have o: \<open>oth (2 * length db) = Suc (2 * length db)\<close> \<open>oth (Suc (2 * length db)) = 2 * length db\<close>
+      by (simp_all add: oth_def)
+    show ?thesis using s assms(3) lc f w0 w1 o by auto
+  qed
+qed
+
+lemma SP_app: \<open>SP db t \<Longrightarrow> (length c < 2 \<longrightarrow> (\<exists>l \<in> set c. l \<in> set t)) \<Longrightarrow> SP (db @ [c]) t\<close>
+  unfolding SP_def by auto
+
+
+subsection \<open>The invariant of the search\<close>
+
+text \<open>The state of the search over the clauses \<open>db\<close>, which are the clauses \<open>cs\<close> of the problem
+  followed by learned ones that follow from them: the trail \<open>t\<close> with the decision positions \<open>L\<close>
+  (\<^const>\<open>dstate\<close>), the reasons \<open>rs\<close> of the implied entries while learning is on (\<open>lr\<close>), the
+  trail positions \<open>tp\<close>, and the watches \<open>p\<close>, \<open>nx\<close>, \<open>h\<close> with the invariant at the decision
+  positions. It holds at every conflict; \<^const>\<open>wstate\<close> adds the invariant at the propagated
+  prefix of the trail.\<close>
+definition cinv ::
+  \<open>Lit list list \<Rightarrow> nat \<Rightarrow> Lit list list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow>
+   nat list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool \<Rightarrow> bool\<close> where
+  \<open>cinv cs n db a t rs tp L p nx h lr \<equiv>
+     (\<exists>ls. db = cs @ ls) \<and> dpll_wf n db \<and> (\<forall>\<sigma>. cnf_sem \<sigma> cs \<longrightarrow> cnf_sem \<sigma> db) \<and>
+     0 < length db \<and> length db < 2 ^ 62 \<and>
+     dstate db n a t L \<and> length rs = length t \<and> (\<forall>j < length t. rs ! j < length db) \<and>
+     (lr \<longrightarrow> (\<forall>j < length t. j \<notin> set L \<longrightarrow> reason db t j (rs ! j))) \<and>
+     tpos t tp \<and> length tp = n \<and> lends nx h \<and> length h = 2 * n \<and>
+     wl_ok db p nx h \<and> SP db t \<and> (\<forall>k \<in> set L. k \<le> length t \<and> WP db p t k \<and> SP db (take k t))\<close>
+
+lemma tr_imp_mono: \<open>(\<forall>\<sigma>. cnf_sem \<sigma> db' \<longrightarrow> cnf_sem \<sigma> db) \<Longrightarrow> tr_imp db t j \<Longrightarrow> tr_imp db' t j\<close>
+  unfolding tr_imp_def by blast
+
+lemma reason_imp: \<open>reason db t j r \<Longrightarrow> tr_imp db t j\<close>
+  unfolding tr_imp_def
+proof (intro allI impI)
+  fix \<sigma> assume r: \<open>reason db t j r\<close> and m: \<open>cnf_sem \<sigma> db \<and> (\<forall>k < j. lit_sem \<sigma> (t ! k))\<close>
+  have \<open>db ! r \<in> set db\<close> using r by (simp add: reason_def)
+  then obtain l where l: \<open>l \<in> set (db ! r)\<close> \<open>lit_sem \<sigma> l\<close> using m unfolding cnf_sem_def by blast
+  show \<open>lit_sem \<sigma> (t ! j)\<close>
+  proof (rule ccontr)
+    assume n: \<open>\<not> lit_sem \<sigma> (t ! j)\<close>
+    then have \<open>l \<noteq> t ! j\<close> using l(2) by blast
+    then obtain k where \<open>k < j\<close> \<open>t ! k = lneg l\<close> using r l(1) by (auto simp: reason_def)
+    then show False using m l(2) cdcl_lit_sem_lneg by metis
+  qed
+qed
+
+lemma cnf_sem_app: \<open>cnf_sem \<sigma> (cs @ ls) \<Longrightarrow> cnf_sem \<sigma> cs\<close>
+  by (simp add: cnf_sem_def)
+
+lemma sorted_last: \<open>sorted_wrt (<) L \<Longrightarrow> x \<in> set L \<Longrightarrow> x \<le> last L\<close> for L :: \<open>nat list\<close>
+proof -
+  assume a: \<open>sorted_wrt (<) L\<close> \<open>x \<in> set L\<close>
+  then obtain i where i: \<open>i < length L\<close> \<open>L ! i = x\<close> by (auto simp: in_set_conv_nth)
+  have ne: \<open>L \<noteq> []\<close> using a(2) by auto
+  have l: \<open>last L = L ! (length L - 1)\<close> using last_conv_nth[OF ne] .
+  show ?thesis
+  proof (cases \<open>i = length L - 1\<close>)
+    case False
+    then have \<open>i < length L - 1\<close> using i(1) by simp
+    then show ?thesis using sorted_wrt_nth_less[OF a(1)] i l by fastforce
+  qed (use i l in simp)
+qed
+
+lemma sorted_take_lt: \<open>sorted_wrt (<) L \<Longrightarrow> j < length L \<Longrightarrow> x \<in> set (take j L) \<Longrightarrow> x < L ! j\<close> for L :: \<open>nat list\<close>
+  by (auto simp: in_set_conv_nth sorted_wrt_iff_nth_less)
+
+lemma sorted_lt_take: \<open>sorted_wrt (<) L \<Longrightarrow> j < length L \<Longrightarrow> x \<in> set L \<Longrightarrow> x < L ! j \<Longrightarrow> x \<in> set (take j L)\<close>
+  for L :: \<open>nat list\<close>
+proof -
+  assume a: \<open>sorted_wrt (<) L\<close> \<open>j < length L\<close> \<open>x \<in> set L\<close> \<open>x < L ! j\<close>
+  then obtain i where i: \<open>i < length L\<close> \<open>L ! i = x\<close> by (auto simp: in_set_conv_nth)
+  have \<open>i < j\<close>
+  proof (rule ccontr)
+    assume \<open>\<not> i < j\<close>
+    then have \<open>j = i \<or> j < i\<close> by auto
+    then have \<open>L ! j \<le> L ! i\<close>
+    proof
+      assume \<open>j < i\<close>
+      then show ?thesis using sorted_wrt_nth_less[OF a(1) _ i(1)] by fastforce
+    qed simp
+    then show False using a(4) i(2) by simp
+  qed
+  then show ?thesis using i a(2) by (auto simp: in_set_conv_nth)
+qed
+
+text \<open>The backjump after a conflict of the clause \<open>cf\<close> (all its literals false) at a decision
+  level above 0, with learning on: the analysis learns a clause \<open>C\<close>; its literal of the highest
+  trail position after the first is moved to position 1 (if it has two literals); the search
+  returns to the decision position \<open>L ! j\<close> of the level of that literal (\<open>j = 0\<close> for a unit
+  clause), where the first literal of the clause is implied with the new clause as its reason.\<close>
+theorem cinv_backjump:
+  assumes I: \<open>cinv cs n db a t rs tp L p nx h True\<close> and L: \<open>L \<noteq> []\<close>
+    and cf: \<open>cf < length db\<close> \<open>\<forall>l \<in> set (db ! cf). lneg l \<in> set t\<close>
+    and sz: \<open>length db < 2 ^ 62 - 1\<close>
+    and A: \<open>analyze_m db t rs tp (last L) (replicate n False) cf = (C, sn, True)\<close>
+    and C2: \<open>C2 = (if 2 \<le> length C then sw_m tp C else C)\<close>
+    and j: \<open>j = (if 2 \<le> length C then level_of_m L (tp ! lv (C2 ! 1)) else 0)\<close>
+    and a2: \<open>tr_ok n a2 (take (L ! j) t)\<close>
+    and W: \<open>acw_m db p nx h C2 = (db', p', nx', h')\<close>
+  shows \<open>sn = replicate n False \<and> j < length L \<and> db' = db @ [C2] \<and> C2 \<noteq> [] \<and>
+    cinv cs n db' (a2[lv (hd C2) := Some (\<not> Lit_neg (hd C2))]) (take (L ! j) t @ [hd C2])
+      (take (L ! j) rs @ [length db]) (tp[lv (hd C2) := L ! j]) (take j L) p' nx' h' True \<and>
+    wstate db' p' nx' h' (take (L ! j) t @ [hd C2]) (L ! j) (take j L) \<and>
+    meas n (length t) L < meas n (Suc (L ! j)) (take j L)\<close>
+proof -
+  have D: \<open>\<exists>ls. db = cs @ ls\<close> \<open>dpll_wf n db\<close> \<open>\<forall>\<sigma>. cnf_sem \<sigma> cs \<longrightarrow> cnf_sem \<sigma> db\<close> \<open>0 < length db\<close>
+    \<open>dstate db n a t L\<close> \<open>length rs = length t\<close> \<open>\<forall>j < length t. rs ! j < length db\<close>
+    \<open>\<forall>j < length t. j \<notin> set L \<longrightarrow> reason db t j (rs ! j)\<close>
+    \<open>tpos t tp\<close> \<open>length tp = n\<close> \<open>lends nx h\<close> \<open>length h = 2 * n\<close> \<open>wl_ok db p nx h\<close> \<open>SP db t\<close>
+    \<open>\<forall>k \<in> set L. k \<le> length t \<and> WP db p t k \<and> SP db (take k t)\<close>
+    using I by (simp_all add: cinv_def)
+  have DS: \<open>tr_ok n a t\<close> \<open>sorted_wrt (<) L\<close> \<open>\<forall>q \<in> set L. q < length t\<close>
+    \<open>\<forall>j < length t. j \<notin> set L \<longrightarrow> tr_imp db t j\<close>
+    using D(5) by (simp_all add: dstate_def)
+  interpret atrail n a t tp using DS(1) D(9) by unfold_locales
+  let ?st = \<open>last L\<close>
+  have stL: \<open>?st \<in> set L\<close> using L by simp
+  have st: \<open>?st < length t\<close> using DS(3) stL by blast
+  have Lst: \<open>\<forall>x \<in> set L. x \<le> ?st\<close> using sorted_last[OF DS(2)] by blast
+  have rsn: \<open>\<forall>j. ?st < j \<and> j < length t \<longrightarrow> reason db t j (rs ! j)\<close>
+    using D(8) Lst by (meson leD)
+  have cfl: \<open>\<forall>l \<in> set (db ! cf). \<exists>j < length t. t ! j = lneg l\<close>
+    using cf(2) by (metis in_set_conv_nth)
+  note AN = analyze_ok[OF D(2) less_imp_le[OF st] rsn cf(1) cfl A]
+  obtain u where u: \<open>?st \<le> u\<close> \<open>u < length t\<close> \<open>hd C = lneg (t ! u)\<close> using AN by blast
+  have Cne: \<open>C \<noteq> []\<close> and Clow: \<open>\<forall>l \<in> set (tl C). \<exists>j < ?st. j < length t \<and> t ! j = lneg l\<close>
+    and Cent: \<open>\<forall>\<sigma>. cnf_sem \<sigma> db \<longrightarrow> (\<exists>l \<in> set C. lit_sem \<sigma> l)\<close> using AN by auto
+  have C2f: \<open>C2 \<noteq> [] \<and> hd C2 = hd C \<and> set C2 = set C \<and> set (tl C2) = set (tl C) \<and> length C2 = length C\<close>
+  proof (cases \<open>2 \<le> length C\<close>)
+    case True
+    note F = sw_m_facts[OF True, of tp]
+    have \<open>hd (sw_m tp C) = hd C\<close> using F True by (metis hd_conv_nth list.size(3) not_numeral_le_zero)
+    then show ?thesis using F C2 True Cne by auto
+  qed (use C2 Cne in simp)
+  let ?d = \<open>hd C2\<close>
+  have d: \<open>?d = lneg (t ! u)\<close> using C2f u(3) by simp
+  have C2d: \<open>C2 = ?d # tl C2\<close> using C2f list.collapse by metis
+  have C2low: \<open>\<forall>l \<in> set (tl C2). \<exists>j < ?st. j < length t \<and> t ! j = lneg l\<close> using Clow C2f by simp
+  \<comment> \<open>The level of the backjump.\<close>
+  have J: \<open>j < length L \<and> (\<forall>l \<in> set (tl C2). \<exists>jl < L ! j. t ! jl = lneg l) \<and>
+           (2 \<le> length C2 \<longrightarrow> (\<exists>mp. t ! mp = lneg (C2 ! 1) \<and> mp < length t \<and> (\<forall>x \<in> set (take j L). x \<le> mp)))\<close>
+  proof (cases \<open>2 \<le> length C\<close>)
+    case True
+    note F = sw_m_facts[OF True, of tp]
+    have c2: \<open>C2 = sw_m tp C\<close> using C2 True by simp
+    have \<open>0 < length (tl C2)\<close> using True C2f by simp
+    then have \<open>tl C2 ! 0 \<in> set (tl C2)\<close> by (rule nth_mem)
+    moreover have \<open>tl C2 ! 0 = C2 ! 1\<close> using \<open>0 < length (tl C2)\<close> by (simp add: nth_tl)
+    ultimately have \<open>C2 ! 1 \<in> set (tl C2)\<close> by metis
+    then obtain j1 where j1: \<open>j1 < ?st\<close> \<open>j1 < length t\<close> \<open>t ! j1 = lneg (C2 ! 1)\<close> using C2low by blast
+    have tp1: \<open>tp ! lv (C2 ! 1) = j1\<close> using tp_at[OF j1(2)] j1(3) by (simp add: lv_lneg)
+    have jj: \<open>j = level_of_m L j1\<close> using j True tp1 by simp
+    note LV = level_of_facts[OF DS(2) L, of j1] j1(1)
+    have lowj: \<open>\<exists>jl < L ! j. t ! jl = lneg l\<close> if hl: \<open>l \<in> set (tl C2)\<close> for l
+    proof -
+      obtain jl where jl: \<open>jl < ?st\<close> \<open>jl < length t\<close> \<open>t ! jl = lneg l\<close> using bspec[OF C2low hl] by blast
+      obtain k' where k': \<open>k' < length (tl C2)\<close> \<open>tl C2 ! k' = l\<close> using hl by (auto simp: in_set_conv_nth)
+      have k: \<open>1 \<le> Suc k'\<close> \<open>Suc k' < length C2\<close> \<open>C2 ! Suc k' = l\<close> using k' by (auto simp: nth_tl)
+      have \<open>tp ! lv l \<le> tp ! lv (C2 ! 1)\<close> using F k c2 by (metis (no_types, lifting))
+      moreover have \<open>tp ! lv l = jl\<close> using tp_at[OF jl(2)] jl(3) by (simp add: lv_lneg)
+      ultimately have \<open>jl \<le> j1\<close> using tp1 by simp
+      then have \<open>jl < L ! j\<close> using LV jj by simp
+      then show ?thesis using jl(3) by blast
+    qed
+    show ?thesis using LV jj lowj j1 C2f True by auto
+  next
+    case False
+    have \<open>0 < length C\<close> using Cne by simp
+    then have \<open>length C = 1\<close> using False by linarith
+    then have \<open>length (tl C2) = 0\<close> using C2f by simp
+    then have \<open>tl C2 = []\<close> by (simp only: length_0_conv)
+    moreover have \<open>j = 0\<close> using j False by simp
+    ultimately show ?thesis using L C2f False by simp
+  qed
+  let ?pp = \<open>L ! j\<close>
+  have ppL: \<open>?pp \<in> set L\<close> using J by simp
+  have pst: \<open>?pp \<le> ?st\<close> using Lst ppL by blast
+  have ppt: \<open>?pp < length t\<close> using DS(3) ppL by blast
+  have up: \<open>?pp \<le> u\<close> using pst u(1) by simp
+  have takeL: \<open>\<forall>x \<in> set (take j L). x < ?pp\<close> using sorted_take_lt[OF DS(2)] J by blast
+  have Ltake: \<open>x \<in> set (take j L)\<close> if \<open>x \<in> set L\<close> \<open>x < ?pp\<close> for x
+    using sorted_lt_take[OF DS(2)] J that by blast
+  have lowpp: \<open>\<forall>l \<in> set (tl C2). \<exists>jl < ?pp. t ! jl = lneg l\<close> using J by blast
+  let ?t' = \<open>take ?pp t @ [?d]\<close>
+  let ?a' = \<open>a2[lv ?d := Some (\<not> Lit_neg ?d)]\<close>
+  let ?rs' = \<open>take ?pp rs @ [length db]\<close>
+  let ?tp' = \<open>tp[lv ?d := ?pp]\<close>
+  let ?L' = \<open>take j L\<close>
+  have lt': \<open>length ?t' = Suc ?pp\<close> using ppt by simp
+  have t'k: \<open>?t' ! k = t ! k\<close> if \<open>k < ?pp\<close> for k using that ppt by (simp add: nth_append)
+  have t'pp: \<open>?t' ! ?pp = ?d\<close> using ppt by (simp add: nth_append)
+  have vd: \<open>lv ?d = lv (t ! u)\<close> using d by (simp add: lv_lneg)
+  have vdn: \<open>lv ?d < n\<close> using vd var_lt[OF u(2)] by simp
+  have vne: \<open>lv (t ! k) \<noteq> lv ?d\<close> if \<open>k < ?pp\<close> for k using var_inj[of k u] that vd up ppt u(2) by force
+  \<comment> \<open>The clauses.\<close>
+  have lits: \<open>\<forall>l \<in> set C2. lv l < n\<close>
+  proof
+    fix l assume l: \<open>l \<in> set C2\<close>
+    show \<open>lv l < n\<close>
+    proof (cases \<open>l = ?d\<close>)
+      case False
+      then have \<open>l \<in> set (tl C2)\<close> using l C2d by (metis set_ConsD)
+      then obtain jl where \<open>jl < ?st\<close> \<open>jl < length t\<close> \<open>t ! jl = lneg l\<close> using C2low by blast
+      then show ?thesis using var_lt by (metis lv_lneg)
+    qed (use vdn in simp)
+  qed
+  have lidx: \<open>\<forall>l \<in> set C2. lidx l < length h\<close> using lits D(12) by (auto simp: lidx_def)
+  have sz4: \<open>2 * length db + 4 < 2 ^ 64\<close> using sz by simp
+  note AW = acw_facts[OF D(13,11) sz4 lidx W]
+  have db': \<open>db' = db @ [C2]\<close> and p': \<open>p' = p @ [0, 1]\<close> using AW by simp_all
+  have lp: \<open>length p = 2 * length db\<close>
+    using D(13) by (auto simp: wl_ok_def wl_lists_def)
+  have ent': \<open>\<forall>\<sigma>. cnf_sem \<sigma> cs \<longrightarrow> cnf_sem \<sigma> db'\<close>
+  proof (intro allI impI)
+    fix \<sigma> assume \<open>cnf_sem \<sigma> cs\<close>
+    then have m: \<open>cnf_sem \<sigma> db\<close> using D(3) by blast
+    then have \<open>\<exists>l \<in> set C2. lit_sem \<sigma> l\<close> using Cent C2f by simp
+    then show \<open>cnf_sem \<sigma> db'\<close> using m db' by (simp add: cnf_sem_def)
+  qed
+  have bk: \<open>\<forall>\<sigma>. cnf_sem \<sigma> db' \<longrightarrow> cnf_sem \<sigma> db\<close> using db' cnf_sem_app by blast
+  have wf': \<open>dpll_wf n db'\<close> using D(2) lits db' by (simp add: dpll_wf_def lits_lt_def)
+  have dbapp: \<open>\<exists>ls. db' = cs @ ls\<close> using D(1) db' by auto
+  \<comment> \<open>The trail.\<close>
+  have none: \<open>a2 ! lv ?d = None\<close>
+  proof (rule ccontr)
+    assume \<open>a2 ! lv ?d \<noteq> None\<close>
+    then obtain l where l: \<open>l \<in> set (take ?pp t)\<close> \<open>lv l = lv ?d\<close> using a2 vdn by (auto simp: tr_ok_def)
+    then obtain k where \<open>k < ?pp\<close> \<open>t ! k = l\<close> using ppt by (auto simp: in_set_conv_nth)
+    then show False using vne l(2) by blast
+  qed
+  have tr': \<open>tr_ok n ?a' ?t'\<close> using tr_ok_push[OF a2 vdn none] by simp
+  have imp_new: \<open>tr_imp db' ?t' ?pp\<close>
+    unfolding tr_imp_def
+  proof (intro allI impI)
+    fix \<sigma> assume m: \<open>cnf_sem \<sigma> db' \<and> (\<forall>k < ?pp. lit_sem \<sigma> (?t' ! k))\<close>
+    have \<open>C2 \<in> set db'\<close> using db' by simp
+    then obtain l where l: \<open>l \<in> set C2\<close> \<open>lit_sem \<sigma> l\<close> using m unfolding cnf_sem_def by blast
+    show \<open>lit_sem \<sigma> (?t' ! ?pp)\<close>
+    proof (cases \<open>l = ?d\<close>)
+      case False
+      then have \<open>l \<in> set (tl C2)\<close> using l(1) C2d by (metis set_ConsD)
+      then obtain jl where \<open>jl < ?pp\<close> \<open>t ! jl = lneg l\<close> using lowpp by blast
+      then have \<open>lit_sem \<sigma> (lneg l)\<close> using m t'k by metis
+      then show ?thesis using l(2) cdcl_lit_sem_lneg by simp
+    qed (use l t'pp in simp)
+  qed
+  have imp': \<open>\<forall>k < length ?t'. k \<notin> set ?L' \<longrightarrow> tr_imp db' ?t' k\<close>
+  proof (intro allI impI)
+    fix k assume k: \<open>k < length ?t'\<close> \<open>k \<notin> set ?L'\<close>
+    show \<open>tr_imp db' ?t' k\<close>
+    proof (cases \<open>k = ?pp\<close>)
+      case False
+      then have kp: \<open>k < ?pp\<close> using k(1) lt' by simp
+      then have \<open>k \<notin> set L\<close> using Ltake k(2) by blast
+      then have \<open>tr_imp db t k\<close> using DS(4) kp ppt by simp
+      moreover have \<open>t = take ?pp t @ drop ?pp t\<close> by simp
+      ultimately have \<open>tr_imp db (take ?pp t) k\<close> using tr_imp_append[of k \<open>take ?pp t\<close> db \<open>drop ?pp t\<close>] kp ppt by simp
+      then have \<open>tr_imp db ?t' k\<close> using tr_imp_append[of k \<open>take ?pp t\<close> db \<open>[?d]\<close>] kp ppt by simp
+      then show ?thesis using tr_imp_mono[OF bk] by blast
+    qed (use imp_new in simp)
+  qed
+  have sortedL': \<open>sorted_wrt (<) ?L'\<close> using DS(2) by (metis sorted_wrt_take)
+  have L't: \<open>\<forall>x \<in> set ?L'. x < length ?t'\<close> using takeL lt' by auto
+  have ds': \<open>dstate db' n ?a' ?t' ?L'\<close> using tr' sortedL' L't imp' by (simp add: dstate_def)
+  \<comment> \<open>Reasons and positions.\<close>
+  have rsl: \<open>length ?rs' = length ?t'\<close> using D(6) ppt by simp
+  have rs'k: \<open>?rs' ! k = rs ! k\<close> if \<open>k < ?pp\<close> for k using that D(6) ppt by (simp add: nth_append)
+  have rs'pp: \<open>?rs' ! ?pp = length db\<close> using D(6) ppt by (simp add: nth_append)
+  have rslt: \<open>\<forall>k < length ?t'. ?rs' ! k < length db'\<close>
+  proof (intro allI impI)
+    fix k assume \<open>k < length ?t'\<close>
+    then have \<open>k < ?pp \<or> k = ?pp\<close> using lt' by auto
+    then show \<open>?rs' ! k < length db'\<close>
+    proof
+      assume kp: \<open>k < ?pp\<close>
+      then have \<open>k < length t\<close> using ppt by simp
+      then have \<open>rs ! k < length db\<close> using D(7) by blast
+      then show ?thesis using rs'k[OF kp] db' by simp
+    qed (use rs'pp db' in simp)
+  qed
+  have rsn': \<open>\<forall>k < length ?t'. k \<notin> set ?L' \<longrightarrow> reason db' ?t' k (?rs' ! k)\<close>
+  proof (intro allI impI)
+    fix k assume k: \<open>k < length ?t'\<close> \<open>k \<notin> set ?L'\<close>
+    show \<open>reason db' ?t' k (?rs' ! k)\<close>
+    proof (cases \<open>k = ?pp\<close>)
+      case True
+      have \<open>db' ! length db = C2\<close> using db' by simp
+      moreover have \<open>\<forall>l \<in> set C2. l \<noteq> ?d \<longrightarrow> (\<exists>k' < ?pp. ?t' ! k' = lneg l)\<close>
+        using lowpp C2d t'k by (metis set_ConsD)
+      ultimately show ?thesis using True rs'pp t'pp db' C2d by (auto simp: reason_def) (metis list.set_intros(1))
+    next
+      case False
+      then have kp: \<open>k < ?pp\<close> using k(1) lt' by simp
+      then have \<open>k \<notin> set L\<close> using Ltake k(2) by blast
+      then have R: \<open>reason db t k (rs ! k)\<close> using D(8) kp ppt by simp
+      have e: \<open>db' ! (rs ! k) = db ! (rs ! k)\<close> using R db' by (simp add: reason_def nth_append)
+      have e2: \<open>\<forall>k' < k. ?t' ! k' = t ! k'\<close> using t'k kp by simp
+      have R': \<open>rs ! k < length db\<close> \<open>t ! k \<in> set (db ! (rs ! k))\<close>
+        \<open>\<forall>l \<in> set (db ! (rs ! k)). l \<noteq> t ! k \<longrightarrow> (\<exists>k' < k. t ! k' = lneg l)\<close> using R by (simp_all add: reason_def)
+      show ?thesis unfolding reason_def rs'k[OF kp] t'k[OF kp] e
+      proof (intro conjI ballI impI)
+        show \<open>rs ! k < length db'\<close> using R'(1) db' by simp
+        show \<open>t ! k \<in> set (db ! (rs ! k))\<close> using R'(2) .
+        fix l assume \<open>l \<in> set (db ! (rs ! k))\<close> \<open>l \<noteq> t ! k\<close>
+        then obtain k' where \<open>k' < k\<close> \<open>t ! k' = lneg l\<close> using R'(3) by blast
+        then show \<open>\<exists>k' < k. ?t' ! k' = lneg l\<close> using e2 by metis
+      qed
+    qed
+  qed
+  have tpos': \<open>tpos ?t' ?tp'\<close> unfolding tpos_def
+  proof (intro allI impI)
+    fix k assume \<open>k < length ?t'\<close>
+    then have \<open>k < ?pp \<or> k = ?pp\<close> using lt' by auto
+    then show \<open>lv (?t' ! k) < length ?tp' \<and> ?tp' ! lv (?t' ! k) = k\<close>
+    proof
+      assume kp: \<open>k < ?pp\<close>
+      then show ?thesis using t'k[OF kp] vne[OF kp] tp_at[of k] P ppt by (simp add: tpos_def)
+    qed (use t'pp vdn D(10) in simp)
+  qed
+  \<comment> \<open>The watches.\<close>
+  have notd: \<open>t ! u \<notin> set (take k t)\<close> if \<open>k \<le> ?pp\<close> for k using notin_prefix[OF u(2)] that up by simp
+  have WPpp: \<open>WP db p t ?pp\<close> \<open>SP db (take ?pp t)\<close> using D(15) ppL by auto
+  have wsnew: \<open>2 \<le> length C2 \<longrightarrow> (lneg (C2 ! 0) \<in> set (take ?pp t) \<longrightarrow> C2 ! 1 \<in> set ?t') \<and>
+                 (lneg (C2 ! 1) \<in> set (take ?pp t) \<longrightarrow> C2 ! 0 \<in> set ?t')\<close>
+  proof
+    assume \<open>2 \<le> length C2\<close>
+    have \<open>C2 ! 0 = ?d\<close> using C2d by (metis nth_Cons_0)
+    then have \<open>lneg (C2 ! 0) \<notin> set (take ?pp t)\<close> using d notd[of ?pp] by (simp add: lneg_lneg)
+    moreover have \<open>C2 ! 0 \<in> set ?t'\<close> using \<open>C2 ! 0 = ?d\<close> by simp
+    ultimately show \<open>(lneg (C2 ! 0) \<in> set (take ?pp t) \<longrightarrow> C2 ! 1 \<in> set ?t') \<and>
+                 (lneg (C2 ! 1) \<in> set (take ?pp t) \<longrightarrow> C2 ! 0 \<in> set ?t')\<close> by blast
+  qed
+  have tk: \<open>take ?pp ?t' = take ?pp t\<close> using ppt by simp
+  have sub: \<open>set (take ?pp t) \<subseteq> set ?t'\<close> by auto
+  have WS1: \<open>WS db p ?t' (set (take ?pp t))\<close>
+    using WPpp(1) WS_mono[OF _ sub] by (simp add: WP_def)
+  have WS': \<open>WS db' p' ?t' (set (take ?pp ?t'))\<close>
+    using WS_app[OF lp WS1 wsnew] db' p' tk by simp
+  have SP': \<open>SP db' ?t'\<close>
+  proof -
+    have \<open>SP db ?t'\<close> using SP_mono[OF WPpp(2) sub] .
+    moreover have \<open>length C2 < 2 \<longrightarrow> (\<exists>l \<in> set C2. l \<in> set ?t')\<close> using C2d by (metis list.set_intros(1) rotate1.simps(2) set_append set_rotate1 Un_iff)
+    ultimately show ?thesis using SP_app db' by blast
+  qed
+  have LL': \<open>\<forall>k \<in> set ?L'. k \<le> length ?t' \<and> WP db' p' ?t' k \<and> SP db' (take k ?t')\<close>
+  proof
+    fix k assume k: \<open>k \<in> set ?L'\<close>
+    have kp: \<open>k < ?pp\<close> using takeL k by blast
+    have kL: \<open>k \<in> set L\<close> using k by (meson in_set_takeD)
+    have tk': \<open>take k ?t' = take k t\<close> using kp ppt by simp
+    have W0: \<open>WP db p t k\<close> \<open>SP db (take k t)\<close> using D(15) kL by auto
+    have long: \<open>2 \<le> length C2\<close>
+    proof (rule ccontr)
+      assume \<open>\<not> 2 \<le> length C2\<close>
+      then have \<open>j = 0\<close> using j C2f by simp
+      then show False using k by simp
+    qed
+    obtain mp where mp: \<open>t ! mp = lneg (C2 ! 1)\<close> \<open>mp < length t\<close> \<open>\<forall>x \<in> set (take j L). x \<le> mp\<close>
+      using J long by blast
+    have km: \<open>k \<le> mp\<close> using mp(3) k by blast
+    have n1: \<open>lneg (C2 ! 1) \<notin> set (take k t)\<close> using notin_prefix[OF mp(2) km] mp(1) by simp
+    have \<open>C2 ! 0 = ?d\<close> using C2d by (metis nth_Cons_0)
+    then have n0: \<open>lneg (C2 ! 0) \<notin> set (take k t)\<close> using d notd[of k] kp by (simp add: lneg_lneg)
+    have \<open>WS db p (take k t) (set (take k t))\<close> using W0(1) by (simp add: WP_def)
+    then have \<open>WS db' p' (take k t) (set (take k t))\<close> using WS_app[OF lp] n0 n1 db' p' by blast
+    then have \<open>WP db' p' ?t' k\<close> using tk' by (simp add: WP_def)
+    moreover have \<open>SP db' (take k ?t')\<close> using SP_app[OF W0(2)] long db' tk' by simp
+    ultimately show \<open>k \<le> length ?t' \<and> WP db' p' ?t' k \<and> SP db' (take k ?t')\<close> using kp lt' by simp
+  qed
+  have ws': \<open>wstate db' p' nx' h' ?t' ?pp ?L'\<close>
+    unfolding wstate_def using AW WS' SP' LL' takeL lt' by auto
+  \<comment> \<open>The measure.\<close>
+  have \<open>length t \<le> n\<close> using tr_ok_length[OF DS(1)] .
+  then have meas: \<open>meas n (length t) L < meas n (Suc ?pp) ?L'\<close>
+    using meas_backjump[OF DS(2)] J ppt by blast
+  have ci: \<open>cinv cs n db' ?a' ?t' ?rs' ?tp' ?L' p' nx' h' True\<close>
+    unfolding cinv_def using dbapp wf' ent' db' sz ds' rsl rslt rsn' tpos' D(10,12) AW SP' LL' by auto
+  show ?thesis using AN ci ws' meas J db' C2f by simp
+qed
 
 end

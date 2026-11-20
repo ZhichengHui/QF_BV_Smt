@@ -348,6 +348,14 @@ qed
 lemma cut_exit: \<open>r = take (length r) v \<Longrightarrow> unat p \<le> length r \<Longrightarrow> \<not> unat p < length r \<Longrightarrow> r = take (unat p) v\<close>
   by (metis le_neq_implies_less)
 
+lemma cut_len:
+  assumes \<open>r = take (length r) v\<close> \<open>length v < 18446744073709551616\<close>
+  shows \<open>unat (word64_of_nat (length r)) = length r\<close>
+proof -
+  have \<open>length r \<le> length v\<close> using arg_cong[OF assms(1), of length] by simp
+  then show ?thesis using assms(2) by (simp add: unat_of_nat_eq)
+qed
+
 lemma dpll_cut_spec [crush_specs]:
   shows \<open>\<Gamma>; cut v p \<Turnstile>\<^sub>F dpll_cut_contract v p\<close>
   apply (crush_boot f: cut_def contract: dpll_cut_contract_def)
@@ -363,6 +371,7 @@ lemma dpll_cut_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: option.splits inline: vec_pop_def simp add: word_less_nat_alt)
+    apply (all \<open>(frule (1) cut_len)?\<close>)
     apply (auto dest: cut_step cut_exit simp add: unat_of_nat_eq)
     done
   done
@@ -417,11 +426,11 @@ lemma dpll_top_spec [crush_specs]:
     apply (all \<open>(frule (2) dpll_bt_idx)?\<close>)
     apply (all \<open>(frule (1) dpll_init')?\<close>)
     apply (all \<open>(frule wprop_post_len)?\<close>)
-    apply (all \<open>(frule rext_len)?\<close>)
+    apply (all \<open>((drule rext_len)+)?\<close>)
     apply (auto simp add: dpll_wpre_def intro: dpll_cs_ok_wcs[unfolded dpll_cs_ok_def] dstate_tr[THEN conjunct1]
         less_imp_diff_less tr_ok_lenA dpll_wst_init wstate_wl tr_ok_init dest: dpll_wunsat1)
     done
-  using dpll_init' by blast
+  using dpll_init' tr_ok_init by blast+
 
 
 end

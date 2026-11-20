@@ -1,5 +1,5 @@
 theory QFBV_DpllWatch
-  imports QFBV_Watch
+  imports QFBV_Cdcl
 begin
 
 section \<open>DPLL: contracts up to the visit of a watch list\<close>
@@ -57,36 +57,124 @@ lemma dpll_clause_status_spec [crush_specs]:
     done
   done
 
+text \<open>The reasons \<open>rs1\<close> extend the reasons \<open>rs\<close> of the trail \<open>t\<close> with a reason of every entry of
+  \<open>t1\<close> after \<open>t\<close>.\<close>
+definition rext :: \<open>Lit list list \<Rightarrow> Lit list \<Rightarrow> 64 word list \<Rightarrow> Lit list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
+  \<open>rext cs t rs t1 rs1 \<equiv> length rs1 = length t1 \<and> take (length t) rs1 = rs \<and>
+     (\<forall>k. length t \<le> k \<and> k < length t1 \<longrightarrow> reason cs t1 k (unat (rs1 ! k)))\<close>
+
+text \<open>The clause \<open>c\<close> is in conflict with the trail \<open>t\<close>: all its literals are false.\<close>
+definition cfl :: \<open>Lit list list \<Rightarrow> Lit list \<Rightarrow> nat \<Rightarrow> bool\<close> where
+  \<open>cfl cs t c \<equiv> c < length cs \<and> (\<forall>l \<in> set (cs ! c). lneg l \<in> set t)\<close>
+
+lemma rext_refl: \<open>length rs = length t \<Longrightarrow> rext cs t rs t rs\<close>
+  by (auto simp: rext_def)
+
+lemma rext_len: \<open>rext cs t rs t1 rs1 \<Longrightarrow> length rs1 = length t1\<close>
+  by (simp add: rext_def)
+
+lemma rext_unit:
+  assumes \<open>rext cs t rs t' rs'\<close> \<open>length t \<le> length t'\<close> \<open>status_m a (cs ! i) None False = Status_Unit l\<close>
+    \<open>i < length cs\<close> \<open>lits_lt n (cs ! i)\<close> \<open>tr_ok n a t'\<close> \<open>unat w = i\<close>
+  shows \<open>rext cs t rs (t' @ [l]) (rs' @ [w])\<close>
+proof -
+  have R: \<open>length rs' = length t'\<close> \<open>take (length t) rs' = rs\<close>
+    \<open>\<forall>k. length t \<le> k \<and> k < length t' \<longrightarrow> reason cs t' k (unat (rs' ! k))\<close>
+    using assms(1) by (simp_all add: rext_def)
+  have u: \<open>reason cs (t' @ [l]) (length t') i\<close> using unit_reason[OF assms(3,4,5,6)] .
+  have \<open>reason cs (t' @ [l]) k (unat ((rs' @ [w]) ! k))\<close> if \<open>length t \<le> k\<close> \<open>k < Suc (length t')\<close> for k
+  proof (cases \<open>k < length t'\<close>)
+    case True
+    then show ?thesis using R(1,3) that reason_append[of cs t' k] by (simp add: nth_append)
+  next
+    case False
+    then have \<open>k = length t'\<close> using that by simp
+    then show ?thesis using u R(1) assms(7) by (simp add: nth_append)
+  qed
+  then show ?thesis using R assms(2) by (simp add: rext_def)
+qed
+
+lemma rext_trans:
+  assumes \<open>rext cs t rs t1 rs1\<close> \<open>rext cs t1 rs1 t2 rs2\<close> \<open>\<exists>e. t1 = t @ e\<close> \<open>\<exists>e. t2 = t1 @ e\<close>
+  shows \<open>rext cs t rs t2 rs2\<close>
+proof -
+  obtain e1 where e1: \<open>t1 = t @ e1\<close> using assms(3) by blast
+  obtain e2 where e2: \<open>t2 = t1 @ e2\<close> using assms(4) by blast
+  have A: \<open>length rs1 = length t1\<close> \<open>take (length t) rs1 = rs\<close>
+    \<open>\<forall>k. length t \<le> k \<and> k < length t1 \<longrightarrow> reason cs t1 k (unat (rs1 ! k))\<close>
+    using assms(1) by (simp_all add: rext_def)
+  have B: \<open>length rs2 = length t2\<close> \<open>take (length t1) rs2 = rs1\<close>
+    \<open>\<forall>k. length t1 \<le> k \<and> k < length t2 \<longrightarrow> reason cs t2 k (unat (rs2 ! k))\<close>
+    using assms(2) by (simp_all add: rext_def)
+  have \<open>take (length t) rs2 = take (length t) (take (length t1) rs2)\<close> using e1 by (simp add: min_def)
+  then have tk: \<open>take (length t) rs2 = rs\<close> using A(2) B(2) by simp
+  have \<open>reason cs t2 k (unat (rs2 ! k))\<close> if \<open>length t \<le> k\<close> \<open>k < length t2\<close> for k
+  proof (cases \<open>k < length t1\<close>)
+    case True
+    have \<open>rs2 ! k = rs1 ! k\<close> using B(2) True by (metis nth_take)
+    then show ?thesis using A(3) that(1) True reason_append[of cs t1 k \<open>unat (rs1 ! k)\<close> e2] e2 by simp
+  next
+    case False
+    then show ?thesis using B(3) that(2) by simp
+  qed
+  then show ?thesis using B(1) tk by (simp add: rext_def)
+qed
+
+lemma cfl_status:
+  \<open>status_m a (cs ! c) None False = Status_Conflict \<Longrightarrow> c < length cs \<Longrightarrow> lits_lt n (cs ! c) \<Longrightarrow>
+   tr_ok n a t \<Longrightarrow> cfl cs t c\<close>
+  using dpll_status_Conflict tr_false by (fastforce simp: cfl_def lits_lt_def)
+
+lemma pp_unit:
+  fixes i :: \<open>64 word\<close>
+  assumes \<open>wprop_inv cs t n a' t'\<close> \<open>rext cs t rs t' rs'\<close> \<open>unat i < length cs\<close>
+    \<open>\<forall>c \<in> set cs. lits_lt n c \<and> Q c\<close> \<open>status_m a' (cs ! unat i) None False = Status_Unit l\<close>
+  shows \<open>wprop_inv cs t n (a'[unat (Lit_var l) := Some (\<not> Lit_neg l)]) (t' @ [l]) \<and>
+         rext cs t rs (t' @ [l]) (rs' @ [i])\<close>
+proof -
+  have c: \<open>cs ! unat i \<in> set cs\<close> \<open>lits_lt n (cs ! unat i)\<close> using assms(3,4) nth_mem by auto
+  have T: \<open>tr_ok n a' t'\<close> \<open>length t \<le> length t'\<close> using assms(1) by (auto simp: wprop_inv_def)
+  show ?thesis using wprop_unit[OF assms(1) c(1,2) assms(5)] rext_unit[OF assms(2) T(2) assms(5,3) c(2) T(1)]
+    by simp
+qed
+
 definition dpll_propagate_pass_contract ::
-  \<open>Lit list list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> ('s, bool option list \<times> Lit list \<times> bool \<times> tnil, 'abort) function_contract\<close> where
-  [crush_contracts]: \<open>dpll_propagate_pass_contract cs a t \<equiv>
+  \<open>Lit list list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word list \<Rightarrow>
+   ('s, bool option list \<times> Lit list \<times> 64 word list \<times> bool \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>dpll_propagate_pass_contract cs a t rs \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
           \<langle>(\<forall>c \<in> set cs. lits_lt (length a) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64) \<and>
-           length cs + 2 \<le> urust_fuel \<and> length cs < 2 ^ 64 \<and> length a < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>case r of (a1, t1, b, _) \<Rightarrow> tpass_m cs a t = (a1, t1, b)\<rangle>)\<close>
+           length cs + 2 \<le> urust_fuel \<and> length cs < 2 ^ 64 \<and> length a < 2 ^ 64 \<and>
+           tr_ok (length a) a t \<and> length rs = length t\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star>
+          \<langle>case r of (a1, t1, rs1, b, _) \<Rightarrow> tpass_m cs a t = (a1, t1, b) \<and> rext cs t rs t1 rs1\<rangle>)\<close>
 
 lemma dpll_propagate_pass_spec [crush_specs]:
-  shows \<open>\<Gamma>; propagate_pass cs a t \<Turnstile>\<^sub>F dpll_propagate_pass_contract cs a t\<close>
+  shows \<open>\<Gamma>; propagate_pass cs a t rs \<Turnstile>\<^sub>F dpll_propagate_pass_contract cs a t rs\<close>
   apply (crush_boot f: propagate_pass_def contract: dpll_propagate_pass_contract_def)
   apply (crush_base inline: len_def)
-  subgoal for a_ref t_ref i_ref
+  subgoal for a_ref t_ref r_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
-        INV=\<open>\<lambda>k. \<Squnion>ga a' gt t' gi i. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
-               can_alloc_reference \<star>
+        INV=\<open>\<lambda>k. \<Squnion>ga a' gt t' gr rs' gi i. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star>
+               r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs' \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
                \<langle>unat i \<le> length cs \<and> length a' = length a \<and>
-                tpass_m cs a t = tpass_m (drop (unat i) cs) a' t' \<and> length cs - unat i \<le> k\<rangle>\<close> and
-        INV'=\<open>\<lambda>k. \<Squnion>ga a' gt t' gi i. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
-               can_alloc_reference \<star>
+                tpass_m cs a t = tpass_m (drop (unat i) cs) a' t' \<and> length cs - unat i \<le> k \<and>
+                wprop_inv cs t (length a) a' t' \<and> rext cs t rs t' rs'\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>ga a' gt t' gr rs' gi i. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star>
+               r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs' \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
                \<langle>unat i < length cs \<and> length a' = length a \<and>
-                tpass_m cs a t = tpass_m (drop (unat i) cs) a' t' \<and> length cs - unat i \<le> Suc k\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>case r of (a1, t1, b, _) \<Rightarrow> tpass_m cs a t = (a1, t1, b)\<rangle>\<close> and
+                tpass_m cs a t = tpass_m (drop (unat i) cs) a' t' \<and> length cs - unat i \<le> Suc k \<and>
+                wprop_inv cs t (length a) a' t' \<and> rext cs t rs t' rs'\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
+          \<langle>case r of (a1, t1, rs1, b, _) \<Rightarrow> tpass_m cs a t = (a1, t1, b) \<and> rext cs t rs t1 rs1\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: Status.splits inline: vec_push_def
         simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
-    apply (auto simp add: dpll_tpass_drop ASSUMPTION_def intro: dpll_unit_var_nth)
+    apply (all \<open>(frule (4) pp_unit)?\<close>)
+    apply (auto simp add: dpll_tpass_drop ASSUMPTION_def intro: dpll_unit_var_nth wprop_refl rext_refl)
     done
   done
 
@@ -271,7 +359,8 @@ definition dpll_watch_init_contract ::
            2 * unat n < 2 ^ 64 \<and> length cs + 2 \<le> urust_fuel\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of (p, nx, h, _) \<Rightarrow>
-             length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and> wl_ok cs p nx h\<rangle>)\<close>
+             length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and> wl_ok cs p nx h \<and>
+             lends nx h\<rangle>)\<close>
 
 text \<open>The loop of \<^verbatim>\<open>watch_init\<close> has set up the watches of the first \<open>c\<close> clauses.\<close>
 definition wl_init :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
@@ -279,19 +368,67 @@ definition wl_init :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> 64 wo
 
 lemma wl_init_0:
   assumes \<open>length cs < 9223372036854775808\<close>
-  shows \<open>wl_init cs 0 (replicate (2 * length cs) 0) (replicate (2 * length cs) (2 * word_of_nat (length cs)))
-           (replicate (2 * m) (2 * word_of_nat (length cs)))\<close>
+  shows \<open>wl_init cs 0 (replicate (2 * length cs) 0) (replicate (2 * length cs) 18446744073709551615)
+           (replicate (2 * m) 18446744073709551615)\<close>
 proof -
-  have u: \<open>unat (word_of_nat (length cs) :: 64 word) = length cs\<close> using assms by (simp add: unat_of_nat_eq)
-  have \<open>unat (2 * word_of_nat (length cs) :: 64 word) = 2 * length cs\<close>
-    using unat64_dbl[of \<open>word_of_nat (length cs)\<close>] assms u by simp
-  then have \<open>wl_lists cs 0 (replicate (2 * length cs) 0) (replicate (2 * length cs) (2 * word_of_nat (length cs)))
-           (replicate (2 * m) (2 * word_of_nat (length cs))) (replicate (2 * m) [])\<close>
+  have \<open>wl_lists cs 0 (replicate (2 * length cs) 0) (replicate (2 * length cs) 18446744073709551615)
+           (replicate (2 * m) 18446744073709551615) (replicate (2 * m) [])\<close>
     using wl_init_empty[of \<open>replicate (2 * length cs) 0\<close> cs
-      \<open>replicate (2 * length cs) (2 * word_of_nat (length cs))\<close> \<open>replicate (2 * m) (2 * word_of_nat (length cs))\<close>]
+      \<open>replicate (2 * length cs) 18446744073709551615\<close> \<open>replicate (2 * m) 18446744073709551615\<close>] assms
     by simp
   then show ?thesis unfolding wl_init_def by auto
 qed
+
+lemma lends_init: \<open>lends (replicate k 18446744073709551615) (replicate m 18446744073709551615)\<close>
+  unfolding lends_def by (auto simp: set_replicate_conv_if)
+
+lemma lends_nth_nx: \<open>lends nx h \<Longrightarrow> i < length nx \<Longrightarrow> unat (nx ! i) < length nx \<or> unat (nx ! i) = 2 ^ 64 - 1\<close>
+  by (simp add: lends_def)
+
+lemma lends_nth_h: \<open>lends nx h \<Longrightarrow> i < length h \<Longrightarrow> unat (h ! i) < length nx \<or> unat (h ! i) = 2 ^ 64 - 1\<close>
+  by (simp add: lends_def)
+
+lemma lends_nx:
+  assumes \<open>lends nx h\<close> \<open>unat v < length nx \<or> unat v = 2 ^ 64 - 1\<close>
+  shows \<open>lends (nx[i := v]) h\<close>
+proof -
+  have \<open>set (nx[i := v]) \<subseteq> insert v (set nx)\<close> by (rule set_update_subset_insert)
+  then show ?thesis using assms unfolding lends_def by auto
+qed
+
+lemma lends_h:
+  assumes \<open>lends nx h\<close> \<open>unat v < length nx \<or> unat v = 2 ^ 64 - 1\<close>
+  shows \<open>lends nx (h[i := v])\<close>
+proof -
+  have \<open>set (h[i := v]) \<subseteq> insert v (set h)\<close> by (rule set_update_subset_insert)
+  then show ?thesis using assms unfolding lends_def by auto
+qed
+
+lemma lends_add:
+  assumes \<open>lends nx h\<close> \<open>unat sw < length nx\<close> \<open>unat ow < length nx\<close> \<open>x0 < length h\<close> \<open>x1 < length h\<close>
+  shows \<open>lends (nx[i := h ! x0, j := h[x0 := sw] ! x1]) (h[x0 := sw, x1 := ow])\<close>
+proof -
+  have a: \<open>lends (nx[i := h ! x0]) h\<close> using lends_nx[OF assms(1) lends_nth_h[OF assms(1,4)]] .
+  have b: \<open>lends (nx[i := h ! x0]) (h[x0 := sw])\<close> by (rule lends_h[OF a]) (use assms(2) in simp)
+  have c: \<open>unat (h[x0 := sw] ! x1) < length nx \<or> unat (h[x0 := sw] ! x1) = 2 ^ 64 - 1\<close>
+    using lends_nth_h[OF assms(1,5)] assms(2,5) by (cases \<open>x0 = x1\<close>) simp_all
+  have d: \<open>lends (nx[i := h ! x0, j := h[x0 := sw] ! x1]) (h[x0 := sw])\<close>
+    by (rule lends_nx[OF b]) (use c in simp)
+  show ?thesis by (rule lends_h[OF d]) (use assms(3) in simp)
+qed
+
+lemma lends_addw:
+  fixes r :: \<open>64 word\<close>
+  assumes \<open>lends nx h\<close> \<open>unat r < length cs\<close> \<open>length cs < 9223372036854775808\<close> \<open>length nx = 2 * length cs\<close>
+    \<open>x0 < length h\<close> \<open>x1 < length h\<close>
+  shows \<open>lends (nx[i := h ! x0, j := h[x0 := 2 * r] ! x1]) (h[x0 := 2 * r, x1 := 2 * r + 1])\<close>
+  using lends_add[OF assms(1) _ _ assms(5,6)] unat64_dbl_lt[OF assms(2,3)] assms(2,4) by simp
+
+lemma xlt:
+  \<open>\<forall>i < length cs. \<forall>j < length (cs ! i). 2 * lv (cs ! i ! j) < M \<and> lv (cs ! i ! j) < N \<Longrightarrow>
+   length h = 2 * N \<Longrightarrow> i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow>
+   2 * lv (cs ! i ! j) < length h \<and> Suc (2 * lv (cs ! i ! j)) < length h\<close>
+  by fastforce
 
 lemma wl_init_end: \<open>wl_init cs c p nx h \<Longrightarrow> c = length cs \<Longrightarrow> wl_ok cs p nx h\<close>
   by (auto simp: wl_init_def wl_ok_def)
@@ -363,14 +500,14 @@ lemma dpll_watch_init_spec [crush_specs]:
                   (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < 18446744073709551615 \<and>
                      unat (Lit_var (cs ! i ! j)) < unat n)) \<and>
                 length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and>
-                unat c \<le> length cs \<and> length cs - unat c \<le> k \<and> wl_init cs (unat c) p nx h\<rangle>\<close> and
+                unat c \<le> length cs \<and> length cs - unat c \<le> k \<and> wl_init cs (unat c) p nx h \<and> lends nx h\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h gc c. p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx \<star>
                h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h \<star> c_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> can_alloc_reference \<star>
                \<langle>(\<forall>i < length cs. length (cs ! i) < 18446744073709551616 \<and>
                   (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < 18446744073709551615 \<and>
                      unat (Lit_var (cs ! i ! j)) < unat n)) \<and>
                 length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and>
-                unat c < length cs \<and> length cs - unat c \<le> Suc k \<and> wl_init cs (unat c) p nx h\<rangle>\<close> and
+                unat c < length cs \<and> length cs - unat c \<le> Suc k \<and> wl_init cs (unat c) p nx h \<and> lends nx h\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
@@ -383,6 +520,9 @@ lemma dpll_watch_init_spec [crush_specs]:
     apply auto
     apply (all \<open>(rule wl_init_end, assumption, simp)?\<close>)
     apply (all \<open>(rule wl_init_0, simp)?\<close>)
+    apply (all \<open>(rule lends_init)?\<close>)
+    apply (all \<open>(rule lends_addw, assumption, assumption, assumption, assumption)?\<close>)
+    apply (all \<open>((rule xlt[THEN conjunct1] xlt[THEN conjunct2]), assumption, assumption, assumption, simp)?\<close>)
     done
   apply (auto simp add: unat_of_nat_eq)
   done
@@ -527,17 +667,53 @@ lemma vs_unit_var:
    status_m a (cs ! i) None False = Status_Unit l \<Longrightarrow> unat (Lit_var l) < n\<close>
   using dpll_status_Unit_var by blast
 
+lemma vs_unit_r:
+  \<open>status_m a (cs ! i) None False = Status_Unit l \<Longrightarrow> i < length cs \<Longrightarrow>
+   \<forall>i < length cs. lits_lt n (cs ! i) \<and> R i \<Longrightarrow> tr_ok n a t \<Longrightarrow> length rs = length t \<Longrightarrow> unat w = i \<Longrightarrow>
+   rext cs t rs (t @ [l]) (rs @ [w])\<close>
+  using rext_unit[OF rext_refl[of rs t cs], of a i l n w] by simp
+
+lemma vs_cfl:
+  \<open>status_m a (cs ! i) None False = Status_Conflict \<Longrightarrow> i < length cs \<Longrightarrow>
+   \<forall>i < length cs. lits_lt n (cs ! i) \<and> R i \<Longrightarrow> tr_ok n a t \<Longrightarrow> cfl cs t i\<close>
+  using cfl_status by blast
+
+lemma lends_mw:
+  assumes \<open>(p1, nx1, h1) = mw_m p nx h s prev x k y\<close> \<open>lends nx h\<close> \<open>unat s < length nx\<close> \<open>unat y < length h\<close>
+  shows \<open>lends nx1 h1\<close>
+proof (cases \<open>unat prev < length nx\<close>)
+  case True
+  have a: \<open>lends (nx[unat prev := nx ! unat s]) h\<close> by (rule lends_nx[OF assms(2) lends_nth_nx[OF assms(2,3)]])
+  have b: \<open>lends ((nx[unat prev := nx ! unat s])[unat s := h ! unat y]) h\<close>
+    by (rule lends_nx[OF a]) (use lends_nth_h[OF assms(2,4)] in simp)
+  have c: \<open>lends ((nx[unat prev := nx ! unat s])[unat s := h ! unat y]) (h[unat y := s])\<close>
+    by (rule lends_h[OF b]) (use assms(3) in simp)
+  then show ?thesis using True assms(1) by (simp add: mw_m_def Let_def)
+next
+  case False
+  let ?h1 = \<open>h[unat x := nx ! unat s]\<close>
+  have a: \<open>lends nx ?h1\<close> by (rule lends_h[OF assms(2) lends_nth_nx[OF assms(2,3)]])
+  have b: \<open>lends (nx[unat s := ?h1 ! unat y]) ?h1\<close>
+    by (rule lends_nx[OF a]) (use lends_nth_h[OF a] assms(4) in simp)
+  have c: \<open>lends (nx[unat s := ?h1 ! unat y]) (?h1[unat y := s])\<close>
+    by (rule lends_h[OF b]) (use assms(3) in simp)
+  then show ?thesis using False assms(1) by (simp add: mw_m_def Let_def)
+qed
+
 definition dpll_visit_slot_contract ::
-  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word \<Rightarrow>
-   64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> bool \<times> bool \<times> tnil, 'abort) function_contract\<close> where
-  [crush_contracts]: \<open>dpll_visit_slot_contract cs p nx h a t x s prev \<equiv>
+  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow>
+   64 word list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
+   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> 64 word list \<times> bool \<times> bool \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>dpll_visit_slot_contract cs p nx h a t rs x s prev \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>dpll_wpre cs (length a) p nx h \<and> unat x < length h \<and> unat s < 2 * length cs \<and> tr_ok (length a) a t\<rangle>)
+          \<langle>dpll_wpre cs (length a) p nx h \<and> unat x < length h \<and> unat s < 2 * length cs \<and> tr_ok (length a) a t \<and>
+           length rs = length t \<and> lends nx h\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (p1, nx1, h1, a1, t1, keep, b, _) \<Rightarrow>
+          \<langle>case r of (p1, nx1, h1, a1, t1, rs1, keep, b, _) \<Rightarrow>
              dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             vslot_post cs p nx h a t x s prev p1 nx1 h1 a1 t1 keep b\<rangle>)\<close>
+             vslot_post cs p nx h a t x s prev p1 nx1 h1 a1 t1 keep b \<and>
+             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat s div 2)) \<and> lends nx1 h1\<rangle>)\<close>
 
 lemma oslot_even: \<open>even s \<Longrightarrow> oslot s (s + 1)\<close>
   by (simp add: oslot_def even_iff_mod_2_eq_zero)
@@ -558,7 +734,7 @@ lemma var_bnd2:
   by fastforce
 
 lemma dpll_visit_slot_spec [crush_specs]:
-  shows \<open>\<Gamma>; visit_slot cs p nx h a t x s prev \<Turnstile>\<^sub>F dpll_visit_slot_contract cs p nx h a t x s prev\<close>
+  shows \<open>\<Gamma>; visit_slot cs p nx h a t rs x s prev \<Turnstile>\<^sub>F dpll_visit_slot_contract cs p nx h a t rs x s prev\<close>
   apply (crush_boot f: visit_slot_def contract: dpll_visit_slot_contract_def)
   apply (crush_base wp split: option.splits Status.splits inline: vec_push_def
       simp add: dpll_wpre_def wcs_ok_def word_less_nat_alt unat_of_nat_eq unat_div unat_mod div2_lt
@@ -576,8 +752,10 @@ lemma dpll_visit_slot_spec [crush_specs]:
   apply (all \<open>(rule vsp_none(3); assumption)?\<close>)
   apply (all \<open>(rule vsp_none(4); assumption)?\<close>)
   apply (all \<open>(frule var_bnd2)?\<close>)
+  apply (all \<open>(frule lends_mw, assumption, simp, (simp add: lidx_def; fail))?\<close>)
   apply (auto simp add: fw_post_def
-      intro: vs_refl vs_conflict vs_unit vs_unit_var w_odd[THEN conjunct1] w_odd[THEN conjunct2] w_even)
+      intro: vs_refl vs_conflict vs_unit vs_unit_var w_odd[THEN conjunct1] w_odd[THEN conjunct2] w_even
+        rext_refl vs_unit_r vs_cfl)
   done
 
 text \<open>The invariant of the loop of \<^verbatim>\<open>visit\<close> for the false literal of index \<open>x\<close>.\<close>
@@ -660,48 +838,59 @@ next
   then show ?thesis using vx_exit[OF assms(1)] assms(3) by auto
 qed
 
+lemma rext_step:
+  \<open>rext cs t rs t' rs' \<Longrightarrow> rext cs t' rs' t1 rs1 \<Longrightarrow> wprop_inv cs t n a' t' \<Longrightarrow> wprop_post cs t' n a1 t1 b \<Longrightarrow>
+   rext cs t rs t1 rs1\<close>
+  by (rule rext_trans) (auto simp: wprop_inv_def wprop_post_def)
+
 definition dpll_visit_contract ::
-  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word \<Rightarrow>
-   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> bool \<times> tnil, 'abort) function_contract\<close> where
-  [crush_contracts]: \<open>dpll_visit_contract cs p nx h a t x \<equiv>
+  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow>
+   64 word list \<Rightarrow> 64 word \<Rightarrow>
+   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> 64 word list \<times> bool \<times>
+     64 word \<times> tnil, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>dpll_visit_contract cs p nx h a t rs x \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
           \<langle>dpll_wpre cs (length a) p nx h \<and> unat x < length h \<and> tr_ok (length a) a t \<and> wl_ok cs p nx h \<and>
-           (\<exists>w. lidx w = unat x \<and> lneg w \<in> set t)\<rangle>)
+           (\<exists>w. lidx w = unat x \<and> lneg w \<in> set t) \<and> length rs = length t \<and> lends nx h\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (p1, nx1, h1, a1, t1, b, _) \<Rightarrow>
+          \<langle>case r of (p1, nx1, h1, a1, t1, rs1, b, cf, _) \<Rightarrow>
              dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             visit_post cs (unat x) p t p1 nx1 h1 t1 b\<rangle>)\<close>
+             visit_post cs (unat x) p t p1 nx1 h1 t1 b \<and>
+             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat cf)) \<and> lends nx1 h1\<rangle>)\<close>
 
 lemma dpll_visit_spec [crush_specs]:
-  shows \<open>\<Gamma>; visit cs p nx h a t x \<Turnstile>\<^sub>F dpll_visit_contract cs p nx h a t x\<close>
+  shows \<open>\<Gamma>; visit cs p nx h a t rs x \<Turnstile>\<^sub>F dpll_visit_contract cs p nx h a t rs x\<close>
   apply (crush_boot f: visit_def contract: dpll_visit_contract_def)
   apply (crush_base inline: len_def simp add: dpll_wpre_def)
-  subgoal for w p_ref nx_ref h_ref a_ref t_ref s_ref pr_ref st_ref
+  subgoal for w p_ref nx_ref h_ref a_ref t_ref r_ref s_ref pr_ref st_ref
     apply (ucincl_discharge\<open>
       rule_tac
-        INV=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gs s' gr pr gq st.
+        INV=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gr' rs' gs s' gr pr gq st.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p' \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx' \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h' \<star>
-               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star>
+               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr'\<down>rs' \<star>
                s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>s' \<star> pr_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>pr \<star> st_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>st \<star>
                can_alloc_reference \<star>
                \<langle>dpll_wpre cs (length a) p' nx' h' \<and> length nx' = length nx \<and> length h' = length h \<and>
                 length a' = length a \<and> tr_ok (length a) a' t' \<and> wprop_inv cs t (length a) a' t' \<and>
                 unat st \<le> length nx \<and> (unat s' < length nx \<longrightarrow> length nx - unat st \<le> k) \<and>
-                vinvx cs (unat x) p t p' nx' h' t' (unat s') (unat pr) (unat st)\<rangle>\<close> and
-        INV'=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gs s' gr pr gq st.
+                vinvx cs (unat x) p t p' nx' h' t' (unat s') (unat pr) (unat st) \<and>
+                rext cs t rs t' rs' \<and> lends nx' h'\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gr' rs' gs s' gr pr gq st.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p' \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx' \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h' \<star>
-               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star>
+               a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr'\<down>rs' \<star>
                s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>s' \<star> pr_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>pr \<star> st_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>st \<star>
                can_alloc_reference \<star>
                \<langle>dpll_wpre cs (length a) p' nx' h' \<and> length nx' = length nx \<and> length h' = length h \<and>
                 length a' = length a \<and> tr_ok (length a) a' t' \<and> wprop_inv cs t (length a) a' t' \<and>
                 unat s' < length nx \<and> unat st < length nx \<and> length nx - unat st \<le> Suc k \<and>
-                vinvx cs (unat x) p t p' nx' h' t' (unat s') (unat pr) (unat st)\<rangle>\<close> and
+                vinvx cs (unat x) p t p' nx' h' t' (unat s') (unat pr) (unat st) \<and>
+                rext cs t rs t' rs' \<and> lends nx' h'\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (p1, nx1, h1, a1, t1, b, _) \<Rightarrow>
+          \<langle>case r of (p1, nx1, h1, a1, t1, rs1, b, cf, _) \<Rightarrow>
              dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             visit_post cs (unat x) p t p1 nx1 h1 t1 b\<rangle>\<close> and
+             visit_post cs (unat x) p t p1 nx1 h1 t1 b \<and>
+             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat cf)) \<and> lends nx1 h1\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: prod.splits tnil.splits simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
@@ -709,8 +898,9 @@ lemma dpll_visit_spec [crush_specs]:
     apply (all \<open>(frule (4) vx_step)?\<close>)
     apply (all \<open>(frule (7) vx_step2)?\<close>)
     apply (all \<open>(frule (1) vx_conflict)?\<close>)
-    apply (auto simp add: dpll_wpre_def unat64_dbl unat_of_nat_eq wprop_post_def unat2_len
-        intro: wprop_refl vx_entry' vx_entry2 vx_exit2 dest: vx_bound)
+    apply (all \<open>(frule (3) rext_step)?\<close>)
+    apply (auto simp add: dpll_wpre_def unat64_dbl unat_of_nat_eq wprop_post_def unat2_len unat_div
+        intro: wprop_refl vx_entry' vx_entry2 vx_exit2 rext_refl dest: vx_bound rext_len)
     done
   done
 

@@ -26,7 +26,7 @@ lemma defs_length: \<open>length (Problem_defs (tr_problem_m p)) = tsize p\<clos
 text \<open>A fuel sufficient for every loop and recursion of \<^verbatim>\<open>check_sat\<close> on \<open>p\<close>.\<close>
 definition fuel_top :: \<open>SmtProblem \<Rightarrow> nat\<close> where
   \<open>fuel_top p \<equiv> N p + fuel_smt p + fuel_q (tr_problem_m p) + size_bound (tr_problem_m p) +
-     Suc (dpll_fuel (lower_problem_m (tr_problem_m p)))\<close>
+     Suc (dpll_fuel (fst (elim_m (lower_problem_m (tr_problem_m p)))))\<close>
 
 lemma tsz_lt:
   fixes x xa :: \<open>64 word\<close>
@@ -50,7 +50,7 @@ definition solve_contract_b :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort)
           \<langle>case r of Answer_Sat m \<Rightarrow> is_model q m | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model q m)\<rangle>)\<close>
 
 lemma solve_spec_b:
-  assumes \<open>size_bound q \<le> urust_fuel\<close> \<open>dpll_fuel (lower_problem_m q) < urust_fuel\<close>
+  assumes \<open>size_bound q \<le> urust_fuel\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m q))) < urust_fuel\<close>
   shows \<open>\<Gamma>; solve q \<Turnstile>\<^sub>F solve_contract_b q\<close>
 proof (cases \<open>sizes_ok q\<close>)
   case True
@@ -85,7 +85,7 @@ next
   then have W: \<open>smt_wf p\<close> and R: \<open>smt_repr_ok p\<close> by simp_all
   let ?q = \<open>tr_problem_m p\<close>
   have NF: \<open>N p \<le> urust_fuel\<close> \<open>fuel_smt p \<le> urust_fuel\<close> \<open>fuel_q ?q \<le> urust_fuel\<close>
-    \<open>size_bound ?q \<le> urust_fuel\<close> \<open>dpll_fuel (lower_problem_m ?q) < urust_fuel\<close>
+    \<open>size_bound ?q \<le> urust_fuel\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m ?q))) < urust_fuel\<close>
     using F by (simp_all add: fuel_top_def)
   have IP: \<open>length (SmtProblem_funs p) < 2 ^ 64 \<and> length (SmtProblem_funs p) \<le> urust_fuel \<and>
             (\<forall>f \<in> set (SmtProblem_funs p). length (SmtFun_args f) < 2 ^ 64)\<close>

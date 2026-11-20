@@ -958,7 +958,7 @@ fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize
     while ok && start < i {
         i -= 1;
         if seen[trail[i].var] {
-            if cnt == 1 {
+            if cnt <= 1 {
                 learned[0] = lit_neg(trail[i]);
                 ok = false;
             } else {

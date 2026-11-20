@@ -715,33 +715,6 @@ definition "clause_status" :: \<open>((bool option) list) \<Rightarrow> (Lit lis
     }
   \<rbrakk>\<close>
 
-(* Rust: propagate_pass *)
-definition "propagate_pass" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>propagate_pass \<equiv> \<lambda>cs a trail. FunctionBody \<lbrakk>
-    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
-    let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(cs) {
-      match clause_status(* a, cs[* i]) {
-        Status_Conflict \<Rightarrow> {
-          return (* a, * trail, false);
-        },
-        Status_Unit(l) \<Rightarrow> {
-          * (a[l.Lit_var]) = Some(!(l.Lit_neg));
-          vec_push(trail, l);
-        },
-        Status_Satisfied \<Rightarrow> {
-          ()
-        },
-        Status_Open \<Rightarrow> {
-          ()
-        }
-      };
-      * i += 1_usize;
-    };
-    (* a, * trail, true)
-  \<rbrakk>\<close>
-
 (* Rust: find_unassigned *)
 definition "find_unassigned" :: \<open>((bool option) list) \<Rightarrow> ('s, (64 word) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>find_unassigned \<equiv> \<lambda>a. FunctionBody \<lbrakk>
@@ -797,6 +770,35 @@ definition "read_model" :: \<open>((bool option) list) \<Rightarrow> ((Lit list)
     * m
   \<rbrakk>\<close>
 
+(* Rust: propagate_pass *)
+definition "propagate_pass" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>propagate_pass \<equiv> \<lambda>cs a trail rs. FunctionBody \<lbrakk>
+    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut rs = { let init_3 = rs; \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(cs) {
+      match clause_status(* a, cs[* i]) {
+        Status_Conflict \<Rightarrow> {
+          return (* a, * trail, * rs, false);
+        },
+        Status_Unit(l) \<Rightarrow> {
+          * (a[l.Lit_var]) = Some(!(l.Lit_neg));
+          vec_push(trail, l);
+          vec_push(rs, * i);
+        },
+        Status_Satisfied \<Rightarrow> {
+          ()
+        },
+        Status_Open \<Rightarrow> {
+          ()
+        }
+      };
+      * i += 1_usize;
+    };
+    (* a, * trail, * rs, true)
+  \<rbrakk>\<close>
+
 (* Rust: lit_index *)
 definition "lit_index" :: \<open>Lit \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>lit_index \<equiv> \<lambda>l. FunctionBody \<lbrakk>
@@ -812,8 +814,8 @@ definition "watch_init" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Ri
   \<open>watch_init \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>
     let m = len(cs);
     let mut pos = { let init_1 = vec_from_elem(0_usize, 2_usize * m); \<llangle>init_1 :: (64 word) list\<rrangle> };
-    let mut next_v = { let init_2 = vec_from_elem(2_usize * m, 2_usize * m); \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut head = { let init_3 = vec_from_elem(2_usize * m, 2_usize * n); \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let mut next_v = { let init_2 = vec_from_elem(18446744073709551615_usize, 2_usize * m); \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut head = { let init_3 = vec_from_elem(18446744073709551615_usize, 2_usize * n); \<llangle>init_3 :: (64 word) list\<rrangle> };
     let mut c = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* c) < m {
       if len(cs[* c]) >= 2_usize {
@@ -869,10 +871,11 @@ definition "move_watch" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list
   \<rbrakk>\<close>
 
 (* Rust: visit_slot *)
-definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> bool \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>visit_slot \<equiv> \<lambda>cs pos next_v head a trail x s prev. FunctionBody \<lbrakk>
+definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> bool \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>visit_slot \<equiv> \<lambda>cs pos next_v head a trail rs x s prev. FunctionBody \<lbrakk>
     let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
     let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut rs = { let init_3 = rs; \<llangle>init_3 :: (64 word) list\<rrangle> };
     let c = s / 2_usize;
     let o_v = if (s % 2_usize) == 0_usize {
       s + 1_usize
@@ -885,20 +888,21 @@ definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) lis
       match find_watch(* a, cs[c], i, j) {
         Some(k) \<Rightarrow> {
           let y = lit_index(cs[c][k]);
-          let destr_3 = move_watch(pos, next_v, head, s, prev, x, k, y);
-          let p1 = destr_3.0;
-          let n1 = destr_3.1;
-          let h1 = destr_3.2;
-          return (p1, n1, h1, * a, * trail, false, true);
+          let destr_4 = move_watch(pos, next_v, head, s, prev, x, k, y);
+          let p1 = destr_4.0;
+          let n1 = destr_4.1;
+          let h1 = destr_4.2;
+          return (p1, n1, h1, * a, * trail, * rs, false, true);
         },
         None \<Rightarrow> {
           match clause_status(* a, cs[c]) {
             Status_Conflict \<Rightarrow> {
-              return (pos, next_v, head, * a, * trail, true, false);
+              return (pos, next_v, head, * a, * trail, * rs, true, false);
             },
             Status_Unit(l) \<Rightarrow> {
               * (a[l.Lit_var]) = Some(!(l.Lit_neg));
               vec_push(trail, l);
+              vec_push(rs, c);
             },
             Status_Satisfied \<Rightarrow> {
               ()
@@ -910,17 +914,18 @@ definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) lis
         }
       }
     };
-    (pos, next_v, head, * a, * trail, true, true)
+    (pos, next_v, head, * a, * trail, * rs, true, true)
   \<rbrakk>\<close>
 
 (* Rust: visit *)
-definition "visit" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>visit \<equiv> \<lambda>cs pos next_v head a trail x. FunctionBody \<lbrakk>
+definition "visit" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> bool \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>visit \<equiv> \<lambda>cs pos next_v head a trail rs x. FunctionBody \<lbrakk>
     let mut pos = { let init_1 = pos; \<llangle>init_1 :: (64 word) list\<rrangle> };
     let mut next_v = { let init_2 = next_v; \<llangle>init_2 :: (64 word) list\<rrangle> };
     let mut head = { let init_3 = head; \<llangle>init_3 :: (64 word) list\<rrangle> };
     let mut a = { let init_4 = a; \<llangle>init_4 :: (bool option) list\<rrangle> };
     let mut trail = { let init_5 = trail; \<llangle>init_5 :: Lit list\<rrangle> };
+    let mut rs = { let init_6 = rs; \<llangle>init_6 :: (64 word) list\<rrangle> };
     let nil = len(* next_v);
     let mut s = (* head)[x];
     let mut prev = nil;
@@ -928,59 +933,76 @@ definition "visit" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* s) < nil) && ((* steps) < nil) {
       * steps += 1_usize;
       let ns = (* next_v)[* s];
-      let destr_6 = \<epsilon>\<open>funcall9 visit_slot \<lbrakk>cs\<rbrakk> \<lbrakk>* pos\<rbrakk> \<lbrakk>* next_v\<rbrakk> \<lbrakk>* head\<rbrakk> \<lbrakk>* a\<rbrakk> \<lbrakk>* trail\<rbrakk> \<lbrakk>x\<rbrakk> \<lbrakk>* s\<rbrakk> \<lbrakk>* prev\<rbrakk>\<close>;
-      let p1 = destr_6.0;
-      let n1 = destr_6.1;
-      let h1 = destr_6.2;
-      let a1 = destr_6.3;
-      let t1 = destr_6.4;
-      let keep = destr_6.5;
-      let ok_v = destr_6.6;
+      let destr_7 = \<epsilon>\<open>funcall10 visit_slot \<lbrakk>cs\<rbrakk> \<lbrakk>* pos\<rbrakk> \<lbrakk>* next_v\<rbrakk> \<lbrakk>* head\<rbrakk> \<lbrakk>* a\<rbrakk> \<lbrakk>* trail\<rbrakk> \<lbrakk>* rs\<rbrakk> \<lbrakk>x\<rbrakk> \<lbrakk>* s\<rbrakk> \<lbrakk>* prev\<rbrakk>\<close>;
+      let p1 = destr_7.0;
+      let n1 = destr_7.1;
+      let h1 = destr_7.2;
+      let a1 = destr_7.3;
+      let t1 = destr_7.4;
+      let r1 = destr_7.5;
+      let keep = destr_7.6;
+      let ok_v = destr_7.7;
       * pos = p1;
       * next_v = n1;
       * head = h1;
       * a = a1;
       * trail = t1;
+      * rs = r1;
       if !ok_v {
-        return (* pos, * next_v, * head, * a, * trail, false);
+        return (* pos, * next_v, * head, * a, * trail, * rs, false, (* s) / 2_usize);
       };
       if keep {
         * prev = * s;
       };
       * s = ns;
     };
-    (* pos, * next_v, * head, * a, * trail, true)
+    (* pos, * next_v, * head, * a, * trail, * rs, true, 0_usize)
   \<rbrakk>\<close>
 
 (* Rust: wpropagate *)
-definition "wpropagate" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> (64 word) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
-  \<open>wpropagate \<equiv> \<lambda>cs pos next_v head a trail q. FunctionBody \<lbrakk>
+definition "wpropagate" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> (64 word) \<times> bool \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>wpropagate \<equiv> \<lambda>cs pos next_v head a trail rs q. FunctionBody \<lbrakk>
     let mut pos = { let init_1 = pos; \<llangle>init_1 :: (64 word) list\<rrangle> };
     let mut next_v = { let init_2 = next_v; \<llangle>init_2 :: (64 word) list\<rrangle> };
     let mut head = { let init_3 = head; \<llangle>init_3 :: (64 word) list\<rrangle> };
     let mut a = { let init_4 = a; \<llangle>init_4 :: (bool option) list\<rrangle> };
     let mut trail = { let init_5 = trail; \<llangle>init_5 :: Lit list\<rrangle> };
+    let mut rs = { let init_6 = rs; \<llangle>init_6 :: (64 word) list\<rrangle> };
     let mut q = q;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* q) < len(* trail) {
       let x = lit_index(lit_neg((* trail)[* q]));
       * q += 1_usize;
-      let destr_6 = visit(cs, * pos, * next_v, * head, * a, * trail, x);
-      let p1 = destr_6.0;
-      let n1 = destr_6.1;
-      let h1 = destr_6.2;
-      let a1 = destr_6.3;
-      let t1 = destr_6.4;
-      let ok_v = destr_6.5;
+      let destr_7 = visit(cs, * pos, * next_v, * head, * a, * trail, * rs, x);
+      let p1 = destr_7.0;
+      let n1 = destr_7.1;
+      let h1 = destr_7.2;
+      let a1 = destr_7.3;
+      let t1 = destr_7.4;
+      let r1 = destr_7.5;
+      let ok_v = destr_7.6;
+      let cf = destr_7.7;
       * pos = p1;
       * next_v = n1;
       * head = h1;
       * a = a1;
       * trail = t1;
+      * rs = r1;
       if !ok_v {
-        return (* pos, * next_v, * head, * a, * trail, * q, false);
+        return (* pos, * next_v, * head, * a, * trail, * rs, * q, false, cf);
       }
     };
-    (* pos, * next_v, * head, * a, * trail, * q, true)
+    (* pos, * next_v, * head, * a, * trail, * rs, * q, true, 0_usize)
+  \<rbrakk>\<close>
+
+(* Rust: cut *)
+definition "cut" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>cut \<equiv> \<lambda>v p. FunctionBody \<lbrakk>
+    let mut v = { let init_1 = v; \<llangle>init_1 :: (64 word) list\<rrangle> };
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while p < len(* v) {
+      let _ = vec_pop(v);
+      ()
+    };
+    * v
   \<rbrakk>\<close>
 
 (* Rust: dpll *)
@@ -993,31 +1015,36 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
     let mut pos = { let init_2 = pos0; \<llangle>init_2 :: (64 word) list\<rrangle> };
     let mut next_v = { let init_3 = next0; \<llangle>init_3 :: (64 word) list\<rrangle> };
     let mut head = { let init_4 = head0; \<llangle>init_4 :: (64 word) list\<rrangle> };
-    let destr_6 = propagate_pass(cs, vec_from_elem(None, n), { let res_5 = []; \<llangle>res_5 :: Lit list\<rrangle> });
-    let a0 = destr_6.0;
-    let t0 = destr_6.1;
-    let ok0 = destr_6.2;
+    let destr_7 = propagate_pass(cs, vec_from_elem(None, n), { let res_5 = []; \<llangle>res_5 :: Lit list\<rrangle> }, { let res_6 = []; \<llangle>res_6 :: (64 word) list\<rrangle> });
+    let a0 = destr_7.0;
+    let t0 = destr_7.1;
+    let r0 = destr_7.2;
+    let ok0 = destr_7.3;
     if !ok0 {
       return None;
     };
-    let mut a = { let init_7 = a0; \<llangle>init_7 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_8 = t0; \<llangle>init_8 :: Lit list\<rrangle> };
-    let mut lim = { let init_10 = { let res_9 = []; \<llangle>res_9 :: (64 word) list\<rrangle> }; \<llangle>init_10 :: (64 word) list\<rrangle> };
+    let mut a = { let init_8 = a0; \<llangle>init_8 :: (bool option) list\<rrangle> };
+    let mut trail = { let init_9 = t0; \<llangle>init_9 :: Lit list\<rrangle> };
+    let mut rs = { let init_10 = r0; \<llangle>init_10 :: (64 word) list\<rrangle> };
+    let mut lim = { let init_12 = { let res_11 = []; \<llangle>res_11 :: (64 word) list\<rrangle> }; \<llangle>init_12 :: (64 word) list\<rrangle> };
     let mut q = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
-      let destr_11 = wpropagate(cs, * pos, * next_v, * head, * a, * trail, * q);
-      let p1 = destr_11.0;
-      let n1 = destr_11.1;
-      let h1 = destr_11.2;
-      let a1 = destr_11.3;
-      let t1 = destr_11.4;
-      let q1 = destr_11.5;
-      let ok_v = destr_11.6;
+      let destr_13 = wpropagate(cs, * pos, * next_v, * head, * a, * trail, * rs, * q);
+      let p1 = destr_13.0;
+      let n1 = destr_13.1;
+      let h1 = destr_13.2;
+      let a1 = destr_13.3;
+      let t1 = destr_13.4;
+      let r1 = destr_13.5;
+      let q1 = destr_13.6;
+      let ok_v = destr_13.7;
+      let v_cf = destr_13.8;
       * pos = p1;
       * next_v = n1;
       * head = h1;
       * a = a1;
       * trail = t1;
+      * rs = r1;
       * q = q1;
       if ok_v {
         match find_unassigned(* a) {
@@ -1028,6 +1055,7 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
             vec_push(lim, len(* trail));
             * (a[v]) = Some(true);
             vec_push(trail, Lit_mk { Lit_var: v, Lit_neg: false });
+            vec_push(rs, 0_usize);
           }
         }
       };
@@ -1038,13 +1066,15 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
           },
           Some(p) \<Rightarrow> {
             let d = (* trail)[p];
-            let destr_12 = backtrack(* a, * trail, p);
-            let a2 = destr_12.0;
-            let t2 = destr_12.1;
+            let destr_14 = backtrack(* a, * trail, p);
+            let a2 = destr_14.0;
+            let t2 = destr_14.1;
             * a = a2;
             * trail = t2;
+            * rs = cut(* rs, p);
             * (a[d.Lit_var]) = Some(d.Lit_neg);
             vec_push(trail, lit_neg(d));
+            vec_push(rs, 0_usize);
             * q = p;
           }
         }

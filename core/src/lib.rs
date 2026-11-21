@@ -865,7 +865,7 @@ fn heap_bumped(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, c: &Vec<Lit>,
 }
 
 /// The `i`-th element (from 0) of the Luby sequence 1, 1, 2, 1, 1, 2, 4, ...
-const RESTARTS: bool = false;
+const RESTARTS: bool = true;
 
 fn luby(i: usize) -> usize {
     let mut size: usize = 1;

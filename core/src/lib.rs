@@ -679,6 +679,50 @@ fn backtrack(a: Vec<Option<bool>>, trail: Vec<Lit>, p: usize) -> (Vec<Option<boo
     (a, trail)
 }
 
+fn read_bits(a: &Vec<Option<bool>>, ls: &Vec<Lit>) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < ls.len() {
+        r.push(lit_value(a, ls[i]) == Some(true));
+        i += 1;
+    }
+    r
+}
+
+fn read_model(a: &Vec<Option<bool>>, vars: &Vec<Vec<Lit>>) -> Vec<Vec<bool>> {
+    let mut m = Vec::new();
+    let mut i: usize = 0;
+    while i < vars.len() {
+        m.push(read_bits(a, &vars[i]));
+        i += 1;
+    }
+    m
+}
+
+/// One pass of unit propagation over the clauses: assigns the literal of every unit clause in
+/// place and pushes it on the trail, and the index of the clause on the reasons `rs`. The flag is
+/// false on a conflict, which ends the pass.
+fn propagate_pass(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>, rs: Vec<usize>) -> (Vec<Option<bool>>, Vec<Lit>, Vec<usize>, bool) {
+    let mut a = a;
+    let mut trail = trail;
+    let mut rs = rs;
+    let mut i: usize = 0;
+    while i < cs.len() {
+        match clause_status(&a, &cs[i]) {
+            Status::Conflict => return (a, trail, rs, false),
+            Status::Unit(l) => {
+                a[l.var] = Some(!l.neg);
+                trail.push(l);
+                rs.push(i);
+            }
+            Status::Satisfied => {}
+            Status::Open => {}
+        }
+        i += 1;
+    }
+    (a, trail, rs, true)
+}
+
 /// Saves the phase (the sign) of every trail entry from position `p` on in `ph`.
 fn save_phase(ph: Vec<bool>, trail: &Vec<Lit>, p: usize) -> Vec<bool> {
     let mut ph = ph;
@@ -688,21 +732,6 @@ fn save_phase(ph: Vec<bool>, trail: &Vec<Lit>, p: usize) -> Vec<bool> {
         k += 1;
     }
     ph
-}
-
-/// The unassigned variable of highest activity (the first of them), if there is one.
-fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
-    let mut best: Option<usize> = None;
-    let mut ba: usize = 0;
-    let mut i: usize = 0;
-    while i < a.len() {
-        if a[i].is_none() && (best.is_none() || act[i] > ba) {
-            best = Some(i);
-            ba = act[i];
-        }
-        i += 1;
-    }
-    best
 }
 
 // Decision heap: a binary max-heap of variables by activity; `hp[v]` is the position of `v` in
@@ -892,50 +921,6 @@ fn rescale(act: Vec<usize>, r: usize) -> Vec<usize> {
         i += 1;
     }
     act
-}
-
-fn read_bits(a: &Vec<Option<bool>>, ls: &Vec<Lit>) -> Vec<bool> {
-    let mut r = Vec::new();
-    let mut i: usize = 0;
-    while i < ls.len() {
-        r.push(lit_value(a, ls[i]) == Some(true));
-        i += 1;
-    }
-    r
-}
-
-fn read_model(a: &Vec<Option<bool>>, vars: &Vec<Vec<Lit>>) -> Vec<Vec<bool>> {
-    let mut m = Vec::new();
-    let mut i: usize = 0;
-    while i < vars.len() {
-        m.push(read_bits(a, &vars[i]));
-        i += 1;
-    }
-    m
-}
-
-/// One pass of unit propagation over the clauses: assigns the literal of every unit clause in
-/// place and pushes it on the trail, and the index of the clause on the reasons `rs`. The flag is
-/// false on a conflict, which ends the pass.
-fn propagate_pass(cs: &Vec<Vec<Lit>>, a: Vec<Option<bool>>, trail: Vec<Lit>, rs: Vec<usize>) -> (Vec<Option<bool>>, Vec<Lit>, Vec<usize>, bool) {
-    let mut a = a;
-    let mut trail = trail;
-    let mut rs = rs;
-    let mut i: usize = 0;
-    while i < cs.len() {
-        match clause_status(&a, &cs[i]) {
-            Status::Conflict => return (a, trail, rs, false),
-            Status::Unit(l) => {
-                a[l.var] = Some(!l.neg);
-                trail.push(l);
-                rs.push(i);
-            }
-            Status::Satisfied => {}
-            Status::Open => {}
-        }
-        i += 1;
-    }
-    (a, trail, rs, true)
 }
 
 // Watched literals. Each clause of at least two literals watches two of them; slot `2c + k` is
@@ -1144,7 +1129,11 @@ fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, 
         let l = c[k];
         if !seen[l.var] {
             seen[l.var] = true;
-            act[l.var] = act[l.var].saturating_add(inc);
+            if act[l.var] > usize::MAX - inc {
+                act[l.var] = usize::MAX;
+            } else {
+                act[l.var] = act[l.var] + inc;
+            }
             if tp[l.var] >= start {
                 cnt += 1;
             } else {

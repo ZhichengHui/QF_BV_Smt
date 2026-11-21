@@ -1852,6 +1852,17 @@ proof -
   ultimately show ?thesis by simp
 qed
 
+text \<open>The vectors of a vector of vectors can grow.\<close>
+definition allvok :: \<open>'a rvec rvec \<Rightarrow> bool\<close> where
+  \<open>allvok v \<equiv> \<forall>x \<in> set (rvec_elems v). vok x\<close>
+
+lemma allvok_nth: \<open>allvok v \<Longrightarrow> i < rvec_length v \<Longrightarrow> vok (rvec_elems v ! i)\<close>
+  by (simp add: allvok_def)
+
+lemma allvok_push [simp]:
+  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> allvok (the (rvec_append_val v [x])) = (allvok v \<and> vok x)\<close>
+  by (auto simp add: allvok_def)
+
 lemma init_st_eq: \<open>init_st = (Suc 0, [[lconst True]])\<close>
   by (simp add: init_st_def addc_m_def)
 
@@ -1875,17 +1886,6 @@ lemma blast_bin_spec [crush_specs]:
   done
 
 subsection \<open>\<^verbatim>\<open>blast\<close>\<close>
-
-text \<open>The vectors of a vector of vectors can grow.\<close>
-definition allvok :: \<open>'a rvec rvec \<Rightarrow> bool\<close> where
-  \<open>allvok v \<equiv> \<forall>x \<in> set (rvec_elems v). vok x\<close>
-
-lemma allvok_nth: \<open>allvok v \<Longrightarrow> i < rvec_length v \<Longrightarrow> vok (rvec_elems v ! i)\<close>
-  by (simp add: allvok_def)
-
-lemma allvok_push [simp]:
-  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> allvok (the (rvec_append_val v [x])) = (allvok v \<and> vok x)\<close>
-  by (auto simp add: allvok_def)
 
 text \<open>The \<open>k\<close>-th unfolding of \<^const>\<open>blast\<close>: its precondition requires the recursion depth
   \<open>size t + 1\<close> to be at most \<open>k\<close>, so the innermost function is never called.\<close>

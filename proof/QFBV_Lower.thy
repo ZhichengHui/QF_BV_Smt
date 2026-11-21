@@ -1230,7 +1230,7 @@ lemma lower_bin_correct:
      (\<forall>vs. vs_ok ws vs \<longrightarrow> CV ws vs L' ! k = bin_sem op wa (CV ws vs L ! ka) wb (CV ws vs L ! kb))\<close>
 proof -
   have L: \<open>lok ws L\<close> and wa: \<open>snd L ! ka = wa\<close> and wb: \<open>snd L ! kb = wb\<close> and wa1: \<open>1 \<le> wa\<close>
-    and wa64: \<open>wa < 2 ^ 64\<close>
+    and wa64: \<open>wa < 2 ^ 56\<close>
     using EA EB by (simp_all add: env_ok_def)
   have EBa: \<open>op \<noteq> Op_Concat \<Longrightarrow> env_ok ws L kb wa\<close> using EB eqw by simp
   note A = cr_env[OF EA] neg_t_env[OF EA] msb_t_env[OF EA] abs_t_env[OF EA]
@@ -1550,7 +1550,7 @@ proof -
   have L1: \<open>lok ws L1\<close> using IH by (simp add: env_ok_def)
   note P = push_correct[OF L1 t p v]
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[of ws L1 L']] by (intro nth_mem) simp
-  then have w64: \<open>w < 2 ^ 64\<close> using P B by (auto simp add: bnd_def)
+  then have w64: \<open>w < 2 ^ 56\<close> using P B by (auto simp add: bnd_def)
   have E: \<open>env_ok ws L' k w\<close> using env_push[OF L1 t p w1 w64] B by (simp add: bnd_def)
   have X: \<open>lext ws L L'\<close> using IH P lext_trans by blast
   have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = f (ea vs dv)\<close>
@@ -1634,7 +1634,7 @@ proof (induction t arbitrary: L L' k)
   have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) (CoreTermL_Const bs) = bits_nat bs\<close> by simp
   note P = push_correct[OF L t p v]
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[of ws L L']] by (intro nth_mem) simp
-  then have w64: \<open>length bs < 2 ^ 64\<close> using P TermL_Const.prems(5) by (auto simp add: bnd_def)
+  then have w64: \<open>length bs < 2 ^ 56\<close> using P TermL_Const.prems(5) by (auto simp add: bnd_def)
   have \<open>1 \<le> length bs\<close> using TermL_Const.prems(1) by (simp add: Suc_le_eq)
   then have \<open>env_ok ws L' k (length bs)\<close>
     using env_push[OF L t p _ w64] TermL_Const.prems(5) by (simp add: bnd_def)
@@ -1648,7 +1648,7 @@ next
   have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) (CoreTermL_Var i) = vs ! unat i\<close> by simp
   note P = push_correct[OF L t p v]
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[of ws L L']] by (intro nth_mem) simp
-  then have w64: \<open>ws ! unat i < 2 ^ 64\<close> using P TermL_Var.prems(5) by (auto simp add: bnd_def)
+  then have w64: \<open>ws ! unat i < 2 ^ 56\<close> using P TermL_Var.prems(5) by (auto simp add: bnd_def)
   have \<open>env_ok ws L' k (ws ! unat i)\<close>
     using env_push[OF L t p wt(2) w64] TermL_Var.prems(5) by (simp add: bnd_def)
   then show ?case using P by simp

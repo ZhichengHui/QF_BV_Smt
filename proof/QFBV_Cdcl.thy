@@ -1293,11 +1293,26 @@ proof -
   show ?thesis using I ds rl rlt rsn TP e(1) sp LL W by (simp add: cinv_def)
 qed
 
-text \<open>A decision, after propagation without a conflict.\<close>
-lemma cinv_decide:
+text \<open>A decision of either sign, as with phase saving.\<close>
+lemma dstate_decide_any:
+  assumes \<open>dstate cs n a t L\<close> \<open>v < n\<close> \<open>a ! v = None\<close> \<open>lv l = v\<close>
+  shows \<open>dstate cs n (a[v := Some (\<not> Lit_neg l)]) (t @ [l]) (L @ [length t]) \<and>
+         meas n (length t) L < meas n (length (t @ [l])) (L @ [length t])\<close>
+proof -
+  have \<open>tr_ok n (a[v := Some (\<not> Lit_neg l)]) (t @ [l])\<close>
+    using tr_ok_push[of n a t l] assms by (simp add: dstate_def)
+  moreover have \<open>\<forall>j < length (t @ [l]). j \<notin> set (L @ [length t]) \<longrightarrow> tr_imp cs (t @ [l]) j\<close>
+    using assms(1) tr_imp_append by (auto simp: dstate_def less_Suc_eq)
+  moreover have \<open>sorted_wrt (<) (L @ [length t])\<close> using assms(1) by (auto simp: dstate_def sorted_wrt_append)
+  ultimately show ?thesis using assms(1) meas_decide[of L \<open>length t\<close> n] by (auto simp: dstate_def)
+qed
+
+text \<open>A decision of either sign, after propagation without a conflict.\<close>
+lemma cinv_decide_any:
   assumes I: \<open>cinv cs n db a t rs tp L p nx h lr\<close> and S: \<open>wstate db p nx h t (length t) L\<close>
-    and v: \<open>v < n\<close> \<open>a ! v = None\<close> \<open>lv l = v\<close> \<open>\<not> Lit_neg l\<close>
-  shows \<open>cinv cs n db (a[v := Some True]) (t @ [l]) (rs @ [0]) (tp[v := length t]) (L @ [length t]) p nx h lr \<and>
+    and v: \<open>v < n\<close> \<open>a ! v = None\<close> \<open>lv l = v\<close>
+  shows \<open>cinv cs n db (a[v := Some (\<not> Lit_neg l)]) (t @ [l]) (rs @ [0]) (tp[v := length t]) (L @ [length t])
+           p nx h lr \<and>
          wstate db p nx h (t @ [l]) (length t) (L @ [length t]) \<and>
          meas n (length t) L < meas n (length (t @ [l])) (L @ [length t])\<close>
 proof -
@@ -1305,7 +1320,7 @@ proof -
     \<open>lr \<longrightarrow> (\<forall>j < length t. j \<notin> set L \<longrightarrow> reason db t j (rs ! j))\<close> \<open>0 < length db\<close>
     \<open>tpos t tp\<close> \<open>length tp = n\<close>
     using I by (simp_all add: cinv_def)
-  note DD = dstate_decide[OF D(1) v]
+  note DD = dstate_decide_any[OF D(1) v]
   note WD = wstate_decide[OF S, of l]
   have tr: \<open>tr_ok n a t\<close> using D(1) by (simp add: dstate_def)
   have nv: \<open>lv (t ! j) \<noteq> v\<close> if \<open>j < length t\<close> for j
@@ -1332,6 +1347,15 @@ proof -
     using WD by (auto simp: wstate_def)
   show ?thesis using I DD WD tpos rs rsn WS D(2) by (simp add: cinv_def)
 qed
+
+text \<open>A decision, after propagation without a conflict.\<close>
+lemma cinv_decide:
+  assumes I: \<open>cinv cs n db a t rs tp L p nx h lr\<close> and S: \<open>wstate db p nx h t (length t) L\<close>
+    and v: \<open>v < n\<close> \<open>a ! v = None\<close> \<open>lv l = v\<close> \<open>\<not> Lit_neg l\<close>
+  shows \<open>cinv cs n db (a[v := Some True]) (t @ [l]) (rs @ [0]) (tp[v := length t]) (L @ [length t]) p nx h lr \<and>
+         wstate db p nx h (t @ [l]) (length t) (L @ [length t]) \<and>
+         meas n (length t) L < meas n (length (t @ [l])) (L @ [length t])\<close>
+  using cinv_decide_any[OF I S v(1-3)] v(4) by simp
 
 text \<open>Chronological backtracking to the last decision position \<open>pp\<close> after a conflict of the clause
   \<open>cf\<close>; it gives the implied entry no reason, so learning is off afterwards.\<close>
@@ -1468,6 +1492,98 @@ proof -
   have cfl: \<open>\<forall>l \<in> set (db ! cf). \<exists>j < length t. t ! j = lneg l\<close> using cf(2) by (metis in_set_conv_nth)
   note AN = analyze_ok[OF D(1) less_imp_le[OF st] rsn cf(1) cfl A]
   then show ?thesis using confl_cur[OF I L cf] by blast
+qed
+
+subsection \<open>Restarts\<close>
+
+lemma reason_take: \<open>reason db t k r \<Longrightarrow> k < m \<Longrightarrow> reason db (take m t) k r\<close>
+  unfolding reason_def by auto (metis less_trans nth_take)
+
+text \<open>Cutting the trail at the decision position \<open>L ! j\<close>, which learns nothing: the state of the
+  search is kept, with the watch invariant complete up to \<open>L ! j\<close>.\<close>
+lemma cinv_cut:
+  assumes I: \<open>cinv cs n db a t rs tp L p nx h lr\<close> and j: \<open>j < length L\<close>
+    and a2: \<open>tr_ok n a2 (take (L ! j) t)\<close>
+  shows \<open>cinv cs n db a2 (take (L ! j) t) (take (L ! j) rs) tp (take j L) p nx h lr \<and>
+         wstate db p nx h (take (L ! j) t) (L ! j) (take j L)\<close>
+proof -
+  have D: \<open>dstate db n a t L\<close> \<open>length rs = length t\<close> \<open>\<forall>j < length t. rs ! j < length db\<close>
+    \<open>lr \<longrightarrow> (\<forall>j < length t. j \<notin> set L \<longrightarrow> reason db t j (rs ! j))\<close>
+    \<open>tpos t tp\<close> \<open>wl_ok db p nx h\<close> \<open>\<forall>k \<in> set L. k \<le> length t \<and> WP db p t k \<and> SP db (take k t)\<close>
+    using I by (simp_all add: cinv_def)
+  have DS: \<open>sorted_wrt (<) L\<close> \<open>\<forall>q \<in> set L. q < length t\<close> \<open>\<forall>j < length t. j \<notin> set L \<longrightarrow> tr_imp db t j\<close>
+    using D(1) by (simp_all add: dstate_def)
+  let ?pp = \<open>L ! j\<close> and ?t' = \<open>take (L ! j) t\<close> and ?L' = \<open>take j L\<close>
+  have ppL: \<open>?pp \<in> set L\<close> using j by simp
+  have ppt: \<open>?pp < length t\<close> using DS(2) ppL by blast
+  have lt': \<open>length ?t' = ?pp\<close> using ppt by simp
+  have takeL: \<open>\<forall>x \<in> set ?L'. x < ?pp\<close> using sorted_take_lt[OF DS(1) j] by blast
+  have Ltake: \<open>x \<in> set ?L'\<close> if \<open>x \<in> set L\<close> \<open>x < ?pp\<close> for x using sorted_lt_take[OF DS(1) j] that by blast
+  have imp: \<open>\<forall>k < length ?t'. k \<notin> set ?L' \<longrightarrow> tr_imp db ?t' k\<close>
+  proof (intro allI impI)
+    fix k assume k: \<open>k < length ?t'\<close> \<open>k \<notin> set ?L'\<close>
+    then have kp: \<open>k < ?pp\<close> using lt' by simp
+    then have \<open>k \<notin> set L\<close> using Ltake k(2) by blast
+    then have \<open>tr_imp db t k\<close> using DS(3) kp ppt by simp
+    moreover have \<open>t = ?t' @ drop ?pp t\<close> by simp
+    ultimately show \<open>tr_imp db ?t' k\<close> using tr_imp_append[of k ?t' db \<open>drop ?pp t\<close>] k(1) by simp
+  qed
+  have ds: \<open>dstate db n a2 ?t' ?L'\<close>
+    using a2 sorted_wrt_take[OF DS(1)] takeL lt' imp by (simp add: dstate_def)
+  have rsn: \<open>lr \<longrightarrow> (\<forall>k < length ?t'. k \<notin> set ?L' \<longrightarrow> reason db ?t' k (take ?pp rs ! k))\<close>
+  proof (intro impI allI)
+    fix k assume lr and k: \<open>k < length ?t'\<close> \<open>k \<notin> set ?L'\<close>
+    then have kp: \<open>k < ?pp\<close> using lt' by simp
+    then have \<open>k \<notin> set L\<close> using Ltake k(2) by blast
+    then have \<open>reason db t k (rs ! k)\<close> using D(4) \<open>lr\<close> kp ppt by simp
+    then show \<open>reason db ?t' k (take ?pp rs ! k)\<close> using reason_take kp by simp
+  qed
+  have tpos: \<open>tpos ?t' tp\<close> using D(5) by (simp add: tpos_def)
+  have W: \<open>WP db p t ?pp\<close> \<open>SP db ?t'\<close> using D(7) ppL by auto
+  have LL: \<open>\<forall>k \<in> set ?L'. k \<le> ?pp \<and> WP db p ?t' k \<and> SP db (take k ?t')\<close>
+  proof
+    fix k assume k: \<open>k \<in> set ?L'\<close>
+    then have kp: \<open>k < ?pp\<close> using takeL by blast
+    have \<open>WP db p t k\<close> \<open>SP db (take k t)\<close> using D(7) k by (auto dest: in_set_takeD)
+    then show \<open>k \<le> ?pp \<and> WP db p ?t' k \<and> SP db (take k ?t')\<close> using kp by (simp add: WP_def min_def)
+  qed
+  have WSpp: \<open>WS db p ?t' (set (take ?pp ?t'))\<close> using W(1) by (simp add: WP_def)
+  have ppl: \<open>?pp \<le> length ?t'\<close> using lt' by simp
+  have ws: \<open>wstate db p nx h ?t' ?pp ?L'\<close> unfolding wstate_def using D(6) WSpp W(2) ppl LL by blast
+  have LL': \<open>\<forall>k \<in> set ?L'. k \<le> length ?t' \<and> WP db p ?t' k \<and> SP db (take k ?t')\<close>
+    using LL ppl by (meson le_trans)
+  have rsl: \<open>length (take ?pp rs) = length ?t'\<close> using D(2) by simp
+  have rslt: \<open>\<forall>k < length ?t'. take ?pp rs ! k < length db\<close> using D(2,3) lt' ppt by simp
+  have ci: \<open>cinv cs n db a2 ?t' (take ?pp rs) tp ?L' p nx h lr\<close>
+    using I[unfolded cinv_def] ds rsn tpos W(2) LL' rsl rslt unfolding cinv_def by blast
+  show ?thesis using ci ws by blast
+qed
+
+text \<open>A restart: the trail is cut at the first decision position, and the search goes on at
+  decision level 0.\<close>
+lemma cinv_restart:
+  assumes \<open>cinv cs n db a t rs tp L p nx h lr\<close> \<open>L \<noteq> []\<close> \<open>tr_ok n a2 (take (L ! 0) t)\<close>
+  shows \<open>cinv cs n db a2 (take (L ! 0) t) (take (L ! 0) rs) tp [] p nx h lr \<and>
+         wstate db p nx h (take (L ! 0) t) (L ! 0) []\<close>
+  using cinv_cut[OF assms(1) _ assms(3)] assms(2) by simp
+
+text \<open>The measure of the search with restarts: the number \<open>r\<close> of restarts, then \<^const>\<open>meas\<close>.
+  A bound on \<open>r\<close> bounds it.\<close>
+definition rmeas :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat\<close> where
+  \<open>rmeas n r m L \<equiv> r * 3 ^ n + meas n m L\<close>
+
+lemma rmeas_restart: \<open>m \<le> n \<Longrightarrow> rmeas n r m L < rmeas n (Suc r) m' L'\<close>
+  using meas_lt[of m n L] by (simp add: rmeas_def)
+
+lemma rmeas_meas: \<open>meas n m L < meas n m' L' \<Longrightarrow> rmeas n r m L < rmeas n r m' L'\<close>
+  by (simp add: rmeas_def)
+
+lemma rmeas_bound: \<open>r \<le> R \<Longrightarrow> m \<le> n \<Longrightarrow> rmeas n r m L < (R + 1) * 3 ^ n\<close>
+proof -
+  assume r: \<open>r \<le> R\<close> and m: \<open>m \<le> n\<close>
+  have \<open>r * 3 ^ n \<le> R * (3::nat) ^ n\<close> using r by simp
+  moreover have \<open>(R + 1) * (3::nat) ^ n = R * 3 ^ n + 3 ^ n\<close> by simp
+  ultimately show ?thesis using meas_lt[OF m, of L] unfolding rmeas_def by linarith
 qed
 
 end

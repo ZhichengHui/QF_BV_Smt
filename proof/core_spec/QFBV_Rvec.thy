@@ -9,7 +9,7 @@ text \<open>
   \<^verbatim>\<open>StdLib_Vec\<close>): the elements, a capacity and the layout of the elements. \<^verbatim>\<open>push\<close> and
   \<^verbatim>\<open>vec![x; n]\<close> panic when the capacity would exceed \<^const>\<open>rvec_cap_max\<close> of the layout, and
   the capacity after a growth or a clone is unspecified. The proofs therefore state facts about
-  the elements and keep every vector the solver grows within \<^const>\<open>vok\<close>: well-formed, and of
+  the elements and keep every vector the solver grows within \<open>vok\<close>: well-formed, and of
   a layout whose largest capacity is at least \<open>2^57\<close> (every element type of the solver is at most
   64 bytes). A \<^verbatim>\<open>push\<close> onto such a vector of fewer than \<open>2^56\<close> elements does not panic.
 \<close>
@@ -27,7 +27,7 @@ lemma vok_new [simp]: \<open>2 ^ 57 \<le> rvec_cap_max l \<Longrightarrow> vok (
   by (simp add: vok_def rvec_new_val_wf)
 
 lemma vok_length: \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 64\<close>
-  by (simp add: vok_def rvec_wf_length_bound)
+  using rvec_wf_length_bound(1)[of v] by (simp add: vok_def)
 
 lemma vok_len_unat: \<open>vok v \<Longrightarrow> unat (of_nat (rvec_length v) :: 64 word) = rvec_length v\<close>
   by (simp add: vok_def rvec_len_unat)
@@ -64,6 +64,12 @@ proof -
   note S = rvec_append_val_Some[OF w conjunct1[OF assms(1)[unfolded vok_def]]]
   show ?thesis using that[OF w] S assms(1) by (simp add: vok_def)
 qed
+
+text \<open>The condition of the contract of \<^verbatim>\<open>push\<close>, as the automation states it.\<close>
+lemma push_ex [simp]:
+  assumes \<open>vok v\<close> \<open>rvec_length v < 2 ^ 56\<close>
+  shows \<open>\<exists>y. rvec_append_val v [x] = Some y\<close>
+  using push_not_None[OF assms, of x] by blast
 
 text \<open>The value after a \<^verbatim>\<open>push\<close>, as the contract of \<^verbatim>\<open>push\<close> states it.\<close>
 lemma push_the [simp]:

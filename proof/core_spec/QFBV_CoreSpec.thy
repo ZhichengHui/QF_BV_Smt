@@ -344,6 +344,11 @@ text \<open>The lists of the elements of a vector of vectors (an assignment).\<c
 definition vecs_of :: \<open>'a rvec rvec \<Rightarrow> 'a list list\<close> where
   \<open>vecs_of v \<equiv> map rvec_elems (rvec_elems v)\<close>
 
+lemma vecs_of_simps [simp]:
+  \<open>length (vecs_of v) = rvec_length v\<close>
+  \<open>i < rvec_length v \<Longrightarrow> vecs_of v ! i = rvec_elems (rvec_elems v ! i)\<close>
+  by (simp_all add: vecs_of_def)
+
 subsection \<open>Values\<close>
 
 text \<open>The number a bit list denotes, least significant bit first (\<open>bv2nat\<close>).\<close>

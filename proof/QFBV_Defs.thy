@@ -17,6 +17,10 @@ text \<open>The state of a Rust \<^verbatim>\<open>Cnf\<close>.\<close>
 definition st_of :: \<open>Cnf \<Rightarrow> st\<close> where
   \<open>st_of c \<equiv> (unat (Cnf_num_vars c), vecs_of (Cnf_clauses c))\<close>
 
+text \<open>A \<^verbatim>\<open>Cnf\<close> whose vector of clauses can grow.\<close>
+definition cnf_ok :: \<open>Cnf \<Rightarrow> bool\<close> where
+  \<open>cnf_ok c \<equiv> vok (Cnf_clauses c)\<close>
+
 subsection \<open>Literals and gates\<close>
 
 definition lconst :: \<open>bool \<Rightarrow> Lit\<close> where

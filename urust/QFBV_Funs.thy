@@ -2886,7 +2886,7 @@ definition "tr_model" :: \<open>SmtProblem \<Rightarrow> ((bool rvec) rvec) \<Ri
 (* Rust: cap *)
 definition "cap" :: \<open>('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>cap \<equiv> FunctionBody \<lbrakk>
-    9223372036854775808_usize
+    72057594037927936_usize
   \<rbrakk>\<close>
 
 (* Rust: sat_add *)

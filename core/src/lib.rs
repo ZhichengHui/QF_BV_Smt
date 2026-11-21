@@ -2453,14 +2453,15 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
 
 // ---------------------------------------------------------------------------------------------
 // Size checks. The solver of the extended language (`solve`) is verified for problems whose
-// `size_bound` (spec/QFBV_Spec.thy) is below 2^64, and the translation indexes its definitions
-// by `usize`. `check_sat` answers `Unknown` when the translation would add 2^63 definitions or
+// `ovf_bound` (proof/core_spec/QFBV_CoreSpec.thy) is below 2^56, so that every vector it grows
+// stays below 2^56 elements (a `push` then never exceeds the largest capacity), and the
+// translation indexes its definitions by `usize`. `check_sat` answers `Unknown` when the translation would add 2^56 definitions or
 // more, or when the translated problem is too large for `solve`. The computations below saturate
-// at 2^63: each returns the exact value if it is below 2^63, and 2^63 otherwise.
+// at 2^56: each returns the exact value if it is below 2^56, and 2^56 otherwise.
 
-/// The bound at which the size computations saturate: 2^63.
+/// The bound at which the size computations saturate: 2^56.
 fn cap() -> usize {
-    9223372036854775808
+    72057594037927936
 }
 
 /// `a + b`, saturated at `cap()`.
@@ -2614,7 +2615,7 @@ fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
     (w, sat_add(sat_mul(4, sat_add(w, 1)), g))
 }
 
-/// Whether the `ovf_bound` of `q` is below 2^63 (`sizes_ok` of the specification): then no
+/// Whether the `ovf_bound` of `q` is below 2^56 (`sizes_ok` of `QFBV_CoreSpec`): then no
 /// counter of the solver overflows.
 fn size_ok(q: &Problem) -> bool {
     let mut ds = Vec::new();

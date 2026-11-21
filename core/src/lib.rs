@@ -679,6 +679,43 @@ fn backtrack(a: Vec<Option<bool>>, trail: Vec<Lit>, p: usize) -> (Vec<Option<boo
     (a, trail)
 }
 
+/// Saves the phase (the sign) of every trail entry from position `p` on in `ph`.
+fn save_phase(ph: Vec<bool>, trail: &Vec<Lit>, p: usize) -> Vec<bool> {
+    let mut ph = ph;
+    let mut k = p;
+    while k < trail.len() {
+        ph[trail[k].var] = !trail[k].neg;
+        k += 1;
+    }
+    ph
+}
+
+/// The unassigned variable of highest activity (the first of them), if there is one.
+fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
+    let mut best: Option<usize> = None;
+    let mut ba: usize = 0;
+    let mut i: usize = 0;
+    while i < a.len() {
+        if a[i].is_none() && (best.is_none() || act[i] > ba) {
+            best = Some(i);
+            ba = act[i];
+        }
+        i += 1;
+    }
+    best
+}
+
+/// Halves every activity `r` times (shift right), once the increment is large.
+fn rescale(act: Vec<usize>, r: usize) -> Vec<usize> {
+    let mut act = act;
+    let mut i: usize = 0;
+    while i < act.len() {
+        act[i] = act[i] >> r;
+        i += 1;
+    }
+    act
+}
+
 fn read_bits(a: &Vec<Option<bool>>, ls: &Vec<Lit>) -> Vec<bool> {
     let mut r = Vec::new();
     let mut i: usize = 0;
@@ -919,7 +956,8 @@ fn set_pos(tp: Vec<usize>, trail: &Vec<Lit>, k: usize) -> Vec<usize> {
 /// Marks the variables of clause `c` in `seen`: a variable assigned at the current decision level
 /// (trail position at or above `start`) is counted in `cnt`, any other literal is pushed on
 /// `learned`. Variables already marked are skipped.
-fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, learned: Vec<Lit>, cnt: usize) -> (Vec<bool>, Vec<Lit>, usize) {
+fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, learned: Vec<Lit>, cnt: usize, act: Vec<usize>, inc: usize) -> (Vec<bool>, Vec<Lit>, usize, Vec<usize>) {
+    let mut act = act;
     let mut seen = seen;
     let mut learned = learned;
     let mut cnt = cnt;
@@ -928,6 +966,7 @@ fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, 
         let l = c[k];
         if !seen[l.var] {
             seen[l.var] = true;
+            act[l.var] = act[l.var].saturating_add(inc);
             if tp[l.var] >= start {
                 cnt += 1;
             } else {
@@ -936,7 +975,7 @@ fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, 
         }
         k += 1;
     }
-    (seen, learned, cnt)
+    (seen, learned, cnt, act)
 }
 
 /// Conflict analysis (first unique implication point) of the clause `cf` in conflict; the current
@@ -945,11 +984,13 @@ fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, 
 /// the current level is left; the learned clause is its negation, first, followed by the literals
 /// of lower levels. The flag is false if the conflict has no literal of the current level. `seen`
 /// is all false on entry and on exit.
-fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize) -> (Vec<Lit>, Vec<bool>, bool) {
+fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize, act: Vec<usize>, inc: usize) -> (Vec<Lit>, Vec<bool>, bool, Vec<usize>) {
+    let mut act = act;
     let mut seen = seen;
     let mut learned: Vec<Lit> = Vec::new();
     learned.push(Lit { var: 0, neg: false });
-    let (s1, l1, c1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0);
+    let (s1, l1, c1, a1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0, act, inc);
+    act = a1;
     seen = s1;
     learned = l1;
     let mut cnt = c1;
@@ -962,7 +1003,8 @@ fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize
                 learned[0] = lit_neg(trail[i]);
                 ok = false;
             } else {
-                let (s2, l2, c2) = analyze_clause(&cs[rs[i]], tp, start, seen, learned, cnt - 1);
+                let (s2, l2, c2, a2) = analyze_clause(&cs[rs[i]], tp, start, seen, learned, cnt - 1, act, inc);
+                act = a2;
                 seen = s2;
                 learned = l2;
                 cnt = c2;
@@ -980,7 +1022,7 @@ fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize
         seen[trail[j].var] = false;
         j += 1;
     }
-    (learned, seen, found)
+    (learned, seen, found, act)
 }
 
 /// Moves a literal of the learned clause `c` (at least two literals) whose trail position is the
@@ -1069,6 +1111,9 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut lim: Vec<usize> = Vec::new();
     let mut q: usize = 0;
     let mut learn = true;
+    let mut act: Vec<usize> = vec![0; n];
+    let mut inc: usize = 1 << 10;
+    let mut ph: Vec<bool> = vec![false; n];
     loop {
         let q0 = trail.len();
         let (p1, n1, h1, a1, t1, r1, q1, ok, cf) = wpropagate(&db, pos, next, head, a, trail, rs, q);
@@ -1081,13 +1126,13 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         q = q1;
         tp = set_pos(tp, &trail, q0);
         if ok {
-            match find_unassigned(&a) {
+            match pick(&a, &act) {
                 None => return Some(a),
                 Some(v) => {
                     lim.push(trail.len());
-                    a[v] = Some(true);
+                    a[v] = Some(ph[v]);
                     tp[v] = trail.len();
-                    trail.push(Lit { var: v, neg: false });
+                    trail.push(Lit { var: v, neg: !ph[v] });
                     rs.push(0);
                 }
             }
@@ -1100,10 +1145,16 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             let mut c: Vec<Lit> = Vec::new();
             if learn && db.len() < usize::MAX / 4 {
                 let start = lim[lim.len() - 1];
-                let (c1, s1, f1) = analyze(&db, &trail, &rs, &tp, start, seen, cf);
+                let (c1, s1, f1, ac1) = analyze(&db, &trail, &rs, &tp, start, seen, cf, act, inc);
                 c = c1;
                 seen = s1;
                 found = f1;
+                act = ac1;
+                inc = inc + inc / 20;
+                if inc >= 1 << 40 {
+                    act = rescale(act, 30);
+                    inc = inc >> 30;
+                }
             }
             if found {
                 let mut j: usize = 0;
@@ -1113,6 +1164,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 }
                 let p = lim[j];
                 lim = cut(lim, j);
+                ph = save_phase(ph, &trail, p);
                 let (a2, t2) = backtrack(a, trail, p);
                 a = a2;
                 trail = t2;
@@ -1134,6 +1186,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     None => return None,
                     Some(p) => {
                         let d = trail[p];
+                        ph = save_phase(ph, &trail, p);
                         let (a2, t2) = backtrack(a, trail, p);
                         a = a2;
                         trail = t2;

@@ -1036,8 +1036,9 @@ lemma bv_fresh_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnfv_res r (fresh_vec_m (st_of c) (unat w))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        take_Suc_conv_app_nth antisym_conv cnfv_res_def room_def cnf_res_def st_of_def)
+    apply (crush_base)
+    apply (auto simp add: cnf_res_def room_def st_of_def word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp take_Suc_conv_app_nth antisym_conv)
+    apply (clarsimp simp add: cnfv_res_def st_of_def)
     done
   done
 
@@ -1072,9 +1073,8 @@ lemma bv_bitwise_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnfv_res r (bitwise_m op (st_of c) (rvec_elems a) (rvec_elems b))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv bitwise_m_foldl bitwise_fold_count bitwise_step_def bitwise_step_lt cnf_res_def cnfv_res_def
-        room_def)
+    apply (crush_base simp add: cnfv_res_def)
+    apply (auto simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp antisym_conv bitwise_m_foldl bitwise_fold_count bitwise_step_def bitwise_step_lt cnf_res_def room_def)
     done
   done
 
@@ -1119,7 +1119,9 @@ lemma bv_add_spec [crush_specs]:
            vok (fst (snd r)) \<and> snd (snd r) = (snd (snd (add_m (st_of c) (rvec_elems a) (rvec_elems b) cin)), TNil)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    sorry \<comment> \<open>TODO rvec: bv_add loop step\<close>
+    apply (crush_base)
+    apply (auto simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp antisym_conv add_m_def add_fold_count add_step_eq add_step_lt cnf_res_def room_def)
+    done
   done
 
 definition bv_partial_contract ::
@@ -1153,11 +1155,15 @@ lemma bv_partial_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnfv_res r (partial_m (st_of c) (rvec_elems a) bi (unat i))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv partial_m_foldl partial_fold_count partial_step_def partial_step_lt unat_sub_not_less
-        word_le_nat_alt cnf_res_def cnfv_res_def room_def)
+    apply (crush_base simp add: cnfv_res_def)
+    apply (auto simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp antisym_conv partial_m_foldl partial_fold_count partial_step_def partial_step_lt unat_sub_not_less word_le_nat_alt cnf_res_def room_def)
     done
   done
+
+text \<open>\<^verbatim>\<open>vec![x; n]\<close> of literals.\<close>
+lemma from_elem_lit:
+  \<open>rvec_from_elem_val (make_elem_layout 16 8) x n = Some r \<Longrightarrow> vok r \<and> rvec_elems r = replicate n x\<close>
+  using from_elem_Some[of \<open>make_elem_layout 16 8\<close> x n r] by simp
 
 definition bv_mul_contract ::
   \<open>Cnf \<Rightarrow> Lit rvec \<Rightarrow> Lit rvec \<Rightarrow> ('s, Cnf \<times> Lit rvec \<times> tnil, 'abort) function_contract\<close> where
@@ -1196,8 +1202,8 @@ lemma bv_mul_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnfv_res r (mul_m (st_of c) (rvec_elems a) (rvec_elems b))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv mul_step_eq mul_step_lt mul_m_fold cnfv_res_def room_def)
+    apply (crush_base simp add: cnfv_res_def)
+    apply (auto simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp mul_step_eq mul_step_lt mul_m_fold room_def dest!: from_elem_lit)
     done
   done
 
@@ -1232,8 +1238,8 @@ lemma bv_eq_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnf_res r (eq_m (st_of c) (rvec_elems a) (rvec_elems b))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv eq_m_def eq_step_eq eq_step_lt cnf_res_def room_def)
+    apply (crush_base simp add: cnf_res_def)
+    apply (auto simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp antisym_conv eq_m_def eq_step_eq eq_step_lt room_def)
     done
   done
 
@@ -1284,8 +1290,8 @@ lemma bv_ite_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnfv_res r (ite_vec_m (st_of cn) x (rvec_elems a) (rvec_elems b))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv ite_vec_m_foldl ite_fold_count ite_step_def ite_step_lt cnf_res_def cnfv_res_def room_def)
+    apply (crush_base simp add: cnfv_res_def)
+    apply (auto simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp antisym_conv ite_vec_m_foldl ite_fold_count ite_step_def ite_step_lt cnf_res_def room_def)
     done
   done
 
@@ -1324,9 +1330,9 @@ lemma bv_shift_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>cnfv_res r (shift_m (st_of c) (rvec_elems a) (rvec_elems b) left)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_less_nat_alt word_le_nat_alt unat_of_nat_eq
-        unat_of_nat_64 unat_word_Suc_simp shF_len shF_Suc_stage shF_Suc_or unat_len_sub from_elem_Some
-        cnf_res_def cnfv_res_def room_def)
+    apply (crush_base simp add: cnfv_res_def)
+    apply (auto simp add: word_less_nat_alt word_le_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp shF_len
+        shF_Suc_stage shF_Suc_or unat_len_sub cnf_res_def room_def dest!: from_elem_lit)
     apply (auto intro: shF_or_lt shF_stage_lt simp: unat_double_p)
     apply ((simp_all add: shift_m_shF)?)
     apply ((rule le_less_trans[rotated], assumption, simp add: shF_mono)+)?
@@ -1351,8 +1357,8 @@ definition bv_divrem_contract ::
 lemma bv_divrem_spec [crush_specs]:
   shows \<open>\<Gamma>; bv_divrem c a b \<Turnstile>\<^sub>F bv_divrem_contract c a b\<close>
   apply (crush_boot f: bv_divrem_def contract: bv_divrem_contract_def)
-  apply (crush_base simp add: unat_of_nat_eq unat_of_nat_64 unat_double unat_double2 divrem_m_dr dr_fold dr_lt
-      from_elem_Some cnf_res_def cnfv_res_def room_def)
+  apply (crush_base simp add: cnfv_res_def)
+  apply (auto simp add: unat_of_nat_eq unat_of_nat_64 unat_double unat_double2 divrem_m_dr dr_fold dr_lt cnf_res_def room_def dest!: from_elem_lit)
   done
 
 end
@@ -1703,6 +1709,24 @@ lemma enc_defs_simps [simp]:
       snd (enc_defs p n) @ [snd (blast_m (enc_vs p) (snd (enc_defs p n)) (fst (enc_defs p n)) (CoreProblemL_defs p ! n))])\<close>
   by (simp_all add: enc_defs_def defs_step_def split_def Let_def)
 
+lemma vecs_of_len: \<open>vecs_of v = xs \<Longrightarrow> rvec_length v = length xs\<close>
+  by (metis vecs_of_simps(1))
+
+lemma allvok_new: \<open>allvok (rvec_new_val l)\<close>
+  by (simp add: allvok_def)
+
+lemma size_ct_of [simp]: \<open>size (ct_of t) = size t\<close>
+  by (induction t) simp_all
+
+lemma rvec_length_vecs: \<open>rvec_length v = length (vecs_of v)\<close>
+  by simp
+
+lemma enc_vars_length [simp]: \<open>length (snd (enc_vars p n)) = n\<close>
+  by (induction n) simp_all
+
+lemma enc_defs_length [simp]: \<open>length (snd (enc_defs p n)) = n\<close>
+  by (induction n) simp_all
+
 lemma enc_asserts_simps [simp]:
   \<open>enc_asserts p 0 = fst (enc_defs p (length (CoreProblemL_defs p)))\<close>
   \<open>enc_asserts p (Suc n) =
@@ -1936,10 +1960,41 @@ proof -
     \<open>\<And>i. i < rvec_length (CoreProblem_defs p) \<Longrightarrow> i < 18446744073709551615\<close>
     \<open>\<And>i. i < rvec_length (CoreProblem_asserts p) \<Longrightarrow> i < 18446744073709551615\<close>
     using L by linarith+
+  have W: \<open>unat (word64_of_nat (rvec_length (CoreProblem_widths p))) = rvec_length (CoreProblem_widths p)\<close>
+    \<open>unat (word64_of_nat (rvec_length (CoreProblem_defs p))) = rvec_length (CoreProblem_defs p)\<close>
+    \<open>unat (word64_of_nat (rvec_length (CoreProblem_asserts p))) = rvec_length (CoreProblem_asserts p)\<close>
+    using L by (simp_all add: unat_of_nat_eq)
+  have I56: \<open>\<And>i. i < rvec_length (CoreProblem_widths p) \<Longrightarrow> i < 72057594037927936\<close>
+    \<open>\<And>i. i < rvec_length (CoreProblem_defs p) \<Longrightarrow> i < 72057594037927936\<close>
+    \<open>\<And>i. i < rvec_length (CoreProblem_asserts p) \<Longrightarrow> i < 72057594037927936\<close>
+    using L by linarith+
   note V = enc_vars_ok[OF A(2,3), simplified]
   note D = enc_defs_ok[OF A]
+  have D2: \<open>\<And>j. j < rvec_length (CoreProblem_defs p) \<Longrightarrow> Suc (size (rvec_elems (CoreProblem_defs p) ! j)) \<le> urust_fuel \<and>
+      bok urust_fuel (snd (enc_vars ?q (rvec_length (CoreProblem_widths p)))) (snd (enc_defs ?q j)) (fst (enc_defs ?q j))
+        (ct_of (rvec_elems (CoreProblem_defs p) ! j))\<close>
+    using D by simp
   note As = enc_asserts_ok[OF A]
   note As2 = enc_asserts_ok[OF A, THEN conjunct2, THEN conjunct2, simplified]
+  have As3: \<open>\<And>k. k < rvec_length (CoreProblem_asserts p) \<Longrightarrow> Suc (size (rvec_elems (CoreProblem_asserts p) ! k)) \<le> urust_fuel \<and>
+      bok urust_fuel (snd (enc_vars ?q (rvec_length (CoreProblem_widths p)))) (snd (enc_defs ?q (rvec_length (CoreProblem_defs p))))
+        (enc_asserts ?q k) (ct_of (rvec_elems (CoreProblem_asserts p) ! k)) \<and>
+      [] \<noteq> snd (blast_m (snd (enc_vars ?q (rvec_length (CoreProblem_widths p)))) (snd (enc_defs ?q (rvec_length (CoreProblem_defs p))))
+        (enc_asserts ?q k) (ct_of (rvec_elems (CoreProblem_asserts p) ! k)))\<close>
+    using As by (simp, metis)
+  have C: \<open>\<And>k a. k < rvec_length (CoreProblem_asserts p) \<Longrightarrow> st_of a = fst (blast_m (snd (enc_vars ?q (rvec_length (CoreProblem_widths p)))) (snd (enc_defs ?q (rvec_length (CoreProblem_defs p))))
+        (enc_asserts ?q k) (ct_of (rvec_elems (CoreProblem_asserts p) ! k))) \<Longrightarrow>
+      length (vecs_of (Cnf_clauses a)) < 72057594037927936\<close>
+  proof -
+    fix k a assume k: \<open>k < rvec_length (CoreProblem_asserts p)\<close> and a: \<open>st_of a = fst (blast_m (snd (enc_vars ?q (rvec_length (CoreProblem_widths p)))) (snd (enc_defs ?q (rvec_length (CoreProblem_defs p))))
+        (enc_asserts ?q k) (ct_of (rvec_elems (CoreProblem_asserts p) ! k)))\<close>
+    have e: \<open>vecs_of (Cnf_clauses a) = snd (fst (blast_m (snd (enc_vars ?q (rvec_length (CoreProblem_widths p))))
+        (snd (enc_defs ?q (rvec_length (CoreProblem_defs p)))) (enc_asserts ?q k) (ct_of (rvec_elems (CoreProblem_asserts p) ! k))))\<close>
+      using a by (metis snd_conv st_of_def)
+    have \<open>sz (enc_asserts ?q (Suc k)) \<le> sz (fst (encode_m ?q))\<close> using k by (intro enc_asserts_le) simp
+    then show \<open>length (vecs_of (Cnf_clauses a)) < 72057594037927936\<close>
+      using k fb(2) A(3) by (simp add: sz_def e nth_map del: vecs_of_simps(1))
+  qed
   show ?thesis
     apply (crush_boot f: encode_def contract: encode_contract_def)
     apply (crush_base simp add: L init_st_def addc_m_def vecs_of_def push_not_None)
@@ -1961,9 +2016,16 @@ proof -
              snd (snd r) = TNil\<rangle>\<close> and
           \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
-      apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-          antisym_conv L I V init_st_eq cnfv_res_def)
-      subgoal for gc gv gi i defs_ref j_ref
+      apply (crush_base simp add: cnfv_res_def L I V init_st_eq push_not_None unat_word_Suc_simp antisym_conv
+          word_less_nat_alt)
+      prefer 8 apply (simp add: allvok_new)
+      apply (frule vecs_of_len, simp add: I56)
+      apply (frule vecs_of_len, simp add: I56)
+      apply (frule vecs_of_len, simp add: I56)
+      apply (frule vecs_of_len, simp add: I56)
+      apply (subst (asm) unat_of_nat_eq, use L(1) in simp, simp)
+      apply (subst (asm) unat_of_nat_eq, use L(1) in simp, simp)
+      subgoal for gc c gv v gi i defs_ref j_ref
         apply (ucincl_discharge\<open>
           rule_tac
             INV=\<open>\<lambda>k. \<Squnion>gc c gv v gi i gd d gj j. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star>
@@ -1983,9 +2045,10 @@ proof -
                snd (snd r) = TNil\<rangle>\<close> and
             \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
           in wp_bounded_while_framedI\<close>)
-        apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-            antisym_conv L I D cnfv_res_def)
-        subgoal for gc gv gi i gd gj j k_ref
+        apply (crush_base simp add: cnfv_res_def L I)
+        defer 12
+        apply (auto simp add: rvec_length_vecs I I56 D2 W unat_word_Suc_simp allvok_new simp del: vecs_of_simps(1))[12]
+        subgoal for gca ca gva va gia ia gd d gj j k_ref
           apply (ucincl_discharge\<open>
             rule_tac
               INV=\<open>\<lambda>k. \<Squnion>gc c gv v gi i gd d gj j gk kk. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star>
@@ -2005,9 +2068,8 @@ proof -
                  snd (snd r) = TNil\<rangle>\<close> and
               \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
             in wp_bounded_while_framedI\<close>)
-          apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64
-              unat_word_Suc_simp antisym_conv L I As As2 encode_m_eq cnfv_res_def)
-          apply (fastforce dest: As2)?
+          apply (crush_base simp add: I)
+          apply (auto simp add: rvec_length_vecs L I I56 As3 C W unat_word_Suc_simp word_less_nat_alt encode_m_eq cnfv_res_def simp del: vecs_of_simps(1))
           done
         done
       done

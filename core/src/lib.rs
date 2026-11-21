@@ -1425,6 +1425,249 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Word-level normalization (prototype, #67): the definitions are rebuilt in order with sharing
+// (a definition equal to an earlier one is replaced by it), commutative operands sorted, and a
+// few rewrites: `x = x` is 1, `x + ~x` is all ones, `x * ones` is `-x`, products are flattened
+// and their factors sorted, and a variable `v` with an assertion `v = t` is replaced by `t` in
+// the definitions after `t` other than the one of that assertion (the assertion itself is kept, so
+// the models are the same).
+
+fn op_code(op: &BinOp) -> usize {
+    match op {
+        BinOp::And => 0,
+        BinOp::Or => 1,
+        BinOp::Xor => 2,
+        BinOp::Add => 3,
+        BinOp::Mul => 4,
+        BinOp::Udiv => 5,
+        BinOp::Urem => 6,
+        BinOp::Shl => 7,
+        BinOp::Lshr => 8,
+        BinOp::Concat => 9,
+        BinOp::Eq => 10,
+        BinOp::Ult => 11,
+    }
+}
+
+fn commutative(op: &BinOp) -> bool {
+    op_code(op) <= 4 || op_code(op) == 10
+}
+
+fn term_eq(a: &CoreTerm, b: &CoreTerm) -> bool {
+    match (a, b) {
+        (CoreTerm::Const(x), CoreTerm::Const(y)) => x == y,
+        (CoreTerm::Var(i), CoreTerm::Var(j)) => i == j,
+        (CoreTerm::Ref(i), CoreTerm::Ref(j)) => i == j,
+        (CoreTerm::Not(x), CoreTerm::Not(y)) => term_eq(x, y),
+        (CoreTerm::Bin(o, x1, x2), CoreTerm::Bin(p, y1, y2)) => op_code(o) == op_code(p) && term_eq(x1, y1) && term_eq(x2, y2),
+        (CoreTerm::Extract(h, l, x), CoreTerm::Extract(g, m, y)) => h == g && l == m && term_eq(x, y),
+        (CoreTerm::Ite(c, x1, x2), CoreTerm::Ite(d, y1, y2)) => term_eq(c, d) && term_eq(x1, y1) && term_eq(x2, y2),
+        _ => false,
+    }
+}
+
+fn remap(t: &CoreTerm, map: &Vec<usize>) -> CoreTerm {
+    match t {
+        CoreTerm::Const(bits) => CoreTerm::Const(bits.clone()),
+        CoreTerm::Var(i) => CoreTerm::Var(*i),
+        CoreTerm::Ref(i) => CoreTerm::Ref(map[*i]),
+        CoreTerm::Not(a) => cnot(remap(a, map)),
+        CoreTerm::Bin(op, a, b) => cbin(copy_op(op), remap(a, map), remap(b, map)),
+        CoreTerm::Extract(hi, lo, a) => cextract(*hi, *lo, remap(a, map)),
+        CoreTerm::Ite(c, a, b) => cite(remap(c, map), remap(a, map), remap(b, map)),
+    }
+}
+
+/// A sort key of an operand: definitions by index, anything else last.
+fn okey(t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Ref(i) => *i,
+        _ => usize::MAX,
+    }
+}
+
+fn is_ones(n: &Norm, t: &CoreTerm) -> bool {
+    match t {
+        CoreTerm::Const(bits) => bits.iter().all(|b| *b),
+        CoreTerm::Ref(k) => match &n.defs[*k] {
+            CoreTerm::Const(bits) => bits.iter().all(|b| *b),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+pub struct Norm {
+    defs: Vec<CoreTerm>,
+    widths: Vec<usize>,
+    index: std::collections::HashMap<String, usize>,
+}
+
+fn not_of(n: &Norm, t: &CoreTerm) -> Option<usize> {
+    match t {
+        CoreTerm::Ref(k) => match &n.defs[*k] {
+            CoreTerm::Not(a) => match &**a {
+                CoreTerm::Ref(x) => Some(*x),
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The factors of the product the definition `k` stands for, at most `cap` of them.
+fn factors(n: &Norm, k: usize, out: &mut Vec<usize>, cap: usize) -> bool {
+    if out.len() > cap {
+        return false;
+    }
+    match &n.defs[k] {
+        CoreTerm::Bin(BinOp::Mul, a, b) => match (&**a, &**b) {
+            (CoreTerm::Ref(x), CoreTerm::Ref(y)) => {
+                let (x, y) = (*x, *y);
+                factors(n, x, out, cap) && factors(n, y, out, cap)
+            }
+            _ => {
+                out.push(k);
+                true
+            }
+        },
+        _ => {
+            out.push(k);
+            out.len() <= cap
+        }
+    }
+}
+
+/// The definition of `t` (width `w`): an earlier equal one, or a new one.
+fn mk_raw(n: Norm, t: CoreTerm, w: usize) -> (Norm, usize) {
+    let mut n = n;
+    if let CoreTerm::Ref(k) = t {
+        return (n, k);
+    }
+    let key = format!("{}:{:?}", w, KeyOf(&t));
+    if let Some(k) = n.index.get(&key).copied() {
+        return (n, k);
+    }
+    let k = n.defs.len();
+    n.defs.push(t);
+    n.widths.push(w);
+    n.index.insert(key, k);
+    (n, k)
+}
+
+struct KeyOf<'a>(&'a CoreTerm);
+impl<'a> std::fmt::Debug for KeyOf<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.0 {
+            CoreTerm::Const(bits) => {
+                write!(f, "C")?;
+                for b in bits {
+                    write!(f, "{}", if *b { 1 } else { 0 })?;
+                }
+                Ok(())
+            }
+            CoreTerm::Var(i) => write!(f, "V{}", i),
+            CoreTerm::Ref(i) => write!(f, "R{}", i),
+            CoreTerm::Not(a) => write!(f, "N({:?})", KeyOf(a)),
+            CoreTerm::Bin(op, a, b) => write!(f, "B{}({:?},{:?})", op_code(op), KeyOf(a), KeyOf(b)),
+            CoreTerm::Extract(h, l, a) => write!(f, "E{},{}({:?})", h, l, KeyOf(a)),
+            CoreTerm::Ite(c, a, b) => write!(f, "I({:?},{:?},{:?})", KeyOf(c), KeyOf(a), KeyOf(b)),
+        }
+    }
+}
+
+/// Normalizes the term `t` of width `w` (its references are to the new definitions) and gives
+/// its definition.
+fn mk(n: Norm, t: CoreTerm, w: usize) -> (Norm, usize) {
+    let t = match t {
+        CoreTerm::Bin(op, a, b) => {
+            let (a, b) = if commutative(&op) && okey(&b) < okey(&a) { (b, a) } else { (a, b) };
+            if op_code(&op) == 10 && term_eq(&a, &b) {
+                CoreTerm::Const(vec![true])
+            } else if op_code(&op) == 3 && (not_of(&n, &b) == Some(okey(&a)) || not_of(&n, &a) == Some(okey(&b))) {
+                CoreTerm::Const(vec![true; w])
+            } else if op_code(&op) == 4 && okey(&a) != usize::MAX && is_ones(&n, &b) {
+                return mk_raw(n, cneg(okey(&a), w), w);
+            } else if op_code(&op) == 4 && okey(&b) != usize::MAX && is_ones(&n, &a) {
+                return mk_raw(n, cneg(okey(&b), w), w);
+            } else if op_code(&op) == 4 && okey(&a) != usize::MAX && okey(&b) != usize::MAX {
+                let mut fs: Vec<usize> = Vec::new();
+                let ok = factors(&n, okey(&a), &mut fs, 16) && factors(&n, okey(&b), &mut fs, 16);
+                if ok && fs.len() > 2 {
+                    fs.sort();
+                    let mut n = n;
+                    let mut acc = fs[0];
+                    for i in 1..fs.len() - 1 {
+                        let (n1, k) = mk_raw(n, cbin(BinOp::Mul, cref(acc), cref(fs[i])), w);
+                        n = n1;
+                        acc = k;
+                    }
+                    return mk_raw(n, cbin(BinOp::Mul, cref(acc), cref(fs[fs.len() - 1])), w);
+                }
+                CoreTerm::Bin(op, a, b)
+            } else {
+                CoreTerm::Bin(op, a, b)
+            }
+        }
+        t => t,
+    };
+    mk_raw(n, t, w)
+}
+
+/// The widths of the definitions of `q`.
+fn def_widths(q: &CoreProblem) -> Vec<usize> {
+    let mut dw: Vec<usize> = Vec::new();
+    for t in &q.defs {
+        let w = term_width(&q.widths, &dw, t);
+        dw.push(w);
+    }
+    dw
+}
+
+pub fn normalize(q: &CoreProblem) -> CoreProblem {
+    let dw = def_widths(q);
+    // substitutions: sub[v] = (definition b, the definition `Var(v)` of the assertion `v = b`);
+    // every other definition `Var(v)` after `b` becomes `b`
+    let mut sub: Vec<Option<(usize, usize)>> = vec![None; q.widths.len()];
+    for a in &q.asserts {
+        if let CoreTerm::Ref(k) = a {
+            if let CoreTerm::Bin(BinOp::Eq, x, y) = &q.defs[*k] {
+                if let (CoreTerm::Ref(i), CoreTerm::Ref(j)) = (&**x, &**y) {
+                    for (s, o) in [(*i, *j), (*j, *i)] {
+                        if let CoreTerm::Var(v) = &q.defs[s] {
+                            if sub[*v].is_none() && !matches!(&q.defs[o], CoreTerm::Var(u) if u == v) {
+                                sub[*v] = Some((o, s));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut n = Norm { defs: Vec::new(), widths: Vec::new(), index: std::collections::HashMap::new() };
+    let mut map: Vec<usize> = Vec::new();
+    for j in 0..q.defs.len() {
+        if let CoreTerm::Var(v) = &q.defs[j] {
+            if let Some((b, sv)) = sub[*v] {
+                if j != sv && b < j {
+                    let m = map[b];
+                    map.push(m);
+                    continue;
+                }
+            }
+        }
+        let t = remap(&q.defs[j], &map);
+        let (n1, k) = mk(n, t, dw[j]);
+        n = n1;
+        map.push(k);
+    }
+    let asserts = q.asserts.iter().map(|a| remap(a, &map)).collect();
+    CoreProblem { widths: q.widths.clone(), defs: n.defs, asserts }
+}
+
+// ---------------------------------------------------------------------------------------------
 // The solver
 
 /// The CNF formula of the problem, and the literals of its variables.
@@ -1734,7 +1977,7 @@ fn lower_problem(p: &Problem) -> CoreProblem {
 /// The solver: rewrites the problem into the core language, eliminates its unconstrained
 /// definitions, solves the result and reconstructs a model of the problem from a model of it.
 pub fn solve(p: &Problem) -> Answer {
-    let q = lower_problem(p);
+    let q = normalize(&lower_problem(p));
     let (q2, kind, mark) = elim(&q);
     match solve_core(&q2) {
         Answer::Sat(m2) => Answer::Sat(reconstruct(&q, &kind, &mark, &q2, &m2)),

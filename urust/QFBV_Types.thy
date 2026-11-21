@@ -32,7 +32,7 @@ simple_word_enum (plugins del: word_conversion) (64) BinOp =
 
 (* Rust: CoreTerm *)
 datatype CoreTerm =
-    CoreTerm_Const \<open>bool list\<close>
+    CoreTerm_Const \<open>bool rvec\<close>
   | CoreTerm_Var \<open>64 word\<close>
   | CoreTerm_Ref \<open>64 word\<close>
   | CoreTerm_Not \<open>CoreTerm\<close>
@@ -40,7 +40,7 @@ datatype CoreTerm =
   | CoreTerm_Extract \<open>64 word\<close> \<open>64 word\<close> \<open>CoreTerm\<close>
   | CoreTerm_Ite \<open>CoreTerm\<close> \<open>CoreTerm\<close> \<open>CoreTerm\<close>
 
-definition "CoreTerm_Const_mk" :: \<open>(bool list) \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
+definition "CoreTerm_Const_mk" :: \<open>(bool rvec) \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>CoreTerm_Const_mk \<equiv> \<lambda>a0. FunctionBody (literal (CoreTerm_Const a0))\<close>
 
 definition "CoreTerm_Var_mk" :: \<open>(64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i, 'o) function_body\<close> where
@@ -63,20 +63,20 @@ definition "CoreTerm_Ite_mk" :: \<open>CoreTerm \<Rightarrow> CoreTerm \<Rightar
 
 (* Rust: CoreProblem *)
 scalable_datatype_record CoreProblem =
-  CoreProblem_widths :: \<open>(64 word) list\<close>
-  CoreProblem_defs :: \<open>CoreTerm list\<close>
-  CoreProblem_asserts :: \<open>CoreTerm list\<close>
+  CoreProblem_widths :: \<open>(64 word) rvec\<close>
+  CoreProblem_defs :: \<open>CoreTerm rvec\<close>
+  CoreProblem_asserts :: \<open>CoreTerm rvec\<close>
 micro_rust_record CoreProblem
 
-definition "CoreProblem_mk" :: \<open>((64 word) list) \<Rightarrow> (CoreTerm list) \<Rightarrow> (CoreTerm list) \<Rightarrow> ('s, CoreProblem, 'abort, 'i, 'o) function_body\<close> where
+definition "CoreProblem_mk" :: \<open>((64 word) rvec) \<Rightarrow> (CoreTerm rvec) \<Rightarrow> (CoreTerm rvec) \<Rightarrow> ('s, CoreProblem, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>CoreProblem_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (make_CoreProblem a0 a1 a2))\<close>
 
 (* Rust: Answer *)
 enum Answer =
-    Answer_Sat \<open>(bool list) list\<close>
+    Answer_Sat \<open>(bool rvec) rvec\<close>
   | Answer_Unsat
 
-definition "Answer_Sat_mk" :: \<open>((bool list) list) \<Rightarrow> ('s, Answer, 'abort, 'i, 'o) function_body\<close> where
+definition "Answer_Sat_mk" :: \<open>((bool rvec) rvec) \<Rightarrow> ('s, Answer, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Answer_Sat_mk \<equiv> \<lambda>a0. FunctionBody (literal (Answer_Sat a0))\<close>
 
 (* Rust: Op *)
@@ -113,7 +113,7 @@ simple_word_enum (plugins del: word_conversion) (64) Op =
 
 (* Rust: Term *)
 datatype Term =
-    Term_Const \<open>bool list\<close>
+    Term_Const \<open>bool rvec\<close>
   | Term_Var \<open>64 word\<close>
   | Term_Ref \<open>64 word\<close>
   | Term_Not \<open>Term\<close>
@@ -127,7 +127,7 @@ datatype Term =
   | Term_RotateRight \<open>64 word\<close> \<open>Term\<close>
   | Term_Ite \<open>Term\<close> \<open>Term\<close> \<open>Term\<close>
 
-definition "Term_Const_mk" :: \<open>(bool list) \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
+definition "Term_Const_mk" :: \<open>(bool rvec) \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Term_Const_mk \<equiv> \<lambda>a0. FunctionBody (literal (Term_Const a0))\<close>
 
 definition "Term_Var_mk" :: \<open>(64 word) \<Rightarrow> ('s, Term, 'abort, 'i, 'o) function_body\<close> where
@@ -168,21 +168,21 @@ definition "Term_Ite_mk" :: \<open>Term \<Rightarrow> Term \<Rightarrow> Term \<
 
 (* Rust: Problem *)
 scalable_datatype_record Problem =
-  Problem_widths :: \<open>(64 word) list\<close>
-  Problem_defs :: \<open>Term list\<close>
-  Problem_asserts :: \<open>Term list\<close>
+  Problem_widths :: \<open>(64 word) rvec\<close>
+  Problem_defs :: \<open>Term rvec\<close>
+  Problem_asserts :: \<open>Term rvec\<close>
 micro_rust_record Problem
 
-definition "Problem_mk" :: \<open>((64 word) list) \<Rightarrow> (Term list) \<Rightarrow> (Term list) \<Rightarrow> ('s, Problem, 'abort, 'i, 'o) function_body\<close> where
+definition "Problem_mk" :: \<open>((64 word) rvec) \<Rightarrow> (Term rvec) \<Rightarrow> (Term rvec) \<Rightarrow> ('s, Problem, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Problem_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (make_Problem a0 a1 a2))\<close>
 
 (* Rust: Cnf *)
 scalable_datatype_record Cnf =
   Cnf_num_vars :: \<open>64 word\<close>
-  Cnf_clauses :: \<open>(Lit list) list\<close>
+  Cnf_clauses :: \<open>(Lit rvec) rvec\<close>
 micro_rust_record Cnf
 
-definition "Cnf_mk" :: \<open>(64 word) \<Rightarrow> ((Lit list) list) \<Rightarrow> ('s, Cnf, 'abort, 'i, 'o) function_body\<close> where
+definition "Cnf_mk" :: \<open>(64 word) \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> ('s, Cnf, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Cnf_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_Cnf a0 a1))\<close>
 
 (* Rust: Status *)
@@ -197,11 +197,11 @@ definition "Status_Unit_mk" :: \<open>Lit \<Rightarrow> ('s, Status, 'abort, 'i,
 
 (* Rust: Lower *)
 scalable_datatype_record Lower =
-  Lower_defs :: \<open>CoreTerm list\<close>
-  Lower_widths :: \<open>(64 word) list\<close>
+  Lower_defs :: \<open>CoreTerm rvec\<close>
+  Lower_widths :: \<open>(64 word) rvec\<close>
 micro_rust_record Lower
 
-definition "Lower_mk" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, Lower, 'abort, 'i, 'o) function_body\<close> where
+definition "Lower_mk" :: \<open>(CoreTerm rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, Lower, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Lower_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_Lower a0 a1))\<close>
 
 (* Rust: SmtSort *)
@@ -283,70 +283,70 @@ definition "SmtOp_RotateRight_mk" :: \<open>(64 word) \<Rightarrow> ('s, SmtOp, 
 (* Rust: SmtTerm *)
 datatype SmtTerm =
     SmtTerm_BoolConst \<open>bool\<close>
-  | SmtTerm_BvConst \<open>bool list\<close>
+  | SmtTerm_BvConst \<open>bool rvec\<close>
   | SmtTerm_Param \<open>64 word\<close>
-  | SmtTerm_Fun \<open>64 word\<close> \<open>SmtTerm list\<close>
-  | SmtTerm_Def \<open>64 word\<close> \<open>SmtTerm list\<close>
-  | SmtTerm_App \<open>SmtOp\<close> \<open>SmtTerm list\<close>
+  | SmtTerm_Fun \<open>64 word\<close> \<open>SmtTerm rvec\<close>
+  | SmtTerm_Def \<open>64 word\<close> \<open>SmtTerm rvec\<close>
+  | SmtTerm_App \<open>SmtOp\<close> \<open>SmtTerm rvec\<close>
 
 definition "SmtTerm_BoolConst_mk" :: \<open>bool \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtTerm_BoolConst_mk \<equiv> \<lambda>a0. FunctionBody (literal (SmtTerm_BoolConst a0))\<close>
 
-definition "SmtTerm_BvConst_mk" :: \<open>(bool list) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtTerm_BvConst_mk" :: \<open>(bool rvec) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtTerm_BvConst_mk \<equiv> \<lambda>a0. FunctionBody (literal (SmtTerm_BvConst a0))\<close>
 
 definition "SmtTerm_Param_mk" :: \<open>(64 word) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtTerm_Param_mk \<equiv> \<lambda>a0. FunctionBody (literal (SmtTerm_Param a0))\<close>
 
-definition "SmtTerm_Fun_mk" :: \<open>(64 word) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtTerm_Fun_mk" :: \<open>(64 word) \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtTerm_Fun_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (SmtTerm_Fun a0 a1))\<close>
 
-definition "SmtTerm_Def_mk" :: \<open>(64 word) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtTerm_Def_mk" :: \<open>(64 word) \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtTerm_Def_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (SmtTerm_Def a0 a1))\<close>
 
-definition "SmtTerm_App_mk" :: \<open>SmtOp \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtTerm_App_mk" :: \<open>SmtOp \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, SmtTerm, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtTerm_App_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (SmtTerm_App a0 a1))\<close>
 
 (* Rust: SmtFun *)
 scalable_datatype_record SmtFun =
-  SmtFun_args :: \<open>SmtSort list\<close>
+  SmtFun_args :: \<open>SmtSort rvec\<close>
   SmtFun_ret :: \<open>SmtSort\<close>
 micro_rust_record SmtFun
 
-definition "SmtFun_mk" :: \<open>(SmtSort list) \<Rightarrow> SmtSort \<Rightarrow> ('s, SmtFun, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtFun_mk" :: \<open>(SmtSort rvec) \<Rightarrow> SmtSort \<Rightarrow> ('s, SmtFun, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtFun_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_SmtFun a0 a1))\<close>
 
 (* Rust: SmtDef *)
 scalable_datatype_record SmtDef =
-  SmtDef_params :: \<open>SmtSort list\<close>
+  SmtDef_params :: \<open>SmtSort rvec\<close>
   SmtDef_ret :: \<open>SmtSort\<close>
   SmtDef_body :: \<open>SmtTerm\<close>
 micro_rust_record SmtDef
 
-definition "SmtDef_mk" :: \<open>(SmtSort list) \<Rightarrow> SmtSort \<Rightarrow> SmtTerm \<Rightarrow> ('s, SmtDef, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtDef_mk" :: \<open>(SmtSort rvec) \<Rightarrow> SmtSort \<Rightarrow> SmtTerm \<Rightarrow> ('s, SmtDef, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtDef_mk \<equiv> \<lambda>a0 a1 a2. FunctionBody (literal (make_SmtDef a0 a1 a2))\<close>
 
 (* Rust: SmtProblem *)
 scalable_datatype_record SmtProblem =
   SmtProblem_num_sorts :: \<open>64 word\<close>
-  SmtProblem_funs :: \<open>SmtFun list\<close>
-  SmtProblem_defs :: \<open>SmtDef list\<close>
-  SmtProblem_asserts :: \<open>SmtTerm list\<close>
+  SmtProblem_funs :: \<open>SmtFun rvec\<close>
+  SmtProblem_defs :: \<open>SmtDef rvec\<close>
+  SmtProblem_asserts :: \<open>SmtTerm rvec\<close>
 micro_rust_record SmtProblem
 
-definition "SmtProblem_mk" :: \<open>(64 word) \<Rightarrow> (SmtFun list) \<Rightarrow> (SmtDef list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, SmtProblem, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtProblem_mk" :: \<open>(64 word) \<Rightarrow> (SmtFun rvec) \<Rightarrow> (SmtDef rvec) \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, SmtProblem, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtProblem_mk \<equiv> \<lambda>a0 a1 a2 a3. FunctionBody (literal (make_SmtProblem a0 a1 a2 a3))\<close>
 
 (* Rust: SmtValue *)
 enum SmtValue =
     SmtValue_Bool \<open>bool\<close>
-  | SmtValue_Bv \<open>bool list\<close>
+  | SmtValue_Bv \<open>bool rvec\<close>
   | SmtValue_Elem \<open>64 word\<close>
 
 definition "SmtValue_Bool_mk" :: \<open>bool \<Rightarrow> ('s, SmtValue, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtValue_Bool_mk \<equiv> \<lambda>a0. FunctionBody (literal (SmtValue_Bool a0))\<close>
 
-definition "SmtValue_Bv_mk" :: \<open>(bool list) \<Rightarrow> ('s, SmtValue, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtValue_Bv_mk" :: \<open>(bool rvec) \<Rightarrow> ('s, SmtValue, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtValue_Bv_mk \<equiv> \<lambda>a0. FunctionBody (literal (SmtValue_Bv a0))\<close>
 
 definition "SmtValue_Elem_mk" :: \<open>(64 word) \<Rightarrow> ('s, SmtValue, 'abort, 'i, 'o) function_body\<close> where
@@ -354,29 +354,29 @@ definition "SmtValue_Elem_mk" :: \<open>(64 word) \<Rightarrow> ('s, SmtValue, '
 
 (* Rust: SmtEntry *)
 scalable_datatype_record SmtEntry =
-  SmtEntry_args :: \<open>SmtValue list\<close>
+  SmtEntry_args :: \<open>SmtValue rvec\<close>
   SmtEntry_val :: \<open>SmtValue\<close>
 micro_rust_record SmtEntry
 
-definition "SmtEntry_mk" :: \<open>(SmtValue list) \<Rightarrow> SmtValue \<Rightarrow> ('s, SmtEntry, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtEntry_mk" :: \<open>(SmtValue rvec) \<Rightarrow> SmtValue \<Rightarrow> ('s, SmtEntry, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtEntry_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_SmtEntry a0 a1))\<close>
 
 (* Rust: SmtInterp *)
 scalable_datatype_record SmtInterp =
-  SmtInterp_entries :: \<open>SmtEntry list\<close>
+  SmtInterp_entries :: \<open>SmtEntry rvec\<close>
   SmtInterp_default :: \<open>SmtValue\<close>
 micro_rust_record SmtInterp
 
-definition "SmtInterp_mk" :: \<open>(SmtEntry list) \<Rightarrow> SmtValue \<Rightarrow> ('s, SmtInterp, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtInterp_mk" :: \<open>(SmtEntry rvec) \<Rightarrow> SmtValue \<Rightarrow> ('s, SmtInterp, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtInterp_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_SmtInterp a0 a1))\<close>
 
 (* Rust: SmtModel *)
 scalable_datatype_record SmtModel =
-  SmtModel_domains :: \<open>(64 word) list\<close>
-  SmtModel_funs :: \<open>SmtInterp list\<close>
+  SmtModel_domains :: \<open>(64 word) rvec\<close>
+  SmtModel_funs :: \<open>SmtInterp rvec\<close>
 micro_rust_record SmtModel
 
-definition "SmtModel_mk" :: \<open>((64 word) list) \<Rightarrow> (SmtInterp list) \<Rightarrow> ('s, SmtModel, 'abort, 'i, 'o) function_body\<close> where
+definition "SmtModel_mk" :: \<open>((64 word) rvec) \<Rightarrow> (SmtInterp rvec) \<Rightarrow> ('s, SmtModel, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>SmtModel_mk \<equiv> \<lambda>a0 a1. FunctionBody (literal (make_SmtModel a0 a1))\<close>
 
 (* Rust: SmtAnswer *)
@@ -390,10 +390,10 @@ definition "SmtAnswer_Sat_mk" :: \<open>SmtModel \<Rightarrow> ('s, SmtAnswer, '
 
 (* Rust: Tr *)
 scalable_datatype_record Tr =
-  Tr_defs :: \<open>Term list\<close>
+  Tr_defs :: \<open>Term rvec\<close>
 micro_rust_record Tr
 
-definition "Tr_mk" :: \<open>(Term list) \<Rightarrow> ('s, Tr, 'abort, 'i, 'o) function_body\<close> where
+definition "Tr_mk" :: \<open>(Term rvec) \<Rightarrow> ('s, Tr, 'abort, 'i, 'o) function_body\<close> where
   [crush_inline]: \<open>Tr_mk \<equiv> \<lambda>a0. FunctionBody (literal (make_Tr a0))\<close>
 
 end

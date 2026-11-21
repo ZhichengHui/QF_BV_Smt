@@ -29,37 +29,37 @@ definition "fresh_fn" :: \<open>Cnf \<Rightarrow> ('s, (Cnf \<times> Lit \<times
   \<rbrakk>\<close>
 
 (* Rust: add_clause *)
-definition "add_clause" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> ('s, Cnf, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "add_clause" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, Cnf, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>add_clause \<equiv> \<lambda>cnf c. FunctionBody \<lbrakk>
-    let mut clauses = { let init_1 = cnf.Cnf_clauses; \<llangle>init_1 :: (Lit list) list\<rrangle> };
-    vec_push(clauses, c);
+    let mut clauses = { let init_1 = cnf.Cnf_clauses; \<llangle>init_1 :: (Lit rvec) rvec\<rrangle> };
+    rvec_push(clauses, c);
     Cnf_mk { Cnf_num_vars: cnf.Cnf_num_vars, Cnf_clauses: * clauses }
   \<rbrakk>\<close>
 
 (* Rust: clause1 *)
-definition "clause1" :: \<open>Lit \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "clause1" :: \<open>Lit \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>clause1 \<equiv> \<lambda>a. FunctionBody \<lbrakk>
-    let mut c = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
-    vec_push(c, a);
+    let mut c = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
+    rvec_push(c, a);
     * c
   \<rbrakk>\<close>
 
 (* Rust: clause2 *)
-definition "clause2" :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "clause2" :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>clause2 \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
-    let mut c = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
-    vec_push(c, a);
-    vec_push(c, b);
+    let mut c = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
+    rvec_push(c, a);
+    rvec_push(c, b);
     * c
   \<rbrakk>\<close>
 
 (* Rust: clause3 *)
-definition "clause3" :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "clause3" :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>clause3 \<equiv> \<lambda>a b d. FunctionBody \<lbrakk>
-    let mut c = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
-    vec_push(c, a);
-    vec_push(c, b);
-    vec_push(c, d);
+    let mut c = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
+    rvec_push(c, a);
+    rvec_push(c, b);
+    rvec_push(c, d);
     * c
   \<rbrakk>\<close>
 
@@ -228,25 +228,25 @@ definition "gate_bitwise" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> Lit \<
   \<rbrakk>\<close>
 
 (* Rust: bv_const *)
-definition "bv_const" :: \<open>(bool list) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_const" :: \<open>(bool rvec) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_const \<equiv> \<lambda>bits. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(bits) {
-      vec_push(r, lit_const(bits[* i]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(bits) {
+      rvec_push(r, lit_const(\<llangle>rvec_elems\<rrangle>\<^sub>1(bits)[* i]));
       * i += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: bv_of_nat *)
-definition "bv_of_nat" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_of_nat" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_of_nat \<equiv> \<lambda>v w. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut x = v;
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < w {
-      vec_push(r, lit_const(((* x) % 2_usize) == 1_usize));
+      rvec_push(r, lit_const(((* x) % 2_usize) == 1_usize));
       * x = (* x) / 2_usize;
       * i += 1_usize;
     };
@@ -254,91 +254,91 @@ definition "bv_of_nat" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow>
   \<rbrakk>\<close>
 
 (* Rust: bv_fresh *)
-definition "bv_fresh" :: \<open>Cnf \<Rightarrow> (64 word) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_fresh" :: \<open>Cnf \<Rightarrow> (64 word) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_fresh \<equiv> \<lambda>cnf w. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < w {
-      let destr_3 = fresh_fn(* cnf);
-      let c = destr_3.0;
-      let x = destr_3.1;
+      let destr_4 = fresh_fn(* cnf);
+      let c = destr_4.0;
+      let x = destr_4.1;
       * cnf = c;
-      vec_push(r, x);
+      rvec_push(r, x);
       * i += 1_usize;
     };
     (* cnf, * r)
   \<rbrakk>\<close>
 
 (* Rust: bv_not *)
-definition "bv_not" :: \<open>(Lit list) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_not" :: \<open>(Lit rvec) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_not \<equiv> \<lambda>a. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      vec_push(r, lit_neg(a[* i]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      rvec_push(r, lit_neg(\<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]));
       * i += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: bv_bitwise *)
-definition "bv_bitwise" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_bitwise" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_bitwise \<equiv> \<lambda>cnf op_v a b. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      let destr_3 = gate_bitwise(* cnf, op_v, a[* i], b[* i]);
-      let c = destr_3.0;
-      let x = destr_3.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      let destr_4 = gate_bitwise(* cnf, op_v, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i], \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]);
+      let c = destr_4.0;
+      let x = destr_4.1;
       * cnf = c;
-      vec_push(r, x);
+      rvec_push(r, x);
       * i += 1_usize;
     };
     (* cnf, * r)
   \<rbrakk>\<close>
 
 (* Rust: bv_add *)
-definition "bv_add" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_add" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> Lit \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_add \<equiv> \<lambda>cnf a b cin. FunctionBody \<lbrakk>
     let mut cnf = cnf;
     let mut carry = cin;
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      let destr_3 = gate_xor(* cnf, a[* i], b[* i]);
-      let c1 = destr_3.0;
-      let t = destr_3.1;
-      let destr_4 = gate_xor(c1, t, * carry);
-      let c2 = destr_4.0;
-      let s = destr_4.1;
-      let destr_5 = gate_ite(c2, t, * carry, a[* i]);
-      let c3 = destr_5.0;
-      let c = destr_5.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      let destr_4 = gate_xor(* cnf, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i], \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]);
+      let c1 = destr_4.0;
+      let t = destr_4.1;
+      let destr_5 = gate_xor(c1, t, * carry);
+      let c2 = destr_5.0;
+      let s = destr_5.1;
+      let destr_6 = gate_ite(c2, t, * carry, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
+      let c3 = destr_6.0;
+      let c = destr_6.1;
       * cnf = c3;
       * carry = c;
-      vec_push(r, s);
+      rvec_push(r, s);
       * i += 1_usize;
     };
     (* cnf, * r, * carry)
   \<rbrakk>\<close>
 
 (* Rust: bv_partial *)
-definition "bv_partial" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> Lit \<Rightarrow> (64 word) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_partial" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> Lit \<Rightarrow> (64 word) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_partial \<equiv> \<lambda>cnf a bi i. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(a) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(a) {
       if (* j) < i {
-        vec_push(r, lit_const(false));
+        rvec_push(r, lit_const(false));
       } else {
-        let destr_3 = gate_and(* cnf, a[(* j) - i], bi);
-        let c = destr_3.0;
-        let x = destr_3.1;
+        let destr_4 = gate_and(* cnf, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[(* j) - i], bi);
+        let c = destr_4.0;
+        let x = destr_4.1;
         * cnf = c;
-        vec_push(r, x);
+        rvec_push(r, x);
       };
       * j += 1_usize;
     };
@@ -346,13 +346,13 @@ definition "bv_partial" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> Lit
   \<rbrakk>\<close>
 
 (* Rust: bv_mul *)
-definition "bv_mul" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_mul" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_mul \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut acc = { let init_1 = vec_from_elem(lit_const(false), len(a)); \<llangle>init_1 :: Lit list\<rrangle> };
+    let mut acc = { let init_1 = rvec_from_elem(\<llangle>make_elem_layout 16 8\<rrangle>, lit_const(false), rvec_len(a)); \<llangle>init_1 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      let destr_2 = bv_partial(* cnf, a, b[* i], * i);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      let destr_2 = bv_partial(* cnf, a, \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i], * i);
       let c1 = destr_2.0;
       let p = destr_2.1;
       let destr_3 = bv_add(c1, * acc, p, lit_const(false));
@@ -366,13 +366,13 @@ definition "bv_mul" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit li
   \<rbrakk>\<close>
 
 (* Rust: bv_eq *)
-definition "bv_eq" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_eq" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_eq \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
     let mut cnf = cnf;
     let mut r = lit_const(true);
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      let destr_1 = gate_xor(* cnf, a[* i], b[* i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      let destr_1 = gate_xor(* cnf, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i], \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]);
       let c1 = destr_1.0;
       let x = destr_1.1;
       let destr_2 = gate_and(c1, * r, lit_neg(x));
@@ -386,7 +386,7 @@ definition "bv_eq" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit lis
   \<rbrakk>\<close>
 
 (* Rust: bv_ult *)
-definition "bv_ult" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_ult" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_ult \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
     let nb = bv_not(b);
     let destr_1 = bv_add(cnf, a, nb, lit_const(true));
@@ -396,39 +396,39 @@ definition "bv_ult" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit li
   \<rbrakk>\<close>
 
 (* Rust: bv_ite *)
-definition "bv_ite" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_ite" :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_ite \<equiv> \<lambda>cnf c a b. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      let destr_3 = gate_ite(* cnf, c, a[* i], b[* i]);
-      let c1 = destr_3.0;
-      let x = destr_3.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      let destr_4 = gate_ite(* cnf, c, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i], \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]);
+      let c1 = destr_4.0;
+      let x = destr_4.1;
       * cnf = c1;
-      vec_push(r, x);
+      rvec_push(r, x);
       * i += 1_usize;
     };
     (* cnf, * r)
   \<rbrakk>\<close>
 
 (* Rust: bv_shift_const *)
-definition "bv_shift_const" :: \<open>(Lit list) \<Rightarrow> (64 word) \<Rightarrow> bool \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_shift_const" :: \<open>(Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> bool \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_shift_const \<equiv> \<lambda>a s left. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(a) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(a) {
       if left {
         if (* j) < s {
-          vec_push(r, lit_const(false));
+          rvec_push(r, lit_const(false));
         } else {
-          vec_push(r, a[(* j) - s]);
+          rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[(* j) - s]);
         }
       } else {
-        if s < (len(a) - (* j)) {
-          vec_push(r, a[(* j) + s]);
+        if s < (rvec_len(a) - (* j)) {
+          rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[(* j) + s]);
         } else {
-          vec_push(r, lit_const(false));
+          rvec_push(r, lit_const(false));
         }
       };
       * j += 1_usize;
@@ -437,27 +437,27 @@ definition "bv_shift_const" :: \<open>(Lit list) \<Rightarrow> (64 word) \<Right
   \<rbrakk>\<close>
 
 (* Rust: bv_shift *)
-definition "bv_shift" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> bool \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_shift" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> bool \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_shift \<equiv> \<lambda>cnf a b left. FunctionBody \<lbrakk>
     let mut cnf = cnf;
-    let mut r = { let init_1 = bv_shift_const(a, 0_usize, left); \<llangle>init_1 :: Lit list\<rrangle> };
+    let mut r = { let init_1 = bv_shift_const(a, 0_usize, left); \<llangle>init_1 :: Lit rvec\<rrangle> };
     let mut big = lit_const(false);
     let mut p = 1_usize;
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(b) {
-      if (* p) < len(a) {
-        let destr_2 = bv_ite(* cnf, b[* i], bv_shift_const(* r, * p, left), * r);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(b) {
+      if (* p) < rvec_len(a) {
+        let destr_2 = bv_ite(* cnf, \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i], bv_shift_const(* r, * p, left), * r);
         let c1 = destr_2.0;
         let x = destr_2.1;
         * cnf = c1;
         * r = x;
-        if (* p) <= (len(a) - (* p)) {
+        if (* p) <= (rvec_len(a) - (* p)) {
           * p = (* p) + (* p);
         } else {
-          * p = len(a);
+          * p = rvec_len(a);
         }
       } else {
-        let destr_3 = gate_or(* cnf, * big, b[* i]);
+        let destr_3 = gate_or(* cnf, * big, \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]);
         let c1 = destr_3.0;
         let o_v = destr_3.1;
         * cnf = c1;
@@ -465,19 +465,19 @@ definition "bv_shift" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit 
       };
       * i += 1_usize;
     };
-    bv_ite(* cnf, * big, vec_from_elem(lit_const(false), len(a)), * r)
+    bv_ite(* cnf, * big, rvec_from_elem(\<llangle>make_elem_layout 16 8\<rrangle>, lit_const(false), rvec_len(a)), * r)
   \<rbrakk>\<close>
 
 (* Rust: bv_zext *)
-definition "bv_zext" :: \<open>(Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_zext" :: \<open>(Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_zext \<equiv> \<lambda>a w. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < w {
-      if (* i) < len(a) {
-        vec_push(r, a[* i]);
+      if (* i) < rvec_len(a) {
+        rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
       } else {
-        vec_push(r, lit_const(false));
+        rvec_push(r, lit_const(false));
       };
       * i += 1_usize;
     };
@@ -485,43 +485,43 @@ definition "bv_zext" :: \<open>(Lit list) \<Rightarrow> (64 word) \<Rightarrow> 
   \<rbrakk>\<close>
 
 (* Rust: bv_extract *)
-definition "bv_extract" :: \<open>(Lit list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_extract" :: \<open>(Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_extract \<equiv> \<lambda>a hi lo. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: Lit list\<rrangle> }; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
     let mut i = lo;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) <= hi {
-      vec_push(r, a[* i]);
+      rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
       * i += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: bv_concat *)
-definition "bv_concat" :: \<open>(Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_concat" :: \<open>(Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_concat \<equiv> \<lambda>hi lo. FunctionBody \<lbrakk>
-    let mut r = { let init_1 = lo; \<llangle>init_1 :: Lit list\<rrangle> };
+    let mut r = { let init_1 = rvec_clone(lo); \<llangle>init_1 :: Lit rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(hi) {
-      vec_push(r, hi[* i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(hi) {
+      rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(hi)[* i]);
       * i += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: bv_divrem *)
-definition "bv_divrem" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bv_divrem" :: \<open>Cnf \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_divrem \<equiv> \<lambda>cnf a b. FunctionBody \<lbrakk>
-    let w = len(a);
+    let w = rvec_len(a);
     let destr_1 = bv_fresh(cnf, w);
     let cnf = destr_1.0;
     let q = destr_1.1;
     let destr_2 = bv_fresh(cnf, w);
     let cnf = destr_2.0;
     let r = destr_2.1;
-    let destr_3 = bv_eq(cnf, b, vec_from_elem(lit_const(false), w));
+    let destr_3 = bv_eq(cnf, b, rvec_from_elem(\<llangle>make_elem_layout 16 8\<rrangle>, lit_const(false), w));
     let cnf = destr_3.0;
     let b_zero = destr_3.1;
-    let destr_4 = bv_eq(cnf, q, vec_from_elem(lit_const(true), w));
+    let destr_4 = bv_eq(cnf, q, rvec_from_elem(\<llangle>make_elem_layout 16 8\<rrangle>, lit_const(true), w));
     let cnf = destr_4.0;
     let q_ones = destr_4.1;
     let destr_5 = bv_eq(cnf, r, a);
@@ -554,7 +554,7 @@ definition "bv_divrem" :: \<open>Cnf \<Rightarrow> (Lit list) \<Rightarrow> (Lit
   \<rbrakk>\<close>
 
 (* Rust: blast_bin *)
-definition "blast_bin" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> (Lit list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "blast_bin" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> (Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>blast_bin \<equiv> \<lambda>cnf op_v a b. FunctionBody \<lbrakk>
     match op_v {
       BinOp_And \<Rightarrow> {
@@ -613,17 +613,17 @@ definition "blast_bin" :: \<open>Cnf \<Rightarrow> BinOp \<Rightarrow> (Lit list
 
 text \<open>Recursive group blast: defined by iterating blast_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((Cnf \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>blast_rec_step \<equiv> \<lambda>rec_blast. (\<lambda>cnf vars defs t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(bits) \<Rightarrow> {
         (cnf, bv_const(bits))
       },
       CoreTerm_Var(i) \<Rightarrow> {
-        (cnf, vars[i])
+        (cnf, rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(vars)[i]))
       },
       CoreTerm_Ref(i) \<Rightarrow> {
-        (cnf, defs[i])
+        (cnf, rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(defs)[i]))
       },
       CoreTerm_Not(a) \<Rightarrow> {
         let destr_1 = \<epsilon>\<open>rec_blast\<close>(cnf, vars, defs, a);
@@ -656,19 +656,19 @@ definition "blast_rec_step" :: \<open>((Cnf \<Rightarrow> ((Lit list) list) \<Ri
         let destr_7 = \<epsilon>\<open>rec_blast\<close>(cnf, vars, defs, b);
         let cnf = destr_7.0;
         let lb = destr_7.1;
-        bv_ite(cnf, lc[0_usize], la, lb)
+        bv_ite(cnf, \<llangle>rvec_elems\<rrangle>\<^sub>1(lc)[0_usize], la, lb)
       }
     }
   \<rbrakk>)\<close>
 
 (* Rust: blast *)
-definition "blast" :: \<open>Cnf \<Rightarrow> ((Lit list) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "blast" :: \<open>Cnf \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (Cnf \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>blast \<equiv> ((blast_rec_step ^^ urust_fuel) (\<lambda>cnf vars defs t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: lit_value *)
-definition "lit_value" :: \<open>((bool option) list) \<Rightarrow> Lit \<Rightarrow> ('s, bool option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "lit_value" :: \<open>((bool option) rvec) \<Rightarrow> Lit \<Rightarrow> ('s, bool option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>lit_value \<equiv> \<lambda>a l. FunctionBody \<lbrakk>
-    match a[l.Lit_var] {
+    match \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[l.Lit_var] {
       Some(b) \<Rightarrow> {
         Some(b != (l.Lit_neg))
       },
@@ -679,13 +679,13 @@ definition "lit_value" :: \<open>((bool option) list) \<Rightarrow> Lit \<Righta
   \<rbrakk>\<close>
 
 (* Rust: clause_status *)
-definition "clause_status" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, Status, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "clause_status" :: \<open>((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, Status, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>clause_status \<equiv> \<lambda>a c. FunctionBody \<lbrakk>
     let mut unit_v = { let init_1 = None; \<llangle>init_1 :: Lit option\<rrangle> };
     let mut open = false;
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(c) {
-      match lit_value(a, c[* i]) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(c) {
+      match lit_value(a, \<llangle>rvec_elems\<rrangle>\<^sub>1(c)[* i]) {
         Some(lit_2) if lit_2 == true \<Rightarrow> {
           return Status_Satisfied;
         },
@@ -696,7 +696,7 @@ definition "clause_status" :: \<open>((bool option) list) \<Rightarrow> (Lit lis
           if urust_func_option_is_some(* unit_v) {
             * open = true;
           } else {
-            * unit_v = Some(c[* i]);
+            * unit_v = Some(\<llangle>rvec_elems\<rrangle>\<^sub>1(c)[* i]);
           }
         }
       };
@@ -716,11 +716,11 @@ definition "clause_status" :: \<open>((bool option) list) \<Rightarrow> (Lit lis
   \<rbrakk>\<close>
 
 (* Rust: find_unassigned *)
-definition "find_unassigned" :: \<open>((bool option) list) \<Rightarrow> ('s, (64 word) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "find_unassigned" :: \<open>((bool option) rvec) \<Rightarrow> ('s, (64 word) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>find_unassigned \<equiv> \<lambda>a. FunctionBody \<lbrakk>
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      if urust_func_option_is_none(a[* i]) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      if urust_func_option_is_none(\<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]) {
         return Some(* i);
       };
       * i += 1_usize;
@@ -729,14 +729,14 @@ definition "find_unassigned" :: \<open>((bool option) list) \<Rightarrow> ('s, (
   \<rbrakk>\<close>
 
 (* Rust: backtrack *)
-definition "backtrack" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "backtrack" :: \<open>((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((bool option) rvec) \<times> (Lit rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>backtrack \<equiv> \<lambda>a trail p. FunctionBody \<lbrakk>
-    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while p < len(* trail) {
-      match vec_pop(trail) {
+    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit rvec\<rrangle> };
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while p < rvec_len(* trail) {
+      match rvec_pop(trail) {
         Some(l) \<Rightarrow> {
-          * (a[l.Lit_var]) = None
+          * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[l.Lit_var]) = None
         },
         None \<Rightarrow> {
           ()
@@ -747,45 +747,45 @@ definition "backtrack" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \
   \<rbrakk>\<close>
 
 (* Rust: read_bits *)
-definition "read_bits" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "read_bits" :: \<open>((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>read_bits \<equiv> \<lambda>a ls. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ls) {
-      vec_push(r, lit_value(a, ls[* i]) == Some(true));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ls) {
+      rvec_push(r, lit_value(a, \<llangle>rvec_elems\<rrangle>\<^sub>1(ls)[* i]) == Some(true));
       * i += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: read_model *)
-definition "read_model" :: \<open>((bool option) list) \<Rightarrow> ((Lit list) list) \<Rightarrow> ('s, (bool list) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "read_model" :: \<open>((bool option) rvec) \<Rightarrow> ((Lit rvec) rvec) \<Rightarrow> ('s, (bool rvec) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>read_model \<equiv> \<lambda>a vars. FunctionBody \<lbrakk>
-    let mut m = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (bool list) list\<rrangle> }; \<llangle>init_2 :: (bool list) list\<rrangle> };
+    let mut m = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 24 8\<rrangle>); \<llangle>vec_1 :: (bool rvec) rvec\<rrangle> }; \<llangle>res_2 :: (bool rvec) rvec\<rrangle> }; \<llangle>init_3 :: (bool rvec) rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(vars) {
-      vec_push(m, read_bits(a, vars[* i]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(vars) {
+      rvec_push(m, read_bits(a, \<llangle>rvec_elems\<rrangle>\<^sub>1(vars)[* i]));
       * i += 1_usize;
     };
     * m
   \<rbrakk>\<close>
 
 (* Rust: propagate_pass *)
-definition "propagate_pass" :: \<open>((Lit list) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, (((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "propagate_pass" :: \<open>((Lit rvec) rvec) \<Rightarrow> ((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, (((bool option) rvec) \<times> (Lit rvec) \<times> ((64 word) rvec) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>propagate_pass \<equiv> \<lambda>cs a trail rs. FunctionBody \<lbrakk>
-    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
-    let mut rs = { let init_3 = rs; \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit rvec\<rrangle> };
+    let mut rs = { let init_3 = rs; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(cs) {
-      match clause_status(* a, cs[* i]) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(cs) {
+      match clause_status(* a, \<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[* i]) {
         Status_Conflict \<Rightarrow> {
           return (* a, * trail, * rs, false);
         },
         Status_Unit(l) \<Rightarrow> {
-          * (a[l.Lit_var]) = Some(!(l.Lit_neg));
-          vec_push(trail, l);
-          vec_push(rs, * i);
+          * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[l.Lit_var]) = Some(!(l.Lit_neg));
+          rvec_push(trail, l);
+          rvec_push(rs, * i);
         },
         Status_Satisfied \<Rightarrow> {
           ()
@@ -810,23 +810,23 @@ definition "lit_index" :: \<open>Lit \<Rightarrow> ('s, 64 word, 'abort, 'i prom
   \<rbrakk>\<close>
 
 (* Rust: watch_init *)
-definition "watch_init" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "watch_init" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>watch_init \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>
-    let m = len(cs);
-    let mut pos = { let init_1 = vec_from_elem(0_usize, 2_usize * m); \<llangle>init_1 :: (64 word) list\<rrangle> };
-    let mut next_v = { let init_2 = vec_from_elem(18446744073709551615_usize, 2_usize * m); \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut head = { let init_3 = vec_from_elem(18446744073709551615_usize, 2_usize * n); \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let m = rvec_len(cs);
+    let mut pos = { let init_1 = rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 0_usize, 2_usize * m); \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_2 = rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 18446744073709551615_usize, 2_usize * m); \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_3 = rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 18446744073709551615_usize, 2_usize * n); \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let mut c = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* c) < m {
-      if len(cs[* c]) >= 2_usize {
+      if rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[* c]) >= 2_usize {
         let s = 2_usize * (* c);
-        * (pos[s + 1_usize]) = 1_usize;
-        let x0 = lit_index(cs[* c][0_usize]);
-        * (next_v[s]) = (* head)[x0];
-        * (head[x0]) = s;
-        let x1 = lit_index(cs[* c][1_usize]);
-        * (next_v[s + 1_usize]) = (* head)[x1];
-        * (head[x1]) = s + 1_usize;
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(pos)[s + 1_usize]) = 1_usize;
+        let x0 = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[* c])[0_usize]);
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(next_v)[s]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x0];
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(head)[x0]) = s;
+        let x1 = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[* c])[1_usize]);
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(next_v)[s + 1_usize]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x1];
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(head)[x1]) = s + 1_usize;
       };
       * c += 1_usize;
     };
@@ -834,11 +834,11 @@ definition "watch_init" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Ri
   \<rbrakk>\<close>
 
 (* Rust: find_watch *)
-definition "find_watch" :: \<open>((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "find_watch" :: \<open>((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>find_watch \<equiv> \<lambda>a c i j. FunctionBody \<lbrakk>
     let mut k = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(c) {
-      if (((* k) != i) && ((* k) != j)) && (lit_value(a, c[* k]) != Some(false)) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(c) {
+      if (((* k) != i) && ((* k) != j)) && (lit_value(a, \<llangle>rvec_elems\<rrangle>\<^sub>1(c)[* k]) != Some(false)) {
         return Some(* k);
       };
       * k += 1_usize;
@@ -847,47 +847,47 @@ definition "find_watch" :: \<open>((bool option) list) \<Rightarrow> (Lit list) 
   \<rbrakk>\<close>
 
 (* Rust: set_at *)
-definition "set_at" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "set_at" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>set_at \<equiv> \<lambda>v i e. FunctionBody \<lbrakk>
-    let mut v = { let init_1 = v; \<llangle>init_1 :: (64 word) list\<rrangle> };
-    * (v[i]) = e;
+    let mut v = { let init_1 = v; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(v)[i]) = e;
     * v
   \<rbrakk>\<close>
 
 (* Rust: move_watch *)
-definition "move_watch" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "move_watch" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>move_watch \<equiv> \<lambda>pos next_v head s prev x k y. FunctionBody \<lbrakk>
-    let ns = next_v[s];
+    let ns = \<llangle>rvec_elems\<rrangle>\<^sub>1(next_v)[s];
     let pos = set_at(pos, s, k);
-    if prev < len(next_v) {
+    if prev < rvec_len(next_v) {
       let next_v = set_at(next_v, prev, ns);
-      let hy = head[y];
+      let hy = \<llangle>rvec_elems\<rrangle>\<^sub>1(head)[y];
       (pos, set_at(next_v, s, hy), set_at(head, y, s))
     } else {
       let head = set_at(head, x, ns);
-      let hy = head[y];
+      let hy = \<llangle>rvec_elems\<rrangle>\<^sub>1(head)[y];
       (pos, set_at(next_v, s, hy), set_at(head, y, s))
     }
   \<rbrakk>\<close>
 
 (* Rust: visit_slot *)
-definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> bool \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "visit_slot" :: \<open>((Lit rvec) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> ((bool option) rvec) \<times> (Lit rvec) \<times> ((64 word) rvec) \<times> bool \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>visit_slot \<equiv> \<lambda>cs pos next_v head a trail rs x s prev. FunctionBody \<lbrakk>
-    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit list\<rrangle> };
-    let mut rs = { let init_3 = rs; \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let mut a = { let init_1 = a; \<llangle>init_1 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_2 = trail; \<llangle>init_2 :: Lit rvec\<rrangle> };
+    let mut rs = { let init_3 = rs; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let c = s / 2_usize;
     let o_v = if (s % 2_usize) == 0_usize {
       s + 1_usize
     } else {
       s - 1_usize
     };
-    let i = pos[s];
-    let j = pos[o_v];
-    if ((i < len(cs[c])) && (j < len(cs[c]))) && (lit_value(* a, cs[c][j]) != Some(true)) {
-      match find_watch(* a, cs[c], i, j) {
+    let i = \<llangle>rvec_elems\<rrangle>\<^sub>1(pos)[s];
+    let j = \<llangle>rvec_elems\<rrangle>\<^sub>1(pos)[o_v];
+    if ((i < rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[c])) && (j < rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[c]))) && (lit_value(* a, \<llangle>rvec_elems\<rrangle>\<^sub>1(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[c])[j]) != Some(true)) {
+      match find_watch(* a, \<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[c], i, j) {
         Some(k) \<Rightarrow> {
-          let y = lit_index(cs[c][k]);
+          let y = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[c])[k]);
           let destr_4 = move_watch(pos, next_v, head, s, prev, x, k, y);
           let p1 = destr_4.0;
           let n1 = destr_4.1;
@@ -895,14 +895,14 @@ definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) lis
           return (p1, n1, h1, * a, * trail, * rs, false, true);
         },
         None \<Rightarrow> {
-          match clause_status(* a, cs[c]) {
+          match clause_status(* a, \<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[c]) {
             Status_Conflict \<Rightarrow> {
               return (pos, next_v, head, * a, * trail, * rs, true, false);
             },
             Status_Unit(l) \<Rightarrow> {
-              * (a[l.Lit_var]) = Some(!(l.Lit_neg));
-              vec_push(trail, l);
-              vec_push(rs, c);
+              * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[l.Lit_var]) = Some(!(l.Lit_neg));
+              rvec_push(trail, l);
+              rvec_push(rs, c);
             },
             Status_Satisfied \<Rightarrow> {
               ()
@@ -918,21 +918,21 @@ definition "visit_slot" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) lis
   \<rbrakk>\<close>
 
 (* Rust: visit *)
-definition "visit" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> bool \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "visit" :: \<open>((Lit rvec) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> ((bool option) rvec) \<times> (Lit rvec) \<times> ((64 word) rvec) \<times> bool \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>visit \<equiv> \<lambda>cs pos next_v head a trail rs x. FunctionBody \<lbrakk>
-    let mut pos = { let init_1 = pos; \<llangle>init_1 :: (64 word) list\<rrangle> };
-    let mut next_v = { let init_2 = next_v; \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut head = { let init_3 = head; \<llangle>init_3 :: (64 word) list\<rrangle> };
-    let mut a = { let init_4 = a; \<llangle>init_4 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_5 = trail; \<llangle>init_5 :: Lit list\<rrangle> };
-    let mut rs = { let init_6 = rs; \<llangle>init_6 :: (64 word) list\<rrangle> };
-    let nil = len(* next_v);
-    let mut s = (* head)[x];
+    let mut pos = { let init_1 = pos; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_2 = next_v; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_3 = head; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut a = { let init_4 = a; \<llangle>init_4 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_5 = trail; \<llangle>init_5 :: Lit rvec\<rrangle> };
+    let mut rs = { let init_6 = rs; \<llangle>init_6 :: (64 word) rvec\<rrangle> };
+    let nil = rvec_len(* next_v);
+    let mut s = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x];
     let mut prev = nil;
     let mut steps = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* s) < nil) && ((* steps) < nil) {
       * steps += 1_usize;
-      let ns = (* next_v)[* s];
+      let ns = \<llangle>rvec_elems\<rrangle>\<^sub>1(* next_v)[* s];
       let destr_7 = \<epsilon>\<open>funcall10 visit_slot \<lbrakk>cs\<rbrakk> \<lbrakk>* pos\<rbrakk> \<lbrakk>* next_v\<rbrakk> \<lbrakk>* head\<rbrakk> \<lbrakk>* a\<rbrakk> \<lbrakk>* trail\<rbrakk> \<lbrakk>* rs\<rbrakk> \<lbrakk>x\<rbrakk> \<lbrakk>* s\<rbrakk> \<lbrakk>* prev\<rbrakk>\<close>;
       let p1 = destr_7.0;
       let n1 = destr_7.1;
@@ -960,17 +960,17 @@ definition "visit" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<
   \<rbrakk>\<close>
 
 (* Rust: wpropagate *)
-definition "wpropagate" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool option) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((bool option) list) \<times> (Lit list) \<times> ((64 word) list) \<times> (64 word) \<times> bool \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "wpropagate" :: \<open>((Lit rvec) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((bool option) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> ((bool option) rvec) \<times> (Lit rvec) \<times> ((64 word) rvec) \<times> (64 word) \<times> bool \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>wpropagate \<equiv> \<lambda>cs pos next_v head a trail rs q. FunctionBody \<lbrakk>
-    let mut pos = { let init_1 = pos; \<llangle>init_1 :: (64 word) list\<rrangle> };
-    let mut next_v = { let init_2 = next_v; \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut head = { let init_3 = head; \<llangle>init_3 :: (64 word) list\<rrangle> };
-    let mut a = { let init_4 = a; \<llangle>init_4 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_5 = trail; \<llangle>init_5 :: Lit list\<rrangle> };
-    let mut rs = { let init_6 = rs; \<llangle>init_6 :: (64 word) list\<rrangle> };
+    let mut pos = { let init_1 = pos; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_2 = next_v; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_3 = head; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut a = { let init_4 = a; \<llangle>init_4 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_5 = trail; \<llangle>init_5 :: Lit rvec\<rrangle> };
+    let mut rs = { let init_6 = rs; \<llangle>init_6 :: (64 word) rvec\<rrangle> };
     let mut q = q;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* q) < len(* trail) {
-      let x = lit_index(lit_neg((* trail)[* q]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* q) < rvec_len(* trail) {
+      let x = lit_index(lit_neg(\<llangle>rvec_elems\<rrangle>\<^sub>1(* trail)[* q]));
       * q += 1_usize;
       let destr_7 = visit(cs, * pos, * next_v, * head, * a, * trail, * rs, x);
       let p1 = destr_7.0;
@@ -995,50 +995,50 @@ definition "wpropagate" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) lis
   \<rbrakk>\<close>
 
 (* Rust: cut *)
-definition "cut" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "cut" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>cut \<equiv> \<lambda>v p. FunctionBody \<lbrakk>
-    let mut v = { let init_1 = v; \<llangle>init_1 :: (64 word) list\<rrangle> };
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while p < len(* v) {
-      let _ = vec_pop(v);
+    let mut v = { let init_1 = v; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while p < rvec_len(* v) {
+      let _ = rvec_pop(v);
       ()
     };
     * v
   \<rbrakk>\<close>
 
 (* Rust: dpll *)
-definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "dpll" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool option) rvec) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>dpll \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>
     let destr_1 = watch_init(cs, n);
     let pos0 = destr_1.0;
     let next0 = destr_1.1;
     let head0 = destr_1.2;
-    let mut pos = { let init_2 = pos0; \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut next_v = { let init_3 = next0; \<llangle>init_3 :: (64 word) list\<rrangle> };
-    let mut head = { let init_4 = head0; \<llangle>init_4 :: (64 word) list\<rrangle> };
-    let destr_7 = propagate_pass(cs, vec_from_elem(None, n), { let res_5 = []; \<llangle>res_5 :: Lit list\<rrangle> }, { let res_6 = []; \<llangle>res_6 :: (64 word) list\<rrangle> });
-    let a0 = destr_7.0;
-    let t0 = destr_7.1;
-    let r0 = destr_7.2;
-    let ok0 = destr_7.3;
+    let mut pos = { let init_2 = pos0; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_3 = next0; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_4 = head0; \<llangle>init_4 :: (64 word) rvec\<rrangle> };
+    let destr_9 = propagate_pass(cs, rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, None, n), { let res_6 = { let vec_5 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_5 :: Lit rvec\<rrangle> }; \<llangle>res_6 :: Lit rvec\<rrangle> }, { let res_8 = { let vec_7 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_7 :: (64 word) rvec\<rrangle> }; \<llangle>res_8 :: (64 word) rvec\<rrangle> });
+    let a0 = destr_9.0;
+    let t0 = destr_9.1;
+    let r0 = destr_9.2;
+    let ok0 = destr_9.3;
     if !ok0 {
       return None;
     };
-    let mut a = { let init_8 = a0; \<llangle>init_8 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_9 = t0; \<llangle>init_9 :: Lit list\<rrangle> };
-    let mut rs = { let init_10 = r0; \<llangle>init_10 :: (64 word) list\<rrangle> };
-    let mut lim = { let init_12 = { let res_11 = []; \<llangle>res_11 :: (64 word) list\<rrangle> }; \<llangle>init_12 :: (64 word) list\<rrangle> };
+    let mut a = { let init_10 = a0; \<llangle>init_10 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_11 = t0; \<llangle>init_11 :: Lit rvec\<rrangle> };
+    let mut rs = { let init_12 = r0; \<llangle>init_12 :: (64 word) rvec\<rrangle> };
+    let mut lim = { let init_15 = { let res_14 = { let vec_13 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_13 :: (64 word) rvec\<rrangle> }; \<llangle>res_14 :: (64 word) rvec\<rrangle> }; \<llangle>init_15 :: (64 word) rvec\<rrangle> };
     let mut q = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
-      let destr_13 = wpropagate(cs, * pos, * next_v, * head, * a, * trail, * rs, * q);
-      let p1 = destr_13.0;
-      let n1 = destr_13.1;
-      let h1 = destr_13.2;
-      let a1 = destr_13.3;
-      let t1 = destr_13.4;
-      let r1 = destr_13.5;
-      let q1 = destr_13.6;
-      let ok_v = destr_13.7;
-      let v_cf = destr_13.8;
+      let destr_16 = wpropagate(cs, * pos, * next_v, * head, * a, * trail, * rs, * q);
+      let p1 = destr_16.0;
+      let n1 = destr_16.1;
+      let h1 = destr_16.2;
+      let a1 = destr_16.3;
+      let t1 = destr_16.4;
+      let r1 = destr_16.5;
+      let q1 = destr_16.6;
+      let ok_v = destr_16.7;
+      let v_cf = destr_16.8;
       * pos = p1;
       * next_v = n1;
       * head = h1;
@@ -1052,29 +1052,29 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
             return Some(* a);
           },
           Some(v) \<Rightarrow> {
-            vec_push(lim, len(* trail));
-            * (a[v]) = Some(true);
-            vec_push(trail, Lit_mk { Lit_var: v, Lit_neg: false });
-            vec_push(rs, 0_usize);
+            rvec_push(lim, rvec_len(* trail));
+            * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[v]) = Some(true);
+            rvec_push(trail, Lit_mk { Lit_var: v, Lit_neg: false });
+            rvec_push(rs, 0_usize);
           }
         }
       };
       if !ok_v {
-        match vec_pop(lim) {
+        match rvec_pop(lim) {
           None \<Rightarrow> {
             return None;
           },
           Some(p) \<Rightarrow> {
-            let d = (* trail)[p];
-            let destr_14 = backtrack(* a, * trail, p);
-            let a2 = destr_14.0;
-            let t2 = destr_14.1;
+            let d = \<llangle>rvec_elems\<rrangle>\<^sub>1(* trail)[p];
+            let destr_17 = backtrack(* a, * trail, p);
+            let a2 = destr_17.0;
+            let t2 = destr_17.1;
             * a = a2;
             * trail = t2;
             * rs = cut(* rs, p);
-            * (a[d.Lit_var]) = Some(d.Lit_neg);
-            vec_push(trail, lit_neg(d));
-            vec_push(rs, 0_usize);
+            * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[d.Lit_var]) = Some(d.Lit_neg);
+            rvec_push(trail, lit_neg(d));
+            rvec_push(rs, 0_usize);
             * q = p;
           }
         }
@@ -1084,35 +1084,35 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
   \<rbrakk>\<close>
 
 (* Rust: encode *)
-definition "encode" :: \<open>CoreProblem \<Rightarrow> ('s, (Cnf \<times> ((Lit list) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "encode" :: \<open>CoreProblem \<Rightarrow> ('s, (Cnf \<times> ((Lit rvec) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>encode \<equiv> \<lambda>p. FunctionBody \<lbrakk>
-    let mut cnf = add_clause(Cnf_mk { Cnf_num_vars: 1_usize, Cnf_clauses: { let res_1 = []; \<llangle>res_1 :: (Lit list) list\<rrangle> } }, clause1(lit_const(true)));
-    let mut vars = { let init_3 = { let res_2 = []; \<llangle>res_2 :: (Lit list) list\<rrangle> }; \<llangle>init_3 :: (Lit list) list\<rrangle> };
+    let mut cnf = add_clause(Cnf_mk { Cnf_num_vars: 1_usize, Cnf_clauses: { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 24 8\<rrangle>); \<llangle>vec_1 :: (Lit rvec) rvec\<rrangle> }; \<llangle>res_2 :: (Lit rvec) rvec\<rrangle> } }, clause1(lit_const(true)));
+    let mut vars = { let init_5 = { let res_4 = { let vec_3 = rvec_new(\<llangle>make_elem_layout 24 8\<rrangle>); \<llangle>vec_3 :: (Lit rvec) rvec\<rrangle> }; \<llangle>res_4 :: (Lit rvec) rvec\<rrangle> }; \<llangle>init_5 :: (Lit rvec) rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(p.CoreProblem_widths) {
-      let destr_4 = bv_fresh(* cnf, p.CoreProblem_widths[* i]);
-      let c = destr_4.0;
-      let ls = destr_4.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(p.CoreProblem_widths) {
+      let destr_6 = bv_fresh(* cnf, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.CoreProblem_widths)[* i]);
+      let c = destr_6.0;
+      let ls = destr_6.1;
       * cnf = c;
-      vec_push(vars, ls);
+      rvec_push(vars, ls);
       * i += 1_usize;
     };
-    let mut defs = { let init_6 = { let res_5 = []; \<llangle>res_5 :: (Lit list) list\<rrangle> }; \<llangle>init_6 :: (Lit list) list\<rrangle> };
+    let mut defs = { let init_9 = { let res_8 = { let vec_7 = rvec_new(\<llangle>make_elem_layout 24 8\<rrangle>); \<llangle>vec_7 :: (Lit rvec) rvec\<rrangle> }; \<llangle>res_8 :: (Lit rvec) rvec\<rrangle> }; \<llangle>init_9 :: (Lit rvec) rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(p.CoreProblem_defs) {
-      let destr_7 = blast(* cnf, * vars, * defs, p.CoreProblem_defs[* j]);
-      let c = destr_7.0;
-      let ls = destr_7.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(p.CoreProblem_defs) {
+      let destr_10 = blast(* cnf, * vars, * defs, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.CoreProblem_defs)[* j]);
+      let c = destr_10.0;
+      let ls = destr_10.1;
       * cnf = c;
-      vec_push(defs, ls);
+      rvec_push(defs, ls);
       * j += 1_usize;
     };
     let mut k = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(p.CoreProblem_asserts) {
-      let destr_8 = blast(* cnf, * vars, * defs, p.CoreProblem_asserts[* k]);
-      let c = destr_8.0;
-      let ls = destr_8.1;
-      * cnf = add_clause(c, clause1(ls[0_usize]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(p.CoreProblem_asserts) {
+      let destr_11 = blast(* cnf, * vars, * defs, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.CoreProblem_asserts)[* k]);
+      let c = destr_11.0;
+      let ls = destr_11.1;
+      * cnf = add_clause(c, clause1(\<llangle>rvec_elems\<rrangle>\<^sub>1(ls)[0_usize]));
       * k += 1_usize;
     };
     (* cnf, * vars)
@@ -1137,11 +1137,11 @@ definition "solve_core" :: \<open>CoreProblem \<Rightarrow> ('s, Answer, 'abort,
 (* Rust: push_def *)
 definition "push_def" :: \<open>Lower \<Rightarrow> CoreTerm \<Rightarrow> (64 word) \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>push_def \<equiv> \<lambda>l t w. FunctionBody \<lbrakk>
-    let k = len(l.Lower_defs);
-    let mut defs = { let init_1 = l.Lower_defs; \<llangle>init_1 :: CoreTerm list\<rrangle> };
-    vec_push(defs, t);
-    let mut widths = { let init_2 = l.Lower_widths; \<llangle>init_2 :: (64 word) list\<rrangle> };
-    vec_push(widths, w);
+    let k = rvec_len(l.Lower_defs);
+    let mut defs = { let init_1 = l.Lower_defs; \<llangle>init_1 :: CoreTerm rvec\<rrangle> };
+    rvec_push(defs, t);
+    let mut widths = { let init_2 = l.Lower_widths; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    rvec_push(widths, w);
     (Lower_mk { Lower_defs: * defs, Lower_widths: * widths }, k)
   \<rbrakk>\<close>
 
@@ -1178,9 +1178,9 @@ definition "cextract" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> 
 (* Rust: cone *)
 definition "cone" :: \<open>(64 word) \<Rightarrow> ('s, CoreTerm, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>cone \<equiv> \<lambda>w. FunctionBody \<lbrakk>
-    let mut one = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
-    vec_push(one, true);
-    cbin(BinOp_Concat, CoreTerm_Const_mk(vec_from_elem(false, w - 1_usize)), CoreTerm_Const_mk(* one))
+    let mut one = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
+    rvec_push(one, true);
+    cbin(BinOp_Concat, CoreTerm_Const_mk(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, w - 1_usize)), CoreTerm_Const_mk(* one))
   \<rbrakk>\<close>
 
 (* Rust: cneg *)
@@ -1216,7 +1216,7 @@ definition "csle" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> (64 
 (* Rust: lower_bin *)
 definition "lower_bin" :: \<open>Lower \<Rightarrow> Op \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>lower_bin \<equiv> \<lambda>l op_v ka kb. FunctionBody \<lbrakk>
-    let w = l.Lower_widths[ka];
+    let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
     match op_v {
       Op_And \<Rightarrow> {
         push_def(l, cbin(BinOp_And, cref(ka), cref(kb)), w)
@@ -1273,7 +1273,7 @@ definition "lower_bin" :: \<open>Lower \<Rightarrow> Op \<Rightarrow> (64 word) 
         let destr_4 = push_def(l, cneg(u, w), w);
         let l = destr_4.0;
         let nu = destr_4.1;
-        let zero = cbin(BinOp_Eq, cref(u), CoreTerm_Const_mk(vec_from_elem(false, w)));
+        let zero = cbin(BinOp_Eq, cref(u), CoreTerm_Const_mk(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, w)));
         let neg_a = cite(cmsb(kb, w), cref(nu), cbin(BinOp_Add, cref(nu), cref(kb)));
         let pos_a = cite(cmsb(kb, w), cbin(BinOp_Add, cref(u), cref(kb)), cref(u));
         push_def(l, cite(zero, cref(u), cite(cmsb(ka, w), neg_a, pos_a)), w)
@@ -1288,7 +1288,7 @@ definition "lower_bin" :: \<open>Lower \<Rightarrow> Op \<Rightarrow> (64 word) 
         push_def(l, cite(cmsb(ka, w), cnot(cbin(BinOp_Lshr, cnot(cref(ka)), cref(kb))), cbin(BinOp_Lshr, cref(ka), cref(kb))), w)
       },
       Op_Concat \<Rightarrow> {
-        let wb = l.Lower_widths[kb];
+        let wb = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[kb];
         push_def(l, cbin(BinOp_Concat, cref(ka), cref(kb)), w + wb)
       },
       Op_Eq \<Rightarrow> {
@@ -1326,30 +1326,30 @@ definition "lower_bin" :: \<open>Lower \<Rightarrow> Op \<Rightarrow> (64 word) 
 
 text \<open>Recursive group lower: defined by iterating lower_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "lower_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "lower_rec_step" :: \<open>((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>lower_rec_step \<equiv> \<lambda>rec_lower. (\<lambda>ws dm l t. FunctionBody \<lbrakk>
     match t {
       Term_Const(bits) \<Rightarrow> {
-        push_def(l, CoreTerm_Const_mk(bits), len(bits))
+        push_def(l, CoreTerm_Const_mk(rvec_clone(bits)), rvec_len(bits))
       },
       Term_Var(i) \<Rightarrow> {
-        push_def(l, CoreTerm_Var_mk(i), ws[i])
+        push_def(l, CoreTerm_Var_mk(i), \<llangle>rvec_elems\<rrangle>\<^sub>1(ws)[i])
       },
       Term_Ref(j) \<Rightarrow> {
-        (l, dm[j])
+        (l, \<llangle>rvec_elems\<rrangle>\<^sub>1(dm)[j])
       },
       Term_Not(a) \<Rightarrow> {
         let destr_1 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
         let l = destr_1.0;
         let ka = destr_1.1;
-        let w = l.Lower_widths[ka];
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
         push_def(l, cnot(cref(ka)), w)
       },
       Term_Neg(a) \<Rightarrow> {
         let destr_2 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
         let l = destr_2.0;
         let ka = destr_2.1;
-        let w = l.Lower_widths[ka];
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
         push_def(l, cneg(ka, w), w)
       },
       Term_Bin(op_v, a, b) \<Rightarrow> {
@@ -1371,18 +1371,18 @@ definition "lower_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word
         let destr_6 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
         let l = destr_6.0;
         let ka = destr_6.1;
-        let w = l.Lower_widths[ka];
-        let destr_8 = push_def(l, CoreTerm_Const_mk({ let res_7 = []; \<llangle>res_7 :: bool list\<rrangle> }), 0_usize);
-        let l = destr_8.0;
-        let k0 = destr_8.1;
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
+        let destr_9 = push_def(l, CoreTerm_Const_mk({ let res_8 = { let vec_7 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_7 :: bool rvec\<rrangle> }; \<llangle>res_8 :: bool rvec\<rrangle> }), 0_usize);
+        let l = destr_9.0;
+        let k0 = destr_9.1;
         let mut l = l;
         let mut k = k0;
         let mut acc = 0_usize;
         let mut j = 0_usize;
         #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < i {
-          let destr_9 = push_def(* l, cbin(BinOp_Concat, cref(ka), cref(* k)), (* acc) + w);
-          let l1 = destr_9.0;
-          let k1 = destr_9.1;
+          let destr_10 = push_def(* l, cbin(BinOp_Concat, cref(ka), cref(* k)), (* acc) + w);
+          let l1 = destr_10.0;
+          let k1 = destr_10.1;
           * l = l1;
           * k = k1;
           * acc = (* acc) + w;
@@ -1391,25 +1391,25 @@ definition "lower_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word
         (* l, * k)
       },
       Term_ZeroExtend(i, a) \<Rightarrow> {
-        let destr_10 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
-        let l = destr_10.0;
-        let ka = destr_10.1;
-        let w = l.Lower_widths[ka];
-        push_def(l, cbin(BinOp_Concat, CoreTerm_Const_mk(vec_from_elem(false, i)), cref(ka)), w + i)
-      },
-      Term_SignExtend(i, a) \<Rightarrow> {
         let destr_11 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
         let l = destr_11.0;
         let ka = destr_11.1;
-        let w = l.Lower_widths[ka];
-        let ext = cite(cmsb(ka, w), CoreTerm_Const_mk(vec_from_elem(true, i)), CoreTerm_Const_mk(vec_from_elem(false, i)));
-        push_def(l, cbin(BinOp_Concat, ext, cref(ka)), w + i)
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
+        push_def(l, cbin(BinOp_Concat, CoreTerm_Const_mk(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, i)), cref(ka)), w + i)
       },
-      Term_RotateLeft(i, a) \<Rightarrow> {
+      Term_SignExtend(i, a) \<Rightarrow> {
         let destr_12 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
         let l = destr_12.0;
         let ka = destr_12.1;
-        let w = l.Lower_widths[ka];
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
+        let ext = cite(cmsb(ka, w), CoreTerm_Const_mk(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, true, i)), CoreTerm_Const_mk(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, i)));
+        push_def(l, cbin(BinOp_Concat, ext, cref(ka)), w + i)
+      },
+      Term_RotateLeft(i, a) \<Rightarrow> {
+        let destr_13 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_13.0;
+        let ka = destr_13.1;
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
         let r = i % w;
         if r == 0_usize {
           (l, ka)
@@ -1418,10 +1418,10 @@ definition "lower_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word
         }
       },
       Term_RotateRight(i, a) \<Rightarrow> {
-        let destr_13 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
-        let l = destr_13.0;
-        let ka = destr_13.1;
-        let w = l.Lower_widths[ka];
+        let destr_14 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let l = destr_14.0;
+        let ka = destr_14.1;
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
         let r = i % w;
         if r == 0_usize {
           (l, ka)
@@ -1430,65 +1430,65 @@ definition "lower_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word
         }
       },
       Term_Ite(c, a, b) \<Rightarrow> {
-        let destr_14 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, c);
-        let l = destr_14.0;
-        let kc = destr_14.1;
-        let destr_15 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
+        let destr_15 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, c);
         let l = destr_15.0;
-        let ka = destr_15.1;
-        let destr_16 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, b);
+        let kc = destr_15.1;
+        let destr_16 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, a);
         let l = destr_16.0;
-        let kb = destr_16.1;
-        let w = l.Lower_widths[ka];
+        let ka = destr_16.1;
+        let destr_17 = \<epsilon>\<open>rec_lower\<close>(ws, dm, l, b);
+        let l = destr_17.0;
+        let kb = destr_17.1;
+        let w = \<llangle>rvec_elems\<rrangle>\<^sub>1(l.Lower_widths)[ka];
         push_def(l, cite(cref(kc), cref(ka), cref(kb)), w)
       }
     }
   \<rbrakk>)\<close>
 
 (* Rust: lower *)
-definition "lower" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "lower" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Lower \<Rightarrow> Term \<Rightarrow> ('s, (Lower \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>lower \<equiv> ((lower_rec_step ^^ urust_fuel) (\<lambda>ws dm l t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: lower_problem *)
 definition "lower_problem" :: \<open>Problem \<Rightarrow> ('s, CoreProblem, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>lower_problem \<equiv> \<lambda>p. FunctionBody \<lbrakk>
-    let mut l = Lower_mk { Lower_defs: { let res_1 = []; \<llangle>res_1 :: CoreTerm list\<rrangle> }, Lower_widths: { let res_2 = []; \<llangle>res_2 :: (64 word) list\<rrangle> } };
-    let mut dm = { let init_4 = { let res_3 = []; \<llangle>res_3 :: (64 word) list\<rrangle> }; \<llangle>init_4 :: (64 word) list\<rrangle> };
+    let mut l = Lower_mk { Lower_defs: { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 32 8\<rrangle>); \<llangle>vec_1 :: CoreTerm rvec\<rrangle> }; \<llangle>res_2 :: CoreTerm rvec\<rrangle> }, Lower_widths: { let res_4 = { let vec_3 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_3 :: (64 word) rvec\<rrangle> }; \<llangle>res_4 :: (64 word) rvec\<rrangle> } };
+    let mut dm = { let init_7 = { let res_6 = { let vec_5 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_5 :: (64 word) rvec\<rrangle> }; \<llangle>res_6 :: (64 word) rvec\<rrangle> }; \<llangle>init_7 :: (64 word) rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(p.Problem_defs) {
-      let destr_5 = lower(p.Problem_widths, * dm, * l, p.Problem_defs[* j]);
-      let l1 = destr_5.0;
-      let k = destr_5.1;
-      * l = l1;
-      vec_push(dm, k);
-      * j += 1_usize;
-    };
-    let mut asserts = { let init_7 = { let res_6 = []; \<llangle>res_6 :: CoreTerm list\<rrangle> }; \<llangle>init_7 :: CoreTerm list\<rrangle> };
-    let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(p.Problem_asserts) {
-      let destr_8 = lower(p.Problem_widths, * dm, * l, p.Problem_asserts[* i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(p.Problem_defs) {
+      let destr_8 = lower(p.Problem_widths, * dm, * l, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.Problem_defs)[* j]);
       let l1 = destr_8.0;
       let k = destr_8.1;
       * l = l1;
-      vec_push(asserts, cref(k));
+      rvec_push(dm, k);
+      * j += 1_usize;
+    };
+    let mut asserts = { let init_11 = { let res_10 = { let vec_9 = rvec_new(\<llangle>make_elem_layout 32 8\<rrangle>); \<llangle>vec_9 :: CoreTerm rvec\<rrangle> }; \<llangle>res_10 :: CoreTerm rvec\<rrangle> }; \<llangle>init_11 :: CoreTerm rvec\<rrangle> };
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(p.Problem_asserts) {
+      let destr_12 = lower(p.Problem_widths, * dm, * l, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.Problem_asserts)[* i]);
+      let l1 = destr_12.0;
+      let k = destr_12.1;
+      * l = l1;
+      rvec_push(asserts, cref(k));
       * i += 1_usize;
     };
-    CoreProblem_mk { CoreProblem_widths: p.Problem_widths, CoreProblem_defs: * (l.Lower_defs), CoreProblem_asserts: * asserts }
+    CoreProblem_mk { CoreProblem_widths: rvec_clone(p.Problem_widths), CoreProblem_defs: * (l.Lower_defs), CoreProblem_asserts: * asserts }
   \<rbrakk>\<close>
 
 (* Rust: bump *)
-definition "bump" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bump" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bump \<equiv> \<lambda>c i. FunctionBody \<lbrakk>
-    let mut c = { let init_1 = c; \<llangle>init_1 :: (64 word) list\<rrangle> };
-    if ((* c)[i]) < 2_usize {
-      * (c[i]) = ((* c)[i]) + 1_usize;
+    let mut c = { let init_1 = c; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    if (\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[i]) < 2_usize {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(c)[i]) = (\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[i]) + 1_usize;
     };
     * c
   \<rbrakk>\<close>
 
 text \<open>Recursive group count_occ: defined by iterating count_occ_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "count_occ_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "count_occ_rec_step" :: \<open>((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>count_occ_rec_step \<equiv> \<lambda>rec_count_occ. (\<lambda>vc rc t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(_) \<Rightarrow> {
@@ -1525,17 +1525,17 @@ definition "count_occ_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 
   \<rbrakk>)\<close>
 
 (* Rust: count_occ *)
-definition "count_occ" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "count_occ" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>count_occ \<equiv> ((count_occ_rec_step ^^ urust_fuel) (\<lambda>vc rc t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: count_terms *)
-definition "count_terms" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> (CoreTerm list) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "count_terms" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (CoreTerm rvec) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>count_terms \<equiv> \<lambda>vc rc ts. FunctionBody \<lbrakk>
-    let mut vc = { let init_1 = vc; \<llangle>init_1 :: (64 word) list\<rrangle> };
-    let mut rc = { let init_2 = rc; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut vc = { let init_1 = vc; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    let mut rc = { let init_2 = rc; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ts) {
-      let destr_3 = count_occ(* vc, * rc, ts[* i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ts) {
+      let destr_3 = count_occ(* vc, * rc, \<llangle>rvec_elems\<rrangle>\<^sub>1(ts)[* i]);
       let v1 = destr_3.0;
       let r1 = destr_3.1;
       * vc = v1;
@@ -1547,17 +1547,17 @@ definition "count_terms" :: \<open>((64 word) list) \<Rightarrow> ((64 word) lis
 
 text \<open>Recursive group term_width: defined by iterating term_width_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "term_width_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "term_width_rec_step" :: \<open>((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>term_width_rec_step \<equiv> \<lambda>rec_term_width. (\<lambda>ws dw t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(bits) \<Rightarrow> {
-        len(bits)
+        rvec_len(bits)
       },
       CoreTerm_Var(i) \<Rightarrow> {
-        ws[i]
+        \<llangle>rvec_elems\<rrangle>\<^sub>1(ws)[i]
       },
       CoreTerm_Ref(i) \<Rightarrow> {
-        dw[i]
+        \<llangle>rvec_elems\<rrangle>\<^sub>1(dw)[i]
       },
       CoreTerm_Not(a) \<Rightarrow> {
         \<epsilon>\<open>rec_term_width\<close>(ws, dw, a)
@@ -1588,7 +1588,7 @@ definition "term_width_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64
   \<rbrakk>)\<close>
 
 (* Rust: term_width *)
-definition "term_width" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "term_width" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>term_width \<equiv> ((term_width_rec_step ^^ urust_fuel) (\<lambda>ws dw t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: ref_index *)
@@ -1605,9 +1605,9 @@ definition "ref_index" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> 
   \<rbrakk>\<close>
 
 (* Rust: free_once *)
-definition "free_once" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "free_once" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>free_once \<equiv> \<lambda>kind rc i. FunctionBody \<lbrakk>
-    ((i < len(kind)) && ((kind[i]) != 0_usize)) && ((rc[i]) == 1_usize)
+    ((i < rvec_len(kind)) && ((\<llangle>rvec_elems\<rrangle>\<^sub>1(kind)[i]) != 0_usize)) && ((\<llangle>rvec_elems\<rrangle>\<^sub>1(rc)[i]) == 1_usize)
   \<rbrakk>\<close>
 
 (* Rust: bit_const *)
@@ -1615,8 +1615,8 @@ definition "bit_const" :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i
   \<open>bit_const \<equiv> \<lambda>t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(bits) \<Rightarrow> {
-        if len(bits) == 1_usize {
-          if bits[0_usize] {
+        if rvec_len(bits) == 1_usize {
+          if \<llangle>rvec_elems\<rrangle>\<^sub>1(bits)[0_usize] {
             1_usize
           } else {
             0_usize
@@ -1632,12 +1632,12 @@ definition "bit_const" :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i
   \<rbrakk>\<close>
 
 (* Rust: free_kind *)
-definition "free_kind" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "free_kind" :: \<open>(CoreTerm rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>free_kind \<equiv> \<lambda>defs dw vc rc kind t. FunctionBody \<lbrakk>
-    let n = len(kind);
+    let n = rvec_len(kind);
     match t {
       CoreTerm_Var(i) \<Rightarrow> {
-        if (vc[i]) == 1_usize {
+        if (\<llangle>rvec_elems\<rrangle>\<^sub>1(vc)[i]) == 1_usize {
           1_usize
         } else {
           0_usize
@@ -1684,10 +1684,10 @@ definition "free_kind" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) 
             }
           },
           BinOp_Eq \<Rightarrow> {
-            if free_once(kind, rc, ia) && ((dw[ia]) > 0_usize) {
+            if free_once(kind, rc, ia) && ((\<llangle>rvec_elems\<rrangle>\<^sub>1(dw)[ia]) > 0_usize) {
               2_usize
             } else {
-              if free_once(kind, rc, ib) && ((dw[ib]) > 0_usize) {
+              if free_once(kind, rc, ib) && ((\<llangle>rvec_elems\<rrangle>\<^sub>1(dw)[ib]) > 0_usize) {
                 3_usize
               } else {
                 0_usize
@@ -1718,8 +1718,8 @@ definition "free_kind" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) 
         let ia = ref_index(a, n);
         let ib = ref_index(b, n);
         if (free_once(kind, rc, ic) && (ia < n)) && (ib < n) {
-          let x = bit_const(defs[ia]);
-          let y = bit_const(defs[ib]);
+          let x = bit_const(\<llangle>rvec_elems\<rrangle>\<^sub>1(defs)[ia]);
+          let y = bit_const(\<llangle>rvec_elems\<rrangle>\<^sub>1(defs)[ib]);
           if ((x < 2_usize) && (y < 2_usize)) && (x != y) {
             2_usize
           } else {
@@ -1823,7 +1823,7 @@ definition "copy_term_rec_step" :: \<open>((CoreTerm \<Rightarrow> ('s, CoreTerm
   \<open>copy_term_rec_step \<equiv> \<lambda>rec_copy_term. (\<lambda>t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(bits) \<Rightarrow> {
-        CoreTerm_Const_mk(bits)
+        CoreTerm_Const_mk(rvec_clone(bits))
       },
       CoreTerm_Var(i) \<Rightarrow> {
         CoreTerm_Var_mk(i)
@@ -1851,15 +1851,15 @@ definition "copy_term" :: \<open>CoreTerm \<Rightarrow> ('s, CoreTerm, 'abort, '
   \<open>copy_term \<equiv> ((copy_term_rec_step ^^ urust_fuel) (\<lambda>t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: rewrite_def *)
-definition "rewrite_def" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, (CoreTerm \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "rewrite_def" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, (CoreTerm \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>rewrite_def \<equiv> \<lambda>t c w dw n mark. FunctionBody \<lbrakk>
     if c >= 2_usize {
       let a = consumed(t, c, n);
-      let mut mark = { let init_1 = set_at(mark, a, 1_usize); \<llangle>init_1 :: (64 word) list\<rrangle> };
+      let mut mark = { let init_1 = set_at(mark, a, 1_usize); \<llangle>init_1 :: (64 word) rvec\<rrangle> };
       if c == 4_usize {
         * mark = set_at(* mark, second(t, n), 2_usize);
       };
-      if (dw[a]) == w {
+      if (\<llangle>rvec_elems\<rrangle>\<^sub>1(dw)[a]) == w {
         (CoreTerm_Ref_mk(a), * mark)
       } else {
         (cextract(w - 1_usize, 0_usize, cref(a)), * mark)
@@ -1870,25 +1870,25 @@ definition "rewrite_def" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow
   \<rbrakk>\<close>
 
 (* Rust: analyse *)
-definition "analyse" :: \<open>CoreProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, (((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> (CoreTerm list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "analyse" :: \<open>CoreProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, (((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> (CoreTerm rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>analyse \<equiv> \<lambda>q vc rc. FunctionBody \<lbrakk>
-    let n = len(q.CoreProblem_defs);
-    let mut dw = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut kind = { let init_4 = { let res_3 = []; \<llangle>res_3 :: (64 word) list\<rrangle> }; \<llangle>init_4 :: (64 word) list\<rrangle> };
-    let mut mark = { let init_5 = vec_from_elem(0_usize, n); \<llangle>init_5 :: (64 word) list\<rrangle> };
-    let mut defs = { let init_7 = { let res_6 = []; \<llangle>res_6 :: CoreTerm list\<rrangle> }; \<llangle>init_7 :: CoreTerm list\<rrangle> };
+    let n = rvec_len(q.CoreProblem_defs);
+    let mut dw = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_1 :: (64 word) rvec\<rrangle> }; \<llangle>res_2 :: (64 word) rvec\<rrangle> }; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut kind = { let init_6 = { let res_5 = { let vec_4 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_4 :: (64 word) rvec\<rrangle> }; \<llangle>res_5 :: (64 word) rvec\<rrangle> }; \<llangle>init_6 :: (64 word) rvec\<rrangle> };
+    let mut mark = { let init_7 = rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 0_usize, n); \<llangle>init_7 :: (64 word) rvec\<rrangle> };
+    let mut defs = { let init_10 = { let res_9 = { let vec_8 = rvec_new(\<llangle>make_elem_layout 32 8\<rrangle>); \<llangle>vec_8 :: CoreTerm rvec\<rrangle> }; \<llangle>res_9 :: CoreTerm rvec\<rrangle> }; \<llangle>init_10 :: CoreTerm rvec\<rrangle> };
     let mut k = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < n {
-      let t = q.CoreProblem_defs[* k];
+      let t = \<llangle>rvec_elems\<rrangle>\<^sub>1(q.CoreProblem_defs)[* k];
       let w = term_width(q.CoreProblem_widths, * dw, t);
       let c = free_kind(q.CoreProblem_defs, * dw, vc, rc, * kind, t);
-      let destr_8 = rewrite_def(t, c, w, * dw, n, * mark);
-      let t2 = destr_8.0;
-      let m1 = destr_8.1;
+      let destr_11 = rewrite_def(t, c, w, * dw, n, * mark);
+      let t2 = destr_11.0;
+      let m1 = destr_11.1;
       * mark = m1;
-      vec_push(defs, t2);
-      vec_push(dw, w);
-      vec_push(kind, c);
+      rvec_push(defs, t2);
+      rvec_push(dw, w);
+      rvec_push(kind, c);
       * k += 1_usize;
     };
     (* dw, * kind, * mark, * defs)
@@ -1896,7 +1896,7 @@ definition "analyse" :: \<open>CoreProblem \<Rightarrow> ((64 word) list) \<Righ
 
 text \<open>Recursive group mark_live: defined by iterating mark_live_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "mark_live_rec_step" :: \<open>(((bool list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> (((bool list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "mark_live_rec_step" :: \<open>(((bool rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> (((bool rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>mark_live_rec_step \<equiv> \<lambda>rec_mark_live. (\<lambda>live t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(_) \<Rightarrow> {
@@ -1906,8 +1906,8 @@ definition "mark_live_rec_step" :: \<open>(((bool list) \<Rightarrow> CoreTerm \
         live
       },
       CoreTerm_Ref(i) \<Rightarrow> {
-        let mut live = { let init_1 = live; \<llangle>init_1 :: bool list\<rrangle> };
-        * (live[i]) = true;
+        let mut live = { let init_1 = live; \<llangle>init_1 :: bool rvec\<rrangle> };
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(live)[i]) = true;
         * live
       },
       CoreTerm_Not(a) \<Rightarrow> {
@@ -1929,55 +1929,55 @@ definition "mark_live_rec_step" :: \<open>(((bool list) \<Rightarrow> CoreTerm \
   \<rbrakk>)\<close>
 
 (* Rust: mark_live *)
-definition "mark_live" :: \<open>(bool list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "mark_live" :: \<open>(bool rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>mark_live \<equiv> ((mark_live_rec_step ^^ urust_fuel) (\<lambda>live t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: mark_terms *)
-definition "mark_terms" :: \<open>(bool list) \<Rightarrow> (CoreTerm list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "mark_terms" :: \<open>(bool rvec) \<Rightarrow> (CoreTerm rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>mark_terms \<equiv> \<lambda>live ts. FunctionBody \<lbrakk>
-    let mut live = { let init_1 = live; \<llangle>init_1 :: bool list\<rrangle> };
+    let mut live = { let init_1 = live; \<llangle>init_1 :: bool rvec\<rrangle> };
     let mut l = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* l) < len(ts) {
-      * live = mark_live(* live, ts[* l]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* l) < rvec_len(ts) {
+      * live = mark_live(* live, \<llangle>rvec_elems\<rrangle>\<^sub>1(ts)[* l]);
       * l += 1_usize;
     };
     * live
   \<rbrakk>\<close>
 
 (* Rust: dce *)
-definition "dce" :: \<open>(bool list) \<Rightarrow> ((64 word) list) \<Rightarrow> (CoreTerm list) \<Rightarrow> ('s, CoreTerm list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "dce" :: \<open>(bool rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (CoreTerm rvec) \<Rightarrow> ('s, CoreTerm rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>dce \<equiv> \<lambda>live dw defs. FunctionBody \<lbrakk>
-    let mut live = { let init_1 = live; \<llangle>init_1 :: bool list\<rrangle> };
-    let mut defs = { let init_2 = defs; \<llangle>init_2 :: CoreTerm list\<rrangle> };
-    let mut d = len(* defs);
+    let mut live = { let init_1 = live; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut defs = { let init_2 = defs; \<llangle>init_2 :: CoreTerm rvec\<rrangle> };
+    let mut d = rvec_len(* defs);
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) > 0_usize {
       * d -= 1_usize;
-      if (* live)[* d] {
-        * live = mark_live(* live, (* defs)[* d]);
+      if \<llangle>rvec_elems\<rrangle>\<^sub>1(* live)[* d] {
+        * live = mark_live(* live, \<llangle>rvec_elems\<rrangle>\<^sub>1(* defs)[* d]);
       } else {
-        * (defs[* d]) = CoreTerm_Const_mk(vec_from_elem(false, dw[* d]));
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(defs)[* d]) = CoreTerm_Const_mk(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, \<llangle>rvec_elems\<rrangle>\<^sub>1(dw)[* d]));
       }
     };
     * defs
   \<rbrakk>\<close>
 
 (* Rust: copy_terms *)
-definition "copy_terms" :: \<open>(CoreTerm list) \<Rightarrow> ('s, CoreTerm list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "copy_terms" :: \<open>(CoreTerm rvec) \<Rightarrow> ('s, CoreTerm rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>copy_terms \<equiv> \<lambda>ts. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: CoreTerm list\<rrangle> }; \<llangle>init_2 :: CoreTerm list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 32 8\<rrangle>); \<llangle>vec_1 :: CoreTerm rvec\<rrangle> }; \<llangle>res_2 :: CoreTerm rvec\<rrangle> }; \<llangle>init_3 :: CoreTerm rvec\<rrangle> };
     let mut a = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* a) < len(ts) {
-      vec_push(r, copy_term(ts[* a]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* a) < rvec_len(ts) {
+      rvec_push(r, copy_term(\<llangle>rvec_elems\<rrangle>\<^sub>1(ts)[* a]));
       * a += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: elim *)
-definition "elim" :: \<open>CoreProblem \<Rightarrow> ('s, (CoreProblem \<times> ((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "elim" :: \<open>CoreProblem \<Rightarrow> ('s, (CoreProblem \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>elim \<equiv> \<lambda>q. FunctionBody \<lbrakk>
-    let n = len(q.CoreProblem_defs);
-    let destr_1 = count_terms(vec_from_elem(0_usize, len(q.CoreProblem_widths)), vec_from_elem(0_usize, n), q.CoreProblem_defs);
+    let n = rvec_len(q.CoreProblem_defs);
+    let destr_1 = count_terms(rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 0_usize, rvec_len(q.CoreProblem_widths)), rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 0_usize, n), q.CoreProblem_defs);
     let vc = destr_1.0;
     let rc = destr_1.1;
     let destr_2 = count_terms(vc, rc, q.CoreProblem_asserts);
@@ -1988,18 +1988,18 @@ definition "elim" :: \<open>CoreProblem \<Rightarrow> ('s, (CoreProblem \<times>
     let kind = destr_3.1;
     let mark = destr_3.2;
     let defs = destr_3.3;
-    let live = mark_terms(vec_from_elem(false, n), q.CoreProblem_asserts);
+    let live = mark_terms(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, n), q.CoreProblem_asserts);
     let defs = dce(live, dw, defs);
-    (CoreProblem_mk { CoreProblem_widths: q.CoreProblem_widths, CoreProblem_defs: defs, CoreProblem_asserts: copy_terms(q.CoreProblem_asserts) }, kind, mark)
+    (CoreProblem_mk { CoreProblem_widths: rvec_clone(q.CoreProblem_widths), CoreProblem_defs: defs, CoreProblem_asserts: copy_terms(q.CoreProblem_asserts) }, kind, mark)
   \<rbrakk>\<close>
 
 (* Rust: bits_not *)
-definition "bits_not" :: \<open>(bool list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_not" :: \<open>(bool rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_not \<equiv> \<lambda>a. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      vec_push(r, !(a[* i]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      rvec_push(r, !(\<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]));
       * i += 1_usize;
     };
     * r
@@ -2022,12 +2022,12 @@ definition "bit_op" :: \<open>BinOp \<Rightarrow> bool \<Rightarrow> bool \<Righ
   \<rbrakk>\<close>
 
 (* Rust: bits_bitwise *)
-definition "bits_bitwise" :: \<open>BinOp \<Rightarrow> (bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_bitwise" :: \<open>BinOp \<Rightarrow> (bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_bitwise \<equiv> \<lambda>op_v a b. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      vec_push(r, bit_op(op_v, a[* i], b[* i]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      rvec_push(r, bit_op(op_v, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i], \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]));
       * i += 1_usize;
     };
     * r
@@ -2045,16 +2045,16 @@ definition "full_add" :: \<open>bool \<Rightarrow> bool \<Rightarrow> bool \<Rig
   \<rbrakk>\<close>
 
 (* Rust: bits_add *)
-definition "bits_add" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> bool \<Rightarrow> ('s, ((bool list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_add" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> bool \<Rightarrow> ('s, ((bool rvec) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_add \<equiv> \<lambda>a b cin. FunctionBody \<lbrakk>
     let mut carry = cin;
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      let destr_3 = full_add(a[* i], b[* i], * carry);
-      let s = destr_3.0;
-      let c = destr_3.1;
-      vec_push(r, s);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      let destr_4 = full_add(\<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i], \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i], * carry);
+      let s = destr_4.0;
+      let c = destr_4.1;
+      rvec_push(r, s);
       * carry = c;
       * i += 1_usize;
     };
@@ -2062,22 +2062,22 @@ definition "bits_add" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarr
   \<rbrakk>\<close>
 
 (* Rust: bits_shift_const *)
-definition "bits_shift_const" :: \<open>(bool list) \<Rightarrow> (64 word) \<Rightarrow> bool \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_shift_const" :: \<open>(bool rvec) \<Rightarrow> (64 word) \<Rightarrow> bool \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_shift_const \<equiv> \<lambda>a s left. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(a) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(a) {
       if left {
         if (* j) < s {
-          vec_push(r, false);
+          rvec_push(r, false);
         } else {
-          vec_push(r, a[(* j) - s]);
+          rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[(* j) - s]);
         }
       } else {
-        if s < (len(a) - (* j)) {
-          vec_push(r, a[(* j) + s]);
+        if s < (rvec_len(a) - (* j)) {
+          rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[(* j) + s]);
         } else {
-          vec_push(r, false);
+          rvec_push(r, false);
         }
       };
       * j += 1_usize;
@@ -2086,12 +2086,12 @@ definition "bits_shift_const" :: \<open>(bool list) \<Rightarrow> (64 word) \<Ri
   \<rbrakk>\<close>
 
 (* Rust: bits_mul *)
-definition "bits_mul" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_mul" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_mul \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
-    let mut acc = { let init_1 = vec_from_elem(false, len(a)); \<llangle>init_1 :: bool list\<rrangle> };
+    let mut acc = { let init_1 = rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, rvec_len(a)); \<llangle>init_1 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      if b[* i] {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      if \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i] {
         let destr_2 = bits_add(* acc, bits_shift_const(a, * i, true), false);
         let s = destr_2.0;
         * acc = s;
@@ -2102,12 +2102,12 @@ definition "bits_mul" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarr
   \<rbrakk>\<close>
 
 (* Rust: bits_eq *)
-definition "bits_eq" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_eq" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_eq \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
     let mut r = true;
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(a) {
-      if (a[* i]) != (b[* i]) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      if (\<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]) != (\<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i]) {
         * r = false;
       };
       * i += 1_usize;
@@ -2116,15 +2116,15 @@ definition "bits_eq" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarro
   \<rbrakk>\<close>
 
 (* Rust: bits_zext *)
-definition "bits_zext" :: \<open>(bool list) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_zext" :: \<open>(bool rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_zext \<equiv> \<lambda>a w. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < w {
-      if (* i) < len(a) {
-        vec_push(r, a[* i]);
+      if (* i) < rvec_len(a) {
+        rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
       } else {
-        vec_push(r, false);
+        rvec_push(r, false);
       };
       * i += 1_usize;
     };
@@ -2132,38 +2132,38 @@ definition "bits_zext" :: \<open>(bool list) \<Rightarrow> (64 word) \<Rightarro
   \<rbrakk>\<close>
 
 (* Rust: bits_shl1 *)
-definition "bits_shl1" :: \<open>(bool list) \<Rightarrow> bool \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_shl1" :: \<open>(bool rvec) \<Rightarrow> bool \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_shl1 \<equiv> \<lambda>r x. FunctionBody \<lbrakk>
-    let mut s = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
-    vec_push(s, x);
+    let mut s = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
+    rvec_push(s, x);
     let mut k = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* k) + 1_usize) < len(r) {
-      vec_push(s, r[* k]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* k) + 1_usize) < rvec_len(r) {
+      rvec_push(s, \<llangle>rvec_elems\<rrangle>\<^sub>1(r)[* k]);
       * k += 1_usize;
     };
     * s
   \<rbrakk>\<close>
 
 (* Rust: bits_divrem *)
-definition "bits_divrem" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, ((bool list) \<times> (bool list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_divrem" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, ((bool rvec) \<times> (bool rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_divrem \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
-    let w = len(a);
-    if bits_eq(b, vec_from_elem(false, w)) {
-      return (vec_from_elem(true, w), a);
+    let w = rvec_len(a);
+    if bits_eq(b, rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, w)) {
+      return (rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, true, w), rvec_clone(a));
     };
     let nb = bits_not(bits_zext(b, w + 1_usize));
-    let mut q = { let init_1 = vec_from_elem(false, w); \<llangle>init_1 :: bool list\<rrangle> };
-    let mut r = { let init_2 = vec_from_elem(false, w + 1_usize); \<llangle>init_2 :: bool list\<rrangle> };
+    let mut q = { let init_1 = rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, w); \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut r = { let init_2 = rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, w + 1_usize); \<llangle>init_2 :: bool rvec\<rrangle> };
     let mut i = w;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) > 0_usize {
       * i -= 1_usize;
-      let r1 = bits_shl1(* r, a[* i]);
+      let r1 = bits_shl1(* r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
       let destr_3 = bits_add(r1, nb, true);
       let d = destr_3.0;
       let c = destr_3.1;
       if c {
         * r = d;
-        * (q[* i]) = true;
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(q)[* i]) = true;
       } else {
         * r = r1;
       }
@@ -2191,32 +2191,32 @@ definition "shift_amount_step" :: \<open>(64 word) \<Rightarrow> bool \<Rightarr
   \<rbrakk>\<close>
 
 (* Rust: bits_shift *)
-definition "bits_shift" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> bool \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_shift" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> bool \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_shift \<equiv> \<lambda>a b left. FunctionBody \<lbrakk>
-    let w = len(a);
+    let w = rvec_len(a);
     let mut s = 0_usize;
-    let mut i = len(b);
+    let mut i = rvec_len(b);
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) > 0_usize {
       * i -= 1_usize;
-      * s = shift_amount_step(* s, b[* i], w);
+      * s = shift_amount_step(* s, \<llangle>rvec_elems\<rrangle>\<^sub>1(b)[* i], w);
     };
     bits_shift_const(a, * s, left)
   \<rbrakk>\<close>
 
 (* Rust: bits_concat *)
-definition "bits_concat" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_concat" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_concat \<equiv> \<lambda>hi lo. FunctionBody \<lbrakk>
-    let mut r = { let init_1 = lo; \<llangle>init_1 :: bool list\<rrangle> };
+    let mut r = { let init_1 = rvec_clone(lo); \<llangle>init_1 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(hi) {
-      vec_push(r, hi[* i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(hi) {
+      rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(hi)[* i]);
       * i += 1_usize;
     };
     * r
   \<rbrakk>\<close>
 
 (* Rust: bits_ult *)
-definition "bits_ult" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_ult" :: \<open>(bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_ult \<equiv> \<lambda>a b. FunctionBody \<lbrakk>
     let destr_1 = bits_add(a, bits_not(b), true);
     let c = destr_1.1;
@@ -2224,7 +2224,7 @@ definition "bits_ult" :: \<open>(bool list) \<Rightarrow> (bool list) \<Rightarr
   \<rbrakk>\<close>
 
 (* Rust: eval_bin *)
-definition "eval_bin" :: \<open>BinOp \<Rightarrow> (bool list) \<Rightarrow> (bool list) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "eval_bin" :: \<open>BinOp \<Rightarrow> (bool rvec) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>eval_bin \<equiv> \<lambda>op_v a b. FunctionBody \<lbrakk>
     match op_v {
       BinOp_And \<Rightarrow> {
@@ -2264,25 +2264,25 @@ definition "eval_bin" :: \<open>BinOp \<Rightarrow> (bool list) \<Rightarrow> (b
         bits_concat(a, b)
       },
       BinOp_Eq \<Rightarrow> {
-        let mut r = { let init_5 = { let res_4 = []; \<llangle>res_4 :: bool list\<rrangle> }; \<llangle>init_5 :: bool list\<rrangle> };
-        vec_push(r, bits_eq(a, b));
+        let mut r = { let init_6 = { let res_5 = { let vec_4 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_4 :: bool rvec\<rrangle> }; \<llangle>res_5 :: bool rvec\<rrangle> }; \<llangle>init_6 :: bool rvec\<rrangle> };
+        rvec_push(r, bits_eq(a, b));
         * r
       },
       BinOp_Ult \<Rightarrow> {
-        let mut r = { let init_7 = { let res_6 = []; \<llangle>res_6 :: bool list\<rrangle> }; \<llangle>init_7 :: bool list\<rrangle> };
-        vec_push(r, bits_ult(a, b));
+        let mut r = { let init_9 = { let res_8 = { let vec_7 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_7 :: bool rvec\<rrangle> }; \<llangle>res_8 :: bool rvec\<rrangle> }; \<llangle>init_9 :: bool rvec\<rrangle> };
+        rvec_push(r, bits_ult(a, b));
         * r
       }
     }
   \<rbrakk>\<close>
 
 (* Rust: bits_extract *)
-definition "bits_extract" :: \<open>(bool list) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_extract" :: \<open>(bool rvec) \<Rightarrow> (64 word) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_extract \<equiv> \<lambda>a hi lo. FunctionBody \<lbrakk>
-    let mut r = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = lo;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) <= hi {
-      vec_push(r, a[* i]);
+      rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
       * i += 1_usize;
     };
     * r
@@ -2290,17 +2290,17 @@ definition "bits_extract" :: \<open>(bool list) \<Rightarrow> (64 word) \<Righta
 
 text \<open>Recursive group eval_term: defined by iterating eval_term_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "eval_term_rec_step" :: \<open>((((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "eval_term_rec_step" :: \<open>((((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>eval_term_rec_step \<equiv> \<lambda>rec_eval_term. (\<lambda>vars defs t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(bits) \<Rightarrow> {
-        bits
+        rvec_clone(bits)
       },
       CoreTerm_Var(i) \<Rightarrow> {
-        vars[i]
+        rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(vars)[i])
       },
       CoreTerm_Ref(i) \<Rightarrow> {
-        defs[i]
+        rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(defs)[i])
       },
       CoreTerm_Not(a) \<Rightarrow> {
         bits_not(\<epsilon>\<open>rec_eval_term\<close>(vars, defs, a))
@@ -2315,7 +2315,7 @@ definition "eval_term_rec_step" :: \<open>((((bool list) list) \<Rightarrow> ((b
       },
       CoreTerm_Ite(c, a, b) \<Rightarrow> {
         let x = \<epsilon>\<open>rec_eval_term\<close>(vars, defs, c);
-        if x[0_usize] {
+        if \<llangle>rvec_elems\<rrangle>\<^sub>1(x)[0_usize] {
           \<epsilon>\<open>rec_eval_term\<close>(vars, defs, a)
         } else {
           \<epsilon>\<open>rec_eval_term\<close>(vars, defs, b)
@@ -2325,28 +2325,28 @@ definition "eval_term_rec_step" :: \<open>((((bool list) list) \<Rightarrow> ((b
   \<rbrakk>)\<close>
 
 (* Rust: eval_term *)
-definition "eval_term" :: \<open>((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "eval_term" :: \<open>((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> CoreTerm \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>eval_term \<equiv> ((eval_term_rec_step ^^ urust_fuel) (\<lambda>vars defs t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: eval_defs *)
-definition "eval_defs" :: \<open>CoreProblem \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, (bool list) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "eval_defs" :: \<open>CoreProblem \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ('s, (bool rvec) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>eval_defs \<equiv> \<lambda>p m. FunctionBody \<lbrakk>
-    let mut defs = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (bool list) list\<rrangle> }; \<llangle>init_2 :: (bool list) list\<rrangle> };
+    let mut defs = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 24 8\<rrangle>); \<llangle>vec_1 :: (bool rvec) rvec\<rrangle> }; \<llangle>res_2 :: (bool rvec) rvec\<rrangle> }; \<llangle>init_3 :: (bool rvec) rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(p.CoreProblem_defs) {
-      let v = eval_term(m, * defs, p.CoreProblem_defs[* j]);
-      vec_push(defs, v);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(p.CoreProblem_defs) {
+      let v = eval_term(m, * defs, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.CoreProblem_defs)[* j]);
+      rvec_push(defs, v);
       * j += 1_usize;
     };
     * defs
   \<rbrakk>\<close>
 
 (* Rust: bits_one *)
-definition "bits_one" :: \<open>(64 word) \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits_one" :: \<open>(64 word) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits_one \<equiv> \<lambda>w. FunctionBody \<lbrakk>
-    let mut r = { let init_1 = vec_from_elem(false, w); \<llangle>init_1 :: bool list\<rrangle> };
+    let mut r = { let init_1 = rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, w); \<llangle>init_1 :: bool rvec\<rrangle> };
     if w > 0_usize {
-      * (r[0_usize]) = true;
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(r)[0_usize]) = true;
     };
     * r
   \<rbrakk>\<close>
@@ -2365,18 +2365,18 @@ definition "var_index" :: \<open>CoreTerm \<Rightarrow> ('s, 64 word, 'abort, 'i
   \<rbrakk>\<close>
 
 (* Rust: invert *)
-definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, ((64 word) \<times> (bool list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ('s, ((64 word) \<times> (bool rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>invert \<equiv> \<lambda>t k v m dv dv2. FunctionBody \<lbrakk>
-    let n = len(dv2);
+    let n = rvec_len(dv2);
     match t {
       CoreTerm_Not(a) \<Rightarrow> {
         (ref_index(a, n), bits_not(v))
       },
       CoreTerm_Extract(hi, lo, a) \<Rightarrow> {
         let ia = ref_index(a, n);
-        let w = len(dv2[ia]);
-        let low = bits_concat(v, vec_from_elem(false, lo));
-        (ia, bits_concat(vec_from_elem(false, (w - 1_usize) - hi), low))
+        let w = rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(dv2)[ia]);
+        let low = bits_concat(v, rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, lo));
+        (ia, bits_concat(rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, (w - 1_usize) - hi), low))
       },
       CoreTerm_Bin(op_v, a, b) \<Rightarrow> {
         let ic = if k == 3_usize {
@@ -2399,44 +2399,44 @@ definition "invert" :: \<open>CoreTerm \<Rightarrow> (64 word) \<Rightarrow> (bo
             (ic, bits_bitwise(op_v, v, o_v))
           },
           BinOp_Eq \<Rightarrow> {
-            if v[0_usize] {
+            if \<llangle>rvec_elems\<rrangle>\<^sub>1(v)[0_usize] {
               (ic, o_v)
             } else {
               (ic, bits_not(o_v))
             }
           },
           _ \<Rightarrow> {
-            (ic, v)
+            (ic, rvec_clone(v))
           }
         }
       },
       CoreTerm_Ite(c, a, _) \<Rightarrow> {
         let ia = ref_index(a, n);
-        let mut r = { let init_3 = { let res_2 = []; \<llangle>res_2 :: bool list\<rrangle> }; \<llangle>init_3 :: bool list\<rrangle> };
-        vec_push(r, bits_eq(v, dv[ia]));
+        let mut r = { let init_4 = { let res_3 = { let vec_2 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_2 :: bool rvec\<rrangle> }; \<llangle>res_3 :: bool rvec\<rrangle> }; \<llangle>init_4 :: bool rvec\<rrangle> };
+        rvec_push(r, bits_eq(v, \<llangle>rvec_elems\<rrangle>\<^sub>1(dv)[ia]));
         (ref_index(c, n), * r)
       },
       _ \<Rightarrow> {
-        (n, v)
+        (n, rvec_clone(v))
       }
     }
   \<rbrakk>\<close>
 
 (* Rust: settle *)
-definition "settle" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> ((bool list) list) \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> ('s, (((bool list) list) \<times> ((bool list) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "settle" :: \<open>(CoreTerm rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> ('s, (((bool rvec) rvec) \<times> ((bool rvec) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>settle \<equiv> \<lambda>defs kind dv2 dv m k v. FunctionBody \<lbrakk>
-    let mut dv = { let init_1 = dv; \<llangle>init_1 :: (bool list) list\<rrangle> };
-    let mut m = { let init_2 = m; \<llangle>init_2 :: (bool list) list\<rrangle> };
+    let mut dv = { let init_1 = dv; \<llangle>init_1 :: (bool rvec) rvec\<rrangle> };
+    let mut m = { let init_2 = m; \<llangle>init_2 :: (bool rvec) rvec\<rrangle> };
     let mut j = k;
-    let mut v = { let init_3 = v; \<llangle>init_3 :: bool list\<rrangle> };
+    let mut v = { let init_3 = v; \<llangle>init_3 :: bool rvec\<rrangle> };
     let mut i = 0_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) <= k {
-      * (dv[* j]) = * v;
-      if (kind[* j]) == 1_usize {
-        * (m[var_index(defs[* j])]) = * v;
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(dv)[* j]) = rvec_clone(* v);
+      if (\<llangle>rvec_elems\<rrangle>\<^sub>1(kind)[* j]) == 1_usize {
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(m)[var_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(defs)[* j])]) = * v;
         return (* dv, * m);
       };
-      let destr_4 = invert(defs[* j], kind[* j], * v, * m, * dv, dv2);
+      let destr_4 = invert(\<llangle>rvec_elems\<rrangle>\<^sub>1(defs)[* j], \<llangle>rvec_elems\<rrangle>\<^sub>1(kind)[* j], * v, * m, * dv, dv2);
       let a = destr_4.0;
       let va = destr_4.1;
       * j = a;
@@ -2447,29 +2447,29 @@ definition "settle" :: \<open>(CoreTerm list) \<Rightarrow> ((64 word) list) \<R
   \<rbrakk>\<close>
 
 (* Rust: reconstruct *)
-definition "reconstruct" :: \<open>CoreProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> CoreProblem \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, (bool list) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "reconstruct" :: \<open>CoreProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> CoreProblem \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ('s, (bool rvec) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>reconstruct \<equiv> \<lambda>q kind mark q2 m2. FunctionBody \<lbrakk>
     let dv2 = eval_defs(q2, m2);
-    let mut m = { let init_1 = m2; \<llangle>init_1 :: (bool list) list\<rrangle> };
-    let mut dv = { let init_3 = { let res_2 = []; \<llangle>res_2 :: (bool list) list\<rrangle> }; \<llangle>init_3 :: (bool list) list\<rrangle> };
+    let mut m = { let init_1 = rvec_clone(m2); \<llangle>init_1 :: (bool rvec) rvec\<rrangle> };
+    let mut dv = { let init_4 = { let res_3 = { let vec_2 = rvec_new(\<llangle>make_elem_layout 24 8\<rrangle>); \<llangle>vec_2 :: (bool rvec) rvec\<rrangle> }; \<llangle>res_3 :: (bool rvec) rvec\<rrangle> }; \<llangle>init_4 :: (bool rvec) rvec\<rrangle> };
     let mut k = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(q.CoreProblem_defs) {
-      if (mark[* k]) == 1_usize {
-        vec_push(dv, { let res_4 = []; \<llangle>res_4 :: bool list\<rrangle> });
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(q.CoreProblem_defs) {
+      if (\<llangle>rvec_elems\<rrangle>\<^sub>1(mark)[* k]) == 1_usize {
+        rvec_push(dv, { let res_6 = { let vec_5 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_5 :: bool rvec\<rrangle> }; \<llangle>res_6 :: bool rvec\<rrangle> });
       } else {
-        if (kind[* k]) == 0_usize {
-          let v = eval_term(* m, * dv, q.CoreProblem_defs[* k]);
-          vec_push(dv, v);
+        if (\<llangle>rvec_elems\<rrangle>\<^sub>1(kind)[* k]) == 0_usize {
+          let v = eval_term(* m, * dv, \<llangle>rvec_elems\<rrangle>\<^sub>1(q.CoreProblem_defs)[* k]);
+          rvec_push(dv, v);
         } else {
-          vec_push(dv, { let res_5 = []; \<llangle>res_5 :: bool list\<rrangle> });
-          let v = if (mark[* k]) == 2_usize {
-            bits_one(len(dv2[* k]))
+          rvec_push(dv, { let res_8 = { let vec_7 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_7 :: bool rvec\<rrangle> }; \<llangle>res_8 :: bool rvec\<rrangle> });
+          let v = if (\<llangle>rvec_elems\<rrangle>\<^sub>1(mark)[* k]) == 2_usize {
+            bits_one(rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(dv2)[* k]))
           } else {
-            dv2[* k]
+            rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(dv2)[* k])
           };
-          let destr_6 = settle(q.CoreProblem_defs, kind, dv2, * dv, * m, * k, v);
-          let dv1 = destr_6.0;
-          let m1 = destr_6.1;
+          let destr_9 = settle(q.CoreProblem_defs, kind, dv2, * dv, * m, * k, v);
+          let dv1 = destr_9.0;
+          let m1 = destr_9.1;
           * dv = dv1;
           * m = m1;
         }
@@ -2498,19 +2498,19 @@ definition "solve" :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort, 'i promp
   \<rbrakk>\<close>
 
 (* Rust: bits1 *)
-definition "bits1" :: \<open>bool \<Rightarrow> ('s, bool list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "bits1" :: \<open>bool \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bits1 \<equiv> \<lambda>b. FunctionBody \<lbrakk>
-    let mut v = { let init_2 = { let res_1 = []; \<llangle>res_1 :: bool list\<rrangle> }; \<llangle>init_2 :: bool list\<rrangle> };
-    vec_push(v, b);
+    let mut v = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
+    rvec_push(v, b);
     * v
   \<rbrakk>\<close>
 
 (* Rust: tr_push *)
 definition "tr_push" :: \<open>Tr \<Rightarrow> Term \<Rightarrow> ('s, (Tr \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_push \<equiv> \<lambda>s t. FunctionBody \<lbrakk>
-    let k = len(s.Tr_defs);
-    let mut defs = { let init_1 = s.Tr_defs; \<llangle>init_1 :: Term list\<rrangle> };
-    vec_push(defs, t);
+    let k = rvec_len(s.Tr_defs);
+    let mut defs = { let init_1 = s.Tr_defs; \<llangle>init_1 :: Term rvec\<rrangle> };
+    rvec_push(defs, t);
     (Tr_mk { Tr_defs: * defs }, k)
   \<rbrakk>\<close>
 
@@ -2549,8 +2549,8 @@ definition "in_fragment" :: \<open>SmtProblem \<Rightarrow> ('s, bool, 'abort, '
       return false;
     };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(p.SmtProblem_funs) {
-      if len(p.SmtProblem_funs[* i].SmtFun_args) != 0_usize {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(p.SmtProblem_funs) {
+      if rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_funs)[* i].SmtFun_args) != 0_usize {
         return false;
       };
       * i += 1_usize;
@@ -2656,39 +2656,39 @@ definition "tr_op" :: \<open>SmtOp \<Rightarrow> ('s, Op, 'abort, 'i prompt, 'o 
   \<rbrakk>\<close>
 
 (* Rust: fold_left *)
-definition "fold_left_fn" :: \<open>SmtOp \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "fold_left_fn" :: \<open>SmtOp \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>fold_left_fn \<equiv> \<lambda>o_v ks. FunctionBody \<lbrakk>
-    let mut acc = tref(ks[0_usize]);
+    let mut acc = tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]);
     let mut i = 1_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ks) {
-      * acc = tbin(tr_op(o_v), * acc, tref(ks[* i]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ks) {
+      * acc = tbin(tr_op(o_v), * acc, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[* i]));
       * i += 1_usize;
     };
     * acc
   \<rbrakk>\<close>
 
 (* Rust: chain *)
-definition "chain" :: \<open>SmtOp \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "chain" :: \<open>SmtOp \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>chain \<equiv> \<lambda>o_v ks. FunctionBody \<lbrakk>
-    let mut acc = tbin(tr_op(o_v), tref(ks[0_usize]), tref(ks[1_usize]));
+    let mut acc = tbin(tr_op(o_v), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[1_usize]));
     let mut i = 2_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ks) {
-      * acc = tbin(Op_And, * acc, tbin(tr_op(o_v), tref(ks[(* i) - 1_usize]), tref(ks[* i])));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ks) {
+      * acc = tbin(Op_And, * acc, tbin(tr_op(o_v), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[(* i) - 1_usize]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[* i])));
       * i += 1_usize;
     };
     * acc
   \<rbrakk>\<close>
 
 (* Rust: pairwise *)
-definition "pairwise" :: \<open>((64 word) list) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "pairwise" :: \<open>((64 word) rvec) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>pairwise \<equiv> \<lambda>ks. FunctionBody \<lbrakk>
-    let mut acc = tbin(Op_Distinct, tref(ks[0_usize]), tref(ks[1_usize]));
+    let mut acc = tbin(Op_Distinct, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[1_usize]));
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ks) {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ks) {
       let mut j = (* i) + 1_usize;
-      #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(ks) {
+      #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(ks) {
         if ((* i) != 0_usize) || ((* j) != 1_usize) {
-          * acc = tbin(Op_And, * acc, tbin(Op_Distinct, tref(ks[* i]), tref(ks[* j])));
+          * acc = tbin(Op_And, * acc, tbin(Op_Distinct, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[* i]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[* j])));
         };
         * j += 1_usize;
       };
@@ -2698,27 +2698,27 @@ definition "pairwise" :: \<open>((64 word) list) \<Rightarrow> ('s, Term, 'abort
   \<rbrakk>\<close>
 
 (* Rust: implies *)
-definition "implies" :: \<open>((64 word) list) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "implies" :: \<open>((64 word) rvec) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>implies \<equiv> \<lambda>ks. FunctionBody \<lbrakk>
-    let n = len(ks);
-    let mut acc = tref(ks[n - 1_usize]);
+    let n = rvec_len(ks);
+    let mut acc = tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[n - 1_usize]);
     let mut i = n - 1_usize;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) > 0_usize {
       * i -= 1_usize;
-      * acc = tbin(Op_Or, Term_Not_mk(tref(ks[* i])), * acc);
+      * acc = tbin(Op_Or, Term_Not_mk(tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[* i])), * acc);
     };
     * acc
   \<rbrakk>\<close>
 
 (* Rust: tr_app *)
-definition "tr_app" :: \<open>SmtOp \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "tr_app" :: \<open>SmtOp \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, Term, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_app \<equiv> \<lambda>o_v ks. FunctionBody \<lbrakk>
     match o_v {
       SmtOp_Not | SmtOp_Bvnot \<Rightarrow> {
-        Term_Not_mk(tref(ks[0_usize]))
+        Term_Not_mk(tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_Bvneg \<Rightarrow> {
-        Term_Neg_mk(tref(ks[0_usize]))
+        Term_Neg_mk(tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_And | SmtOp_Or | SmtOp_Xor | SmtOp_Bvand | SmtOp_Bvor | SmtOp_Bvadd | SmtOp_Bvmul | SmtOp_Bvxor \<Rightarrow> {
         fold_left_fn(o_v, ks)
@@ -2733,48 +2733,48 @@ definition "tr_app" :: \<open>SmtOp \<Rightarrow> ((64 word) list) \<Rightarrow>
         pairwise(ks)
       },
       SmtOp_Ite \<Rightarrow> {
-        Term_Ite_mk(tref(ks[0_usize]), tref(ks[1_usize]), tref(ks[2_usize]))
+        Term_Ite_mk(tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[1_usize]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[2_usize]))
       },
       SmtOp_Extract(i, j) \<Rightarrow> {
-        Term_Extract_mk(i, j, tref(ks[0_usize]))
+        Term_Extract_mk(i, j, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_Repeat(i) \<Rightarrow> {
-        Term_Repeat_mk(i, tref(ks[0_usize]))
+        Term_Repeat_mk(i, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_ZeroExtend(i) \<Rightarrow> {
-        Term_ZeroExtend_mk(i, tref(ks[0_usize]))
+        Term_ZeroExtend_mk(i, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_SignExtend(i) \<Rightarrow> {
-        Term_SignExtend_mk(i, tref(ks[0_usize]))
+        Term_SignExtend_mk(i, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_RotateLeft(i) \<Rightarrow> {
-        Term_RotateLeft_mk(i, tref(ks[0_usize]))
+        Term_RotateLeft_mk(i, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       SmtOp_RotateRight(i) \<Rightarrow> {
-        Term_RotateRight_mk(i, tref(ks[0_usize]))
+        Term_RotateRight_mk(i, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]))
       },
       _ \<Rightarrow> {
-        tbin(tr_op(o_v), tref(ks[0_usize]), tref(ks[1_usize]))
+        tbin(tr_op(o_v), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[0_usize]), tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(ks)[1_usize]))
       }
     }
   \<rbrakk>\<close>
 
 text \<open>Recursive group tr_args, tr_term: defined by iterating tr_args_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "tr_args_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Tr \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, (Tr \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Tr \<Rightarrow> SmtTerm \<Rightarrow> ('s, (Tr \<times> Term \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Tr \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, (Tr \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Tr \<Rightarrow> SmtTerm \<Rightarrow> ('s, (Tr \<times> Term \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "tr_args_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Tr \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, (Tr \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Tr \<Rightarrow> SmtTerm \<Rightarrow> ('s, (Tr \<times> Term \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Tr \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, (Tr \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Tr \<Rightarrow> SmtTerm \<Rightarrow> ('s, (Tr \<times> Term \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>tr_args_rec_step \<equiv> \<lambda>(rec_tr_args, rec_tr_term). (\<lambda>p dm env s ts. FunctionBody \<lbrakk>
     let mut s = s;
-    let mut ks = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut ks = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_1 :: (64 word) rvec\<rrangle> }; \<llangle>res_2 :: (64 word) rvec\<rrangle> }; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ts) {
-      let destr_3 = \<epsilon>\<open>rec_tr_term\<close>(p, dm, env, * s, ts[* i]);
-      let s1 = destr_3.0;
-      let t = destr_3.1;
-      let destr_4 = tr_push(s1, t);
-      let s2 = destr_4.0;
-      let k = destr_4.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ts) {
+      let destr_4 = \<epsilon>\<open>rec_tr_term\<close>(p, dm, env, * s, \<llangle>rvec_elems\<rrangle>\<^sub>1(ts)[* i]);
+      let s1 = destr_4.0;
+      let t = destr_4.1;
+      let destr_5 = tr_push(s1, t);
+      let s2 = destr_5.0;
+      let k = destr_5.1;
       * s = s2;
-      vec_push(ks, k);
+      rvec_push(ks, k);
       * i += 1_usize;
     };
     (* s, * ks)
@@ -2785,22 +2785,22 @@ definition "tr_args_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) li
         (s, Term_Const_mk(bits1(b)))
       },
       SmtTerm_BvConst(bits) \<Rightarrow> {
-        (s, Term_Const_mk(bits))
+        (s, Term_Const_mk(rvec_clone(bits)))
       },
       SmtTerm_Param(k) \<Rightarrow> {
-        (s, tref(env[k]))
+        (s, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(env)[k]))
       },
       SmtTerm_Fun(i, _) \<Rightarrow> {
         (s, Term_Var_mk(i))
       },
       SmtTerm_Def(d, args) \<Rightarrow> {
-        if len(p.SmtProblem_defs[d].SmtDef_params) == 0_usize {
-          (s, tref(dm[d]))
+        if rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[d].SmtDef_params) == 0_usize {
+          (s, tref(\<llangle>rvec_elems\<rrangle>\<^sub>1(dm)[d]))
         } else {
           let destr_1 = \<epsilon>\<open>rec_tr_args\<close>(p, dm, env, s, args);
           let s = destr_1.0;
           let ks = destr_1.1;
-          \<epsilon>\<open>rec_tr_term\<close>(p, dm, ks, s, p.SmtProblem_defs[d].SmtDef_body)
+          \<epsilon>\<open>rec_tr_term\<close>(p, dm, ks, s, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[d].SmtDef_body)
         }
       },
       SmtTerm_App(o_v, args) \<Rightarrow> {
@@ -2813,74 +2813,74 @@ definition "tr_args_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) li
   \<rbrakk>)\<close>
 
 (* Rust: tr_args *)
-definition "tr_args" :: \<open>SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Tr \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, (Tr \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "tr_args" :: \<open>SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Tr \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, (Tr \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_args \<equiv> (fst ((tr_args_rec_step ^^ urust_fuel) (\<lambda>p dm env s ts. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>,
    \<lambda>p dm env s t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>)))\<close>
 
 (* Rust: tr_term *)
-definition "tr_term" :: \<open>SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Tr \<Rightarrow> SmtTerm \<Rightarrow> ('s, (Tr \<times> Term \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "tr_term" :: \<open>SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Tr \<Rightarrow> SmtTerm \<Rightarrow> ('s, (Tr \<times> Term \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_term \<equiv> (snd ((tr_args_rec_step ^^ urust_fuel) (\<lambda>p dm env s ts. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>,
    \<lambda>p dm env s t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>)))\<close>
 
 (* Rust: tr_problem *)
 definition "tr_problem" :: \<open>SmtProblem \<Rightarrow> ('s, Problem, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_problem \<equiv> \<lambda>p. FunctionBody \<lbrakk>
-    let mut widths = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut widths = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_1 :: (64 word) rvec\<rrangle> }; \<llangle>res_2 :: (64 word) rvec\<rrangle> }; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(p.SmtProblem_funs) {
-      vec_push(widths, sort_width(p.SmtProblem_funs[* i].SmtFun_ret));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(p.SmtProblem_funs) {
+      rvec_push(widths, sort_width(\<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_funs)[* i].SmtFun_ret));
       * i += 1_usize;
     };
-    let mut s = Tr_mk { Tr_defs: { let res_3 = []; \<llangle>res_3 :: Term list\<rrangle> } };
-    let mut dm = { let init_5 = { let res_4 = []; \<llangle>res_4 :: (64 word) list\<rrangle> }; \<llangle>init_5 :: (64 word) list\<rrangle> };
-    let no_params = { let res_6 = []; \<llangle>res_6 :: (64 word) list\<rrangle> };
+    let mut s = Tr_mk { Tr_defs: { let res_5 = { let vec_4 = rvec_new(\<llangle>make_elem_layout 32 8\<rrangle>); \<llangle>vec_4 :: Term rvec\<rrangle> }; \<llangle>res_5 :: Term rvec\<rrangle> } };
+    let mut dm = { let init_8 = { let res_7 = { let vec_6 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_6 :: (64 word) rvec\<rrangle> }; \<llangle>res_7 :: (64 word) rvec\<rrangle> }; \<llangle>init_8 :: (64 word) rvec\<rrangle> };
+    let no_params = { let res_10 = { let vec_9 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_9 :: (64 word) rvec\<rrangle> }; \<llangle>res_10 :: (64 word) rvec\<rrangle> };
     let mut d = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < len(p.SmtProblem_defs) {
-      if len(p.SmtProblem_defs[* d].SmtDef_params) == 0_usize {
-        let destr_7 = tr_term(p, * dm, no_params, * s, p.SmtProblem_defs[* d].SmtDef_body);
-        let s1 = destr_7.0;
-        let t = destr_7.1;
-        let destr_8 = tr_push(s1, t);
-        let s2 = destr_8.0;
-        let k = destr_8.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < rvec_len(p.SmtProblem_defs) {
+      if rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[* d].SmtDef_params) == 0_usize {
+        let destr_11 = tr_term(p, * dm, no_params, * s, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[* d].SmtDef_body);
+        let s1 = destr_11.0;
+        let t = destr_11.1;
+        let destr_12 = tr_push(s1, t);
+        let s2 = destr_12.0;
+        let k = destr_12.1;
         * s = s2;
-        vec_push(dm, k);
+        rvec_push(dm, k);
       } else {
-        vec_push(dm, 0_usize);
+        rvec_push(dm, 0_usize);
       };
       * d += 1_usize;
     };
-    let mut asserts = { let init_10 = { let res_9 = []; \<llangle>res_9 :: Term list\<rrangle> }; \<llangle>init_10 :: Term list\<rrangle> };
+    let mut asserts = { let init_15 = { let res_14 = { let vec_13 = rvec_new(\<llangle>make_elem_layout 32 8\<rrangle>); \<llangle>vec_13 :: Term rvec\<rrangle> }; \<llangle>res_14 :: Term rvec\<rrangle> }; \<llangle>init_15 :: Term rvec\<rrangle> };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(p.SmtProblem_asserts) {
-      let destr_11 = tr_term(p, * dm, no_params, * s, p.SmtProblem_asserts[* j]);
-      let s1 = destr_11.0;
-      let t = destr_11.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(p.SmtProblem_asserts) {
+      let destr_16 = tr_term(p, * dm, no_params, * s, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_asserts)[* j]);
+      let s1 = destr_16.0;
+      let t = destr_16.1;
       * s = s1;
-      vec_push(asserts, t);
+      rvec_push(asserts, t);
       * j += 1_usize;
     };
     Problem_mk { Problem_widths: * widths, Problem_defs: * (s.Tr_defs), Problem_asserts: * asserts }
   \<rbrakk>\<close>
 
 (* Rust: tr_model *)
-definition "tr_model" :: \<open>SmtProblem \<Rightarrow> ((bool list) list) \<Rightarrow> ('s, SmtModel, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "tr_model" :: \<open>SmtProblem \<Rightarrow> ((bool rvec) rvec) \<Rightarrow> ('s, SmtModel, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_model \<equiv> \<lambda>p m. FunctionBody \<lbrakk>
-    let mut funs = { let init_2 = { let res_1 = []; \<llangle>res_1 :: SmtInterp list\<rrangle> }; \<llangle>init_2 :: SmtInterp list\<rrangle> };
+    let mut funs = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 48 8\<rrangle>); \<llangle>vec_1 :: SmtInterp rvec\<rrangle> }; \<llangle>res_2 :: SmtInterp rvec\<rrangle> }; \<llangle>init_3 :: SmtInterp rvec\<rrangle> };
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(p.SmtProblem_funs) {
-      let v = match p.SmtProblem_funs[* i].SmtFun_ret {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(p.SmtProblem_funs) {
+      let v = match \<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_funs)[* i].SmtFun_ret {
         SmtSort_Bool \<Rightarrow> {
-          SmtValue_Bool_mk(m[* i][0_usize])
+          SmtValue_Bool_mk(\<llangle>rvec_elems\<rrangle>\<^sub>1(\<llangle>rvec_elems\<rrangle>\<^sub>1(m)[* i])[0_usize])
         },
         _ \<Rightarrow> {
-          SmtValue_Bv_mk(m[* i])
+          SmtValue_Bv_mk(rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(m)[* i]))
         }
       };
-      vec_push(funs, SmtInterp_mk { SmtInterp_entries: { let res_3 = []; \<llangle>res_3 :: SmtEntry list\<rrangle> }, SmtInterp_default: v });
+      rvec_push(funs, SmtInterp_mk { SmtInterp_entries: { let res_5 = { let vec_4 = rvec_new(\<llangle>make_elem_layout 48 8\<rrangle>); \<llangle>vec_4 :: SmtEntry rvec\<rrangle> }; \<llangle>res_5 :: SmtEntry rvec\<rrangle> }, SmtInterp_default: v });
       * i += 1_usize;
     };
-    SmtModel_mk { SmtModel_domains: { let res_4 = []; \<llangle>res_4 :: (64 word) list\<rrangle> }, SmtModel_funs: * funs }
+    SmtModel_mk { SmtModel_domains: { let res_7 = { let vec_6 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_6 :: (64 word) rvec\<rrangle> }; \<llangle>res_7 :: (64 word) rvec\<rrangle> }, SmtModel_funs: * funs }
   \<rbrakk>\<close>
 
 (* Rust: cap *)
@@ -2915,14 +2915,14 @@ definition "sat_mul" :: \<open>(64 word) \<Rightarrow> (64 word) \<Rightarrow> (
 
 text \<open>Recursive group tr_count, tr_count_args: defined by iterating tr_count_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "tr_count_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "tr_count_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body) \<times> (SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>tr_count_rec_step \<equiv> \<lambda>(rec_tr_count, rec_tr_count_args). (\<lambda>p dc t. FunctionBody \<lbrakk>
     match t {
       SmtTerm_Def(d, args) \<Rightarrow> {
-        if len(p.SmtProblem_defs[d].SmtDef_params) == 0_usize {
+        if rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[d].SmtDef_params) == 0_usize {
           0_usize
         } else {
-          sat_add(\<epsilon>\<open>rec_tr_count_args\<close>(p, dc, args), dc[d])
+          sat_add(\<epsilon>\<open>rec_tr_count_args\<close>(p, dc, args), \<llangle>rvec_elems\<rrangle>\<^sub>1(dc)[d])
         }
       },
       SmtTerm_App(_, args) \<Rightarrow> {
@@ -2936,42 +2936,42 @@ definition "tr_count_rec_step" :: \<open>((SmtProblem \<Rightarrow> ((64 word) l
    \<lambda>p dc ts. FunctionBody \<lbrakk>
     let mut n = 0_usize;
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(ts) {
-      * n = sat_add(* n, sat_add(1_usize, \<epsilon>\<open>rec_tr_count\<close>(p, dc, ts[* i])));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(ts) {
+      * n = sat_add(* n, sat_add(1_usize, \<epsilon>\<open>rec_tr_count\<close>(p, dc, \<llangle>rvec_elems\<rrangle>\<^sub>1(ts)[* i])));
       * i += 1_usize;
     };
     * n
   \<rbrakk>)\<close>
 
 (* Rust: tr_count *)
-definition "tr_count" :: \<open>SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "tr_count" :: \<open>SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_count \<equiv> (fst ((tr_count_rec_step ^^ urust_fuel) (\<lambda>p dc t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>,
    \<lambda>p dc ts. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>)))\<close>
 
 (* Rust: tr_count_args *)
-definition "tr_count_args" :: \<open>SmtProblem \<Rightarrow> ((64 word) list) \<Rightarrow> (SmtTerm list) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "tr_count_args" :: \<open>SmtProblem \<Rightarrow> ((64 word) rvec) \<Rightarrow> (SmtTerm rvec) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_count_args \<equiv> (snd ((tr_count_rec_step ^^ urust_fuel) (\<lambda>p dc t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>,
    \<lambda>p dc ts. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>)))\<close>
 
 (* Rust: tr_size *)
 definition "tr_size" :: \<open>SmtProblem \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>tr_size \<equiv> \<lambda>p. FunctionBody \<lbrakk>
-    let mut dc = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut dc = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_1 :: (64 word) rvec\<rrangle> }; \<llangle>res_2 :: (64 word) rvec\<rrangle> }; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let mut n = 0_usize;
     let mut d = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < len(p.SmtProblem_defs) {
-      let c = tr_count(p, * dc, p.SmtProblem_defs[* d].SmtDef_body);
-      if len(p.SmtProblem_defs[* d].SmtDef_params) == 0_usize {
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < rvec_len(p.SmtProblem_defs) {
+      let c = tr_count(p, * dc, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[* d].SmtDef_body);
+      if rvec_len(\<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_defs)[* d].SmtDef_params) == 0_usize {
         * n = sat_add(* n, sat_add(1_usize, c));
-        vec_push(dc, 0_usize);
+        rvec_push(dc, 0_usize);
       } else {
-        vec_push(dc, c);
+        rvec_push(dc, c);
       };
       * d += 1_usize;
     };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(p.SmtProblem_asserts) {
-      * n = sat_add(* n, tr_count(p, * dc, p.SmtProblem_asserts[* j]));
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(p.SmtProblem_asserts) {
+      * n = sat_add(* n, tr_count(p, * dc, \<llangle>rvec_elems\<rrangle>\<^sub>1(p.SmtProblem_asserts)[* j]));
       * j += 1_usize;
     };
     * n
@@ -3029,17 +3029,17 @@ definition "bin_cost" :: \<open>Op \<Rightarrow> (64 word) \<Rightarrow> ('s, 64
 
 text \<open>Recursive group term_size: defined by iterating term_size_rec_step \<^term>\<open>urust_fuel\<close> times.\<close>
 
-definition "term_size_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
+definition "term_size_rec_step" :: \<open>((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body)) \<Rightarrow> ((((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body))\<close> where
   \<open>term_size_rec_step \<equiv> \<lambda>rec_term_size. (\<lambda>ws ds t. FunctionBody \<lbrakk>
     let destr_11 = match t {
       Term_Const(bs) \<Rightarrow> {
-        (len(bs), 0_usize)
+        (rvec_len(bs), 0_usize)
       },
       Term_Var(i) \<Rightarrow> {
-        (ws[i], 0_usize)
+        (\<llangle>rvec_elems\<rrangle>\<^sub>1(ws)[i], 0_usize)
       },
       Term_Ref(i) \<Rightarrow> {
-        (ds[i], 0_usize)
+        (\<llangle>rvec_elems\<rrangle>\<^sub>1(ds)[i], 0_usize)
       },
       Term_Not(a) \<Rightarrow> {
         \<epsilon>\<open>rec_term_size\<close>(ws, ds, a)
@@ -3105,40 +3105,40 @@ definition "term_size_rec_step" :: \<open>((((64 word) list) \<Rightarrow> ((64 
   \<rbrakk>)\<close>
 
 (* Rust: term_size *)
-definition "term_size" :: \<open>((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+definition "term_size" :: \<open>((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> Term \<Rightarrow> ('s, ((64 word) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>term_size \<equiv> ((term_size_rec_step ^^ urust_fuel) (\<lambda>ws ds t. FunctionBody \<lbrakk> panic!("out of fuel") \<rbrakk>))\<close>
 
 (* Rust: size_ok *)
 definition "size_ok" :: \<open>Problem \<Rightarrow> ('s, bool, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>size_ok \<equiv> \<lambda>q. FunctionBody \<lbrakk>
-    let mut ds = { let init_2 = { let res_1 = []; \<llangle>res_1 :: (64 word) list\<rrangle> }; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut ds = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_1 :: (64 word) rvec\<rrangle> }; \<llangle>res_2 :: (64 word) rvec\<rrangle> }; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
     let mut d = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < len(q.Problem_defs) {
-      let destr_3 = term_size(q.Problem_widths, * ds, q.Problem_defs[* d]);
-      let w = destr_3.0;
-      vec_push(ds, w);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* d) < rvec_len(q.Problem_defs) {
+      let destr_4 = term_size(q.Problem_widths, * ds, \<llangle>rvec_elems\<rrangle>\<^sub>1(q.Problem_defs)[* d]);
+      let w = destr_4.0;
+      rvec_push(ds, w);
       * d += 1_usize;
     };
     let mut n = 1_usize;
     let mut i = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < len(q.Problem_widths) {
-      * n = sat_add(* n, q.Problem_widths[* i]);
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(q.Problem_widths) {
+      * n = sat_add(* n, \<llangle>rvec_elems\<rrangle>\<^sub>1(q.Problem_widths)[* i]);
       * i += 1_usize;
     };
-    * n = sat_add(* n, len(q.Problem_widths));
-    * n = sat_add(* n, len(q.Problem_defs));
-    * n = sat_add(* n, len(q.Problem_asserts));
+    * n = sat_add(* n, rvec_len(q.Problem_widths));
+    * n = sat_add(* n, rvec_len(q.Problem_defs));
+    * n = sat_add(* n, rvec_len(q.Problem_asserts));
     let mut k = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(q.Problem_defs) {
-      let destr_4 = term_size(q.Problem_widths, * ds, q.Problem_defs[* k]);
-      let g = destr_4.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(q.Problem_defs) {
+      let destr_5 = term_size(q.Problem_widths, * ds, \<llangle>rvec_elems\<rrangle>\<^sub>1(q.Problem_defs)[* k]);
+      let g = destr_5.1;
       * n = sat_add(* n, g);
       * k += 1_usize;
     };
     let mut j = 0_usize;
-    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(q.Problem_asserts) {
-      let destr_5 = term_size(q.Problem_widths, * ds, q.Problem_asserts[* j]);
-      let g = destr_5.1;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(q.Problem_asserts) {
+      let destr_6 = term_size(q.Problem_widths, * ds, \<llangle>rvec_elems\<rrangle>\<^sub>1(q.Problem_asserts)[* j]);
+      let g = destr_6.1;
       * n = sat_add(* n, g);
       * j += 1_usize;
     };

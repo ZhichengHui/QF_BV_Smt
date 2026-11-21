@@ -225,91 +225,91 @@ lemma blast_correct:
    wf_st s' \<and> ext s s' \<and> lits_lt (fst s') ls \<and> length ls = cwidth ws ds t \<and>
    (\<forall>\<sigma>. cnf_sem \<sigma> (snd s') \<longrightarrow> val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) t)\<close>
 proof (induction t arbitrary: s s' ls)
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   then show ?case using const_correct[of s bs] by (auto simp: ext_refl)
 next
-  case (CoreTerm_Var i)
+  case (CoreTermL_Var i)
   then show ?case using nth_mem[of \<open>unat i\<close> vs] by (auto simp: env_ok_def ext_refl)
 next
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?case using nth_mem[of \<open>unat i\<close> dl] by (auto simp: env_ok_def ext_refl)
 next
-  case (CoreTerm_Not a)
+  case (CoreTermL_Not a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTerm_Not.prems(5) A by auto
-  have wa: \<open>cwt ws ds a\<close> using CoreTerm_Not.prems(1) by simp
-  have b1: \<open>fst s1 < 2 ^ 64\<close> using CoreTerm_Not.prems(6) E by simp
-  note IA = CoreTerm_Not.IH[OF wa CoreTerm_Not.prems(2-4) A b1]
+  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTermL_Not.prems(5) A by auto
+  have wa: \<open>cwt ws ds a\<close> using CoreTermL_Not.prems(1) by simp
+  have b1: \<open>fst s1 < 2 ^ 64\<close> using CoreTermL_Not.prems(6) E by simp
+  note IA = CoreTermL_Not.IH[OF wa CoreTermL_Not.prems(2-4) A b1]
   show ?case using IA not_correct[of \<open>fst s1\<close> la] by (auto simp: E)
 next
-  case (CoreTerm_Bin op a b)
+  case (CoreTermL_Bin op a b)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
   obtain s2 lb where B: \<open>blast_m vs dl s1 b = (s2, lb)\<close> by (cases \<open>blast_m vs dl s1 b\<close>)
-  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTerm_Bin.prems(5) A B by simp
+  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTermL_Bin.prems(5) A B by simp
   have le2: \<open>fst s2 \<le> fst s'\<close> using blast_bin_m_mono[of \<open>fst s2\<close> s2 op la lb] C by simp
   have le1: \<open>fst s1 \<le> fst s2\<close> using blast_m_mono[of \<open>fst s1\<close> s1 vs dl b] B by simp
   have wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
     and weq: \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ws ds a = cwidth ws ds b\<close>
-    using CoreTerm_Bin.prems(1) by simp_all
+    using CoreTermL_Bin.prems(1) by simp_all
   have b1: \<open>fst s1 < 2 ^ 64\<close> and b2: \<open>fst s2 < 2 ^ 64\<close>
-    using le1 le2 CoreTerm_Bin.prems(6) by linarith+
-  note IA = CoreTerm_Bin.IH(1)[OF wa CoreTerm_Bin.prems(2-4) A b1]
+    using le1 le2 CoreTermL_Bin.prems(6) by linarith+
+  note IA = CoreTermL_Bin.IH(1)[OF wa CoreTermL_Bin.prems(2-4) A b1]
   have e1: \<open>ext s s1\<close> and wf1: \<open>wf_st s1\<close> using IA by simp_all
   have env1: \<open>env_ok (fst s1) ws vs\<close> \<open>env_ok (fst s1) ds dl\<close>
-    using CoreTerm_Bin.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
-  note IB = CoreTerm_Bin.IH(2)[OF wb wf1 env1 B b2]
+    using CoreTermL_Bin.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
+  note IB = CoreTermL_Bin.IH(2)[OF wb wf1 env1 B b2]
   have e2: \<open>ext s1 s2\<close> and wf2: \<open>wf_st s2\<close> using IB by simp_all
   have la2: \<open>lits_lt (fst s2) la\<close> using IA le1 lits_lt_mono by blast
   have lb2: \<open>lits_lt (fst s2) lb\<close> using IB by simp
   have len: \<open>op \<noteq> BinOp_Concat \<longrightarrow> length la = length lb\<close> using IA IB weq by simp
-  note BB = blast_bin_correct[OF wf2 la2 lb2 len C CoreTerm_Bin.prems(6)]
+  note BB = blast_bin_correct[OF wf2 la2 lb2 len C CoreTermL_Bin.prems(6)]
   have e3: \<open>ext s2 s'\<close> using BB by simp
   show ?case
   proof (intro conjI allI impI)
     show \<open>wf_st s'\<close> \<open>lits_lt (fst s') ls\<close> using BB by simp_all
     show \<open>ext s s'\<close> using ext_trans[OF ext_trans[OF e1 e2] e3] .
-    show \<open>length ls = cwidth ws ds (CoreTerm_Bin op a b)\<close>
+    show \<open>length ls = cwidth ws ds (CoreTermL_Bin op a b)\<close>
       using BB IA IB by (simp add: bin_width_def)
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s')\<close>
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using ext_cnf_sem[OF e3 S] .
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF e2 S2] .
-    show \<open>val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (CoreTerm_Bin op a b)\<close>
+    show \<open>val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (CoreTermL_Bin op a b)\<close>
       using BB IA IB S S1 S2 by simp
   qed
 next
-  case (CoreTerm_Extract hi lo a)
+  case (CoreTermL_Extract hi lo a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTerm_Extract.prems(5) A by auto
+  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTermL_Extract.prems(5) A by auto
   have wa: \<open>cwt ws ds a\<close> and lohi: \<open>unat lo \<le> unat hi\<close> and hiw: \<open>unat hi < cwidth ws ds a\<close>
-    using CoreTerm_Extract.prems(1) by simp_all
-  have b1: \<open>fst s1 < 2 ^ 64\<close> using CoreTerm_Extract.prems(6) E by simp
-  note IA = CoreTerm_Extract.IH[OF wa CoreTerm_Extract.prems(2-4) A b1]
+    using CoreTermL_Extract.prems(1) by simp_all
+  have b1: \<open>fst s1 < 2 ^ 64\<close> using CoreTermL_Extract.prems(6) E by simp
+  note IA = CoreTermL_Extract.IH[OF wa CoreTermL_Extract.prems(2-4) A b1]
   have hil: \<open>unat hi < length la\<close> using IA hiw by simp
   show ?case using IA extract_correct[OF lohi hil, where n = \<open>fst s1\<close>] by (auto simp: E)
 next
-  case (CoreTerm_Ite c a b)
+  case (CoreTermL_Ite c a b)
   obtain s1 lc where A: \<open>blast_m vs dl s c = (s1, lc)\<close> by (cases \<open>blast_m vs dl s c\<close>)
   obtain s2 la where B: \<open>blast_m vs dl s1 a = (s2, la)\<close> by (cases \<open>blast_m vs dl s1 a\<close>)
   obtain s3 lb where C: \<open>blast_m vs dl s2 b = (s3, lb)\<close> by (cases \<open>blast_m vs dl s2 b\<close>)
-  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTerm_Ite.prems(5) A B C by simp
+  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTermL_Ite.prems(5) A B C by simp
   have le3: \<open>fst s3 \<le> fst s'\<close> using ite_vec_m_mono_le[of \<open>fst s3\<close> s3 \<open>lc ! 0\<close> la lb] D by simp
   have le2: \<open>fst s2 \<le> fst s3\<close> using blast_m_mono[of \<open>fst s2\<close> s2 vs dl b] C by simp
   have le1: \<open>fst s1 \<le> fst s2\<close> using blast_m_mono[of \<open>fst s1\<close> s1 vs dl a] B by simp
   have wc: \<open>cwt ws ds c\<close> and wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
     and wc1: \<open>cwidth ws ds c = 1\<close> and wab: \<open>cwidth ws ds a = cwidth ws ds b\<close>
-    using CoreTerm_Ite.prems(1) by simp_all
+    using CoreTermL_Ite.prems(1) by simp_all
   have b1: \<open>fst s1 < 2 ^ 64\<close> and b2: \<open>fst s2 < 2 ^ 64\<close> and b3: \<open>fst s3 < 2 ^ 64\<close>
-    using le1 le2 le3 CoreTerm_Ite.prems(6) by linarith+
-  note IC = CoreTerm_Ite.IH(1)[OF wc CoreTerm_Ite.prems(2-4) A b1]
+    using le1 le2 le3 CoreTermL_Ite.prems(6) by linarith+
+  note IC = CoreTermL_Ite.IH(1)[OF wc CoreTermL_Ite.prems(2-4) A b1]
   have e1: \<open>ext s s1\<close> and wf1: \<open>wf_st s1\<close> using IC by simp_all
   have env1: \<open>env_ok (fst s1) ws vs\<close> \<open>env_ok (fst s1) ds dl\<close>
-    using CoreTerm_Ite.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
-  note IA = CoreTerm_Ite.IH(2)[OF wa wf1 env1 B b2]
+    using CoreTermL_Ite.prems(3,4) ext_fst[OF e1] env_ok_mono by blast+
+  note IA = CoreTermL_Ite.IH(2)[OF wa wf1 env1 B b2]
   have e2: \<open>ext s1 s2\<close> and wf2: \<open>wf_st s2\<close> using IA by simp_all
   have env2: \<open>env_ok (fst s2) ws vs\<close> \<open>env_ok (fst s2) ds dl\<close>
     using env1 le1 env_ok_mono by blast+
-  note IB = CoreTerm_Ite.IH(3)[OF wb wf2 env2 C b3]
+  note IB = CoreTermL_Ite.IH(3)[OF wb wf2 env2 C b3]
   have e3: \<open>ext s2 s3\<close> and wf3: \<open>wf_st s3\<close> using IB by simp_all
   have lc1: \<open>length lc = 1\<close> using IC wc1 by simp
   have \<open>lc ! 0 \<in> set lc\<close> using lc1 by (auto intro!: nth_mem)
@@ -318,20 +318,20 @@ next
   have la3: \<open>lits_lt (fst s3) la\<close> using IA le2 lits_lt_mono by blast
   have lb3: \<open>lits_lt (fst s3) lb\<close> using IB by simp
   have len: \<open>length la = length lb\<close> using IA IB wab by simp
-  note IV = ite_vec_correct[OF wf3 lc3 la3 lb3 len D CoreTerm_Ite.prems(6)]
+  note IV = ite_vec_correct[OF wf3 lc3 la3 lb3 len D CoreTermL_Ite.prems(6)]
   have e4: \<open>ext s3 s'\<close> using IV by simp
   show ?case
   proof (intro conjI allI impI)
     show \<open>wf_st s'\<close> \<open>lits_lt (fst s') ls\<close> using IV by simp_all
     show \<open>ext s s'\<close> using ext_trans[OF ext_trans[OF ext_trans[OF e1 e2] e3] e4] .
-    show \<open>length ls = cwidth ws ds (CoreTerm_Ite c a b)\<close> using IV IA by simp
+    show \<open>length ls = cwidth ws ds (CoreTermL_Ite c a b)\<close> using IV IA by simp
   next
     fix \<sigma> assume S: \<open>cnf_sem \<sigma> (snd s')\<close>
     have S3: \<open>cnf_sem \<sigma> (snd s3)\<close> using ext_cnf_sem[OF e4 S] .
     have S2: \<open>cnf_sem \<sigma> (snd s2)\<close> using ext_cnf_sem[OF e3 S3] .
     have S1: \<open>cnf_sem \<sigma> (snd s1)\<close> using ext_cnf_sem[OF e2 S2] .
     have vc: \<open>val \<sigma> lc = (if lit_sem \<sigma> (lc ! 0) then 1 else 0)\<close> using val_single_enc[OF lc1] .
-    show \<open>val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (CoreTerm_Ite c a b)\<close>
+    show \<open>val \<sigma> ls = ceval ws ds (map (val \<sigma>) vs) (map (val \<sigma>) dl) (CoreTermL_Ite c a b)\<close>
       using IV IA IB IC S S1 S2 S3 vc by auto
   qed
 qed
@@ -540,15 +540,15 @@ lemma asserts_step_mono: \<open>fst x \<le> fst (asserts_step vs dl A x i)\<clos
 
 lemma encode_main:
   assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
-  shows \<open>wf_st s \<and> length vs = length (CoreProblem_widths p) \<and>
-    (\<forall>i < length vs. length (vs ! i) = unat (CoreProblem_widths p ! i)) \<and>
+  shows \<open>wf_st s \<and> length vs = length (CoreProblemL_widths p) \<and>
+    (\<forall>i < length vs. length (vs ! i) = unat (CoreProblemL_widths p ! i)) \<and>
     (\<forall>ls \<in> set vs. lits_lt (fst s) ls) \<and>
     (\<forall>\<sigma>. cnf_sem \<sigma> (snd s) \<longrightarrow> csatisfies p (map (map (lit_sem \<sigma>)) vs)) \<and>
     (\<forall>m. cis_assignment p m \<longrightarrow> csatisfies p m \<longrightarrow> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)))\<close>
 proof -
-  let ?W = \<open>CoreProblem_widths p\<close>
-  let ?D = \<open>CoreProblem_defs p\<close>
-  let ?A = \<open>CoreProblem_asserts p\<close>
+  let ?W = \<open>CoreProblemL_widths p\<close>
+  let ?D = \<open>CoreProblemL_defs p\<close>
+  let ?A = \<open>CoreProblemL_asserts p\<close>
   let ?ws = \<open>cvar_widths p\<close>
   let ?ds = \<open>cdef_widths ?ws [] ?D\<close>
   obtain s1 vs1 where V: \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W] = (s1, vs1)\<close>
@@ -638,8 +638,8 @@ theorem encode_complete:
 theorem encode_wf:
   assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close> \<open>fst s < 2 ^ 64\<close>
   shows \<open>(\<forall>c \<in> set (snd s). lits_lt (fst s) c) \<and> (\<forall>ls \<in> set vs. lits_lt (fst s) ls) \<and>
-         length vs = length (CoreProblem_widths p) \<and>
-         (\<forall>i < length vs. length (vs ! i) = unat (CoreProblem_widths p ! i))\<close>
+         length vs = length (CoreProblemL_widths p) \<and>
+         (\<forall>i < length vs. length (vs ! i) = unat (CoreProblemL_widths p ! i))\<close>
   using encode_main[OF assms(1-3)] by (simp add: wf_st_def)
 
 end

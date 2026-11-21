@@ -1,5 +1,5 @@
 theory QFBV_CoreSpec
-  imports "QFBV_Spec.QFBV_Spec"
+  imports QFBV_Rvec
 begin
 
 section \<open>Case analysis on the word enumerations\<close>
@@ -221,9 +221,9 @@ text \<open>
   evaluates to 1; the answer \<open>Unsat\<close> means that no model exists.
 
   The statement \<open>solve_correct\<close> at the end of this theory: for every well-sorted problem
-  (\<open>problem_wt\<close>) whose \<open>size_bound\<close> is less than \<open>2^64\<close> (\<open>sizes_ok\<close>), there is a number \<open>N\<close>
+  (\<open>problem_wt\<close>) whose \<open>ovf_bound\<close> is less than \<open>2^56\<close> (\<open>sizes_ok\<close>), there is a number \<open>N\<close>
   such that the solver, translated with any fuel \<open>\<ge> N\<close>, satisfies the contract (and so does not
-  panic). For a problem that is not well-sorted, or whose \<open>size_bound\<close> is not below \<open>2^64\<close>, the
+  panic). For a problem that is not well-sorted, or whose \<open>ovf_bound\<close> is not below \<open>2^56\<close>, the
   statement says nothing.
 
   The input of the solver is a value of type \<^typ>\<open>Problem\<close>, not SMT-LIB text. Its terms
@@ -724,9 +724,11 @@ definition ovf_bound :: \<open>ProblemL \<Rightarrow> nat\<close> where
      4 * (1 + sum_list ws + length ws + length (ProblemL_defs p) + length (ProblemL_asserts p) +
           sum_list (map (\<lambda>t. 4 * lweight ws ds t + ecount ws ds t) (ProblemL_defs p @ ProblemL_asserts p)))\<close>
 
-text \<open>The condition on the size of a problem: \<^const>\<open>ovf_bound\<close> is below \<open>2^63\<close>.\<close>
+text \<open>The condition on the size of a problem: \<^const>\<open>ovf_bound\<close> is below \<open>2^56\<close>. The bound
+  keeps every vector the solver builds well below the largest capacity of a \<^verbatim>\<open>Vec\<close>
+  (\<^const>\<open>rvec_cap_max\<close>, at least \<open>2^57\<close> for the element types of the solver).\<close>
 definition sizes_ok :: \<open>ProblemL \<Rightarrow> bool\<close> where
-  \<open>sizes_ok p \<equiv> ovf_bound p < 2 ^ 63\<close>
+  \<open>sizes_ok p \<equiv> ovf_bound p < 2 ^ 56\<close>
 
 subsection \<open>The statement over all instances with enough fuel\<close>
 

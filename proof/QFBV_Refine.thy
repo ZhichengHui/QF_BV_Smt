@@ -1532,7 +1532,9 @@ next
   have okb: \<open>bok N vs dl ?s1 b\<close>
     using cwt(2) sub(2) CoreTermL_Bin.prems(3,4) m2 by (rule CoreTermL_Bin.IH(2))
   have \<open>bin_ok N ?s2 op (snd (blast_m vs dl s a)) (snd (blast_m vs dl ?s1 b))\<close>
-    unfolding bin_ok_def using fin la lb cwt(3) wa sub(3) CoreTermL_Bin.prems(3,4) divrem_len
+    unfolding bin_ok_def
+    using fin la lb cwt(3) wa sub(3) CoreTermL_Bin.prems(3,4)
+      divrem_len[of ?s2 \<open>snd (blast_m vs dl s a)\<close> \<open>snd (blast_m vs dl ?s1 b)\<close>]
     by (cases op) (simp_all add: bin_width_def)
   then show ?case using oka okb by simp
 next

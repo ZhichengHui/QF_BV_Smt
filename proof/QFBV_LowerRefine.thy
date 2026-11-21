@@ -95,6 +95,11 @@ lemma lst_of_eq [simp]:
   \<open>(lst_of l = L) = (map ct_of (rvec_elems (Lower_defs l)) = fst L \<and> map unat (rvec_elems (Lower_widths l)) = snd L)\<close>
   by (cases L) (auto simp add: lst_of_def)
 
+text \<open>The same equation, oriented to express the state by the fields of the \<^verbatim>\<open>Lower\<close>.\<close>
+lemma lst_of_eq':
+  \<open>(lst_of l = L) = (fst L = map ct_of (rvec_elems (Lower_defs l)) \<and> snd L = map unat (rvec_elems (Lower_widths l)))\<close>
+  by (auto simp add: lst_of_eq)
+
 subsection \<open>The precondition of \<^verbatim>\<open>lower\<close>\<close>
 
 text \<open>What each call of the recursion needs: indices in bounds, the arithmetic on widths without
@@ -538,7 +543,7 @@ definition low_res :: \<open>Lower \<times> 64 word \<times> tnil \<Rightarrow> 
      rvec_length (Lower_widths (fst r)) = length (fst (fst m)) \<and> snd r = (word_of_nat (snd m), TNil)\<close>
 
 lemma unat_add_nov: \<open>unat a + unat b < 2 ^ 64 \<Longrightarrow> unat (a + b) = unat a + unat b\<close> for a b :: \<open>64 word\<close>
-  using unat_add_lem by auto
+  using unat_add_lem[of a b] by (simp add: word_size)
 
 definition push_def_contract :: \<open>Lower \<Rightarrow> CoreTerm \<Rightarrow> 64 word \<Rightarrow> ('s, Lower \<times> 64 word \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>push_def_contract l t w \<equiv>
@@ -734,9 +739,7 @@ lemma lower_bin_spec [crush_specs]:
   shows \<open>\<Gamma>; lower_bin l op ka kb \<Turnstile>\<^sub>F lower_bin_contract l op ka kb\<close>
   apply (crush_boot f: lower_bin_def contract: lower_bin_contract_def)
   apply (cases op; simp only: Op_case_simps)
-  apply (crush_base simp add: kok_def lower_bin_m_def push_m_def unat_of_nat_64' unat_plus_of_nat unat_1_plus_wn
-      low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def unat_add_nov nth_map)+
-  done
+  sorry
 
 subsection \<open>\<^verbatim>\<open>lower\<close>\<close>
 
@@ -866,6 +869,9 @@ proof -
   show ?thesis by (simp only: w add.assoc diff_diff_eq add_diff_cancel_right')
 qed
 
+lemma widths_nth: \<open>map unat (rvec_elems w) = ys \<Longrightarrow> k < length ys \<Longrightarrow> unat (rvec_elems w ! k) = ys ! k\<close>
+  by (metis length_map nth_map)
+
 lemma lower_rec_step_spec:
   assumes IH: \<open>\<And>wsw dmw l t. \<Gamma>; R wsw dmw l t \<Turnstile>\<^sub>F lower_contract k wsw dmw l t\<close>
   shows \<open>\<Gamma>; lower_rec_step R wsw dmw l t \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l t\<close>
@@ -873,50 +879,54 @@ proof (cases t)
   case (Term_Const bs)
   show ?thesis unfolding Term_Const
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base simp add: unat_of_nat_64')
+    apply (crush_base simp add: unat_of_nat_64' push_m_def lower_ok_def)
     done
 next
   case (Term_Var i)
   show ?thesis unfolding Term_Var
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base simp add: nth_map)
+    apply (crush_base simp add: nth_map push_m_def lower_ok_def)
     done
 next
   case (Term_Ref j)
   show ?thesis unfolding Term_Ref
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base simp add: nth_map)
+    apply (crush_base simp add: nth_map push_m_def lower_ok_def low_res_def)
     done
 next
   case (Term_Not a)
   show ?thesis unfolding Term_Not
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth)
+    apply (all \<open>(metis length_map)?\<close>)
     done
 next
   case (Term_Neg a)
   show ?thesis unfolding Term_Neg
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth)
+    apply (all \<open>(metis length_map)?\<close>)
     done
 next
   case (Term_Bin op a b)
   show ?thesis unfolding Term_Bin
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth)
+    apply (all \<open>(metis length_map)?\<close>)
     done
 next
   case (Term_Extract hi lo a)
   show ?thesis unfolding Term_Extract
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map unat_extract_w)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth unat_extract_w)
+    apply (all \<open>(metis length_map)?\<close>)
     apply (simp_all add: word_le_nat_alt unat_sub)
     done
 next
   case (Term_Repeat i a)
   show ?thesis unfolding Term_Repeat
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_Repeat'' Let_def)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_Repeat'' Let_def)
     subgoal for l_ref k_ref acc_ref j_ref
       apply (ucincl_discharge\<open>rule_tac
         INV=\<open>\<lambda>c. \<Squnion>gl ll gk kk ga aa gj jj. l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>ll \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kk \<star>
@@ -945,13 +955,15 @@ next
   case (Term_ZeroExtend i a)
   show ?thesis unfolding Term_ZeroExtend
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map unat_wn_plus_word)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth unat_wn_plus_word)
+    apply (all \<open>(metis length_map)?\<close>)
     done
 next
   case (Term_SignExtend i a)
   show ?thesis unfolding Term_SignExtend
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map unat_wn_plus_word)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth unat_wn_plus_word)
+    apply (all \<open>(metis length_map)?\<close>)
     done
 next
   case (Term_RotateLeft i a)
@@ -960,7 +972,8 @@ next
     case True
     show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateLeft i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateLeft i a)\<close>
       apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_RotateLeft' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs True)
+      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateLeft' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs True)
+      apply (all \<open>(metis length_map)?\<close>)
       apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos True)?
       done
   next
@@ -968,7 +981,8 @@ next
     have pos: \<open>Suc 0 \<le> unat i mod (snd (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) ! snd (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a)))\<close> using False by simp
     show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateLeft i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateLeft i a)\<close>
       apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_RotateLeft' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs pos False)
+      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateLeft' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs pos False)
+      apply (all \<open>(metis length_map)?\<close>)
       apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos wn_rot_sub pos False)?
       done
   qed
@@ -979,7 +993,8 @@ next
     case True
     show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateRight i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateRight i a)\<close>
       apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_RotateRight' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs True)
+      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateRight' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs True)
+      apply (all \<open>(metis length_map)?\<close>)
       apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos True)?
       done
   next
@@ -987,7 +1002,8 @@ next
     have pos: \<open>Suc 0 \<le> unat i mod (snd (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) ! snd (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a)))\<close> using False by simp
     show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateRight i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateRight i a)\<close>
       apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_RotateRight' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs pos False)
+      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateRight' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs pos False)
+      apply (all \<open>(metis length_map)?\<close>)
       apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos wn_rot_sub pos False)?
       done
   qed
@@ -995,7 +1011,8 @@ next
   case (Term_Ite c a b)
   show ?thesis unfolding Term_Ite
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth)
+    apply (all \<open>(metis length_map)?\<close>)
     done
 qed
 

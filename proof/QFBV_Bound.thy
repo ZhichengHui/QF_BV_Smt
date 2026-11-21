@@ -1006,52 +1006,52 @@ proof -
     using g ci by (simp add: grows_def init_st_def algebra_simps)
 qed
 
-text \<open>\<^const>\<open>fuel_bound\<close> fits in a 64-bit word when the counts, the numbers of variables,
+text \<open>\<^const>\<open>fuel_bound\<close> is below \<open>2^57\<close> when the counts, the numbers of variables,
   definitions and assertions, the widths of the variables and the terms are small.\<close>
 theorem fuel_bound_lt:
   assumes \<open>cproblem_wt p\<close>
     \<open>2 + sum_list (cvar_widths p) + length (CoreProblemL_asserts p) +
      sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)))
-                   (CoreProblemL_defs p @ CoreProblemL_asserts p)) < 2 ^ 63\<close>
-    \<open>length (cvar_widths p) < 2 ^ 63\<close> \<open>length (CoreProblemL_defs p) < 2 ^ 63\<close>
-    \<open>length (CoreProblemL_asserts p) < 2 ^ 63\<close>
+                   (CoreProblemL_defs p @ CoreProblemL_asserts p)) < 2 ^ 56\<close>
+    \<open>length (cvar_widths p) < 2 ^ 56\<close> \<open>length (CoreProblemL_defs p) < 2 ^ 56\<close>
+    \<open>length (CoreProblemL_asserts p) < 2 ^ 56\<close>
     \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p).
-       tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)) t < 2 ^ 63\<close>
-  shows \<open>fuel_bound p < 2 ^ 64\<close>
+       tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)) t < 2 ^ 56\<close>
+  shows \<open>fuel_bound p < 2 ^ 57\<close>
 proof -
   obtain s vs where e: \<open>encode_m p = (s, vs)\<close> by (cases \<open>encode_m p\<close>)
   note EC = encode_cnt[OF assms(1) e]
   define ws where \<open>ws = cvar_widths p\<close>
   define ds where \<open>ds = cdef_widths ws [] (CoreProblemL_defs p)\<close>
-  have c: \<open>fst s + length (snd s) < 2 ^ 63\<close> using EC assms(2) by (simp add: ws_def ds_def)
-  have w: \<open>\<forall>w \<in> set ws. w + 2 < 2 ^ 64\<close>
+  have c: \<open>fst s + length (snd s) < 2 ^ 56\<close> using EC assms(2) by (simp add: ws_def ds_def)
+  have w: \<open>\<forall>w \<in> set ws. w + 2 < 2 ^ 57\<close>
   proof
     fix w assume \<open>w \<in> set ws\<close>
     then have \<open>w \<le> sum_list ws\<close> by (rule member_le_sum_list; simp)
-    then show \<open>w + 2 < 2 ^ 64\<close> using assms(2) by (simp add: ws_def)
+    then show \<open>w + 2 < 2 ^ 57\<close> using assms(2) by (simp add: ws_def)
   qed
-  have cl: \<open>\<forall>c \<in> set (snd s). length c + 2 < 2 ^ 64\<close> using EC by (auto simp: cl4_def)
-  have tb: \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p). tbound ws ds t < 2 ^ 64\<close>
+  have cl: \<open>\<forall>c \<in> set (snd s). length c + 2 < 2 ^ 57\<close> using EC by (auto simp: cl4_def)
+  have tb: \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p). tbound ws ds t < 2 ^ 57\<close>
   proof
     fix t assume \<open>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p)\<close>
-    then have \<open>tbound ws ds t < 2 ^ 63\<close> using assms(6) by (simp add: ws_def ds_def)
-    then show \<open>tbound ws ds t < 2 ^ 64\<close> by simp
+    then have \<open>tbound ws ds t < 2 ^ 56\<close> using assms(6) by (simp add: ws_def ds_def)
+    then show \<open>tbound ws ds t < 2 ^ 57\<close> by simp
   qed
-  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), length ws + 2, length (CoreProblemL_defs p) + 2,
-           length (CoreProblemL_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), 2 * length ws + 2, 2 * length (CoreProblemL_defs p) + 2,
+           2 * length (CoreProblemL_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
           set (map (\<lambda>c. length c + 2) (snd s)) \<union>
           set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
   have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
-  have all: \<open>\<forall>x \<in> X. x < 2 ^ 64\<close>
+  have all: \<open>\<forall>x \<in> X. x < 2 ^ 57\<close>
   proof
     fix x assume \<open>x \<in> X\<close>
     then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
-      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = length ws + 2\<close>
-      | \<open>x = length (CoreProblemL_defs p) + 2\<close> | \<open>x = length (CoreProblemL_asserts p) + 2\<close>
+      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = 2 * length ws + 2\<close>
+      | \<open>x = 2 * length (CoreProblemL_defs p) + 2\<close> | \<open>x = 2 * length (CoreProblemL_asserts p) + 2\<close>
       | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
       | \<open>x \<in> set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
       unfolding X_def by blast
-    then show \<open>x < 2 ^ 64\<close>
+    then show \<open>x < 2 ^ 57\<close>
     proof cases
       case 1 then show ?thesis using c by simp
     next
@@ -1072,7 +1072,7 @@ proof -
       case 9 then show ?thesis using tb by auto
     qed
   qed
-  have M: \<open>Max X < 2 ^ 64\<close> using all by (simp add: Max_less_iff[OF fin ne])
+  have M: \<open>Max X < 2 ^ 57\<close> using all by (simp add: Max_less_iff[OF fin ne])
   have F: \<open>fuel_bound p = Max X\<close>
     unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
   show ?thesis using M F by simp
@@ -1178,9 +1178,9 @@ proof -
       by simp
     then show ?thesis using Bexp b1 b2 b3 by linarith
   qed
-  have h3: \<open>length ws + 2 \<le> B\<close> using Bexp by linarith
-  have h4: \<open>length (CoreProblemL_defs p) + 2 \<le> B\<close> using Bexp by linarith
-  have h5: \<open>length (CoreProblemL_asserts p) + 2 \<le> B\<close> using Bexp by linarith
+  have h3: \<open>2 * length ws + 2 \<le> B\<close> using Bexp by linarith
+  have h4: \<open>2 * length (CoreProblemL_defs p) + 2 \<le> B\<close> using Bexp by linarith
+  have h5: \<open>2 * length (CoreProblemL_asserts p) + 2 \<le> B\<close> using Bexp by linarith
   have h6: \<open>\<forall>w \<in> set ws. w + 2 \<le> B\<close>
   proof
     fix w assume \<open>w \<in> set ws\<close>

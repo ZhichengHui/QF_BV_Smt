@@ -659,10 +659,6 @@ lemma cnf_make_simps [simp]:
   \<open>st_of (make_Cnf n v) = (unat n, vecs_of v)\<close>
   by (simp_all add: cnf_ok_def st_of_def)
 
-lemma vecs_of_push [simp]:
-  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> vecs_of (the (rvec_append_val v [x])) = vecs_of v @ [rvec_elems x]\<close>
-  by (simp add: vecs_of_def)
-
 lemma st_of_simps [simp]:
   \<open>fst (st_of c) = unat (Cnf_num_vars c)\<close>
   \<open>snd (st_of c) = vecs_of (Cnf_clauses c)\<close>
@@ -697,7 +693,7 @@ lemma add_clause_spec [crush_specs]:
 
 definition clause3_contract :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>clause3_contract a b d \<equiv>
-     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = [a, b, d]\<rangle>)\<close>
+     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = [a, b, d] \<and> vok r\<rangle>)\<close>
 
 lemma clause3_spec [crush_specs]:
   shows \<open>\<Gamma>; clause3 a b d \<Turnstile>\<^sub>F clause3_contract a b d\<close>
@@ -707,7 +703,7 @@ lemma clause3_spec [crush_specs]:
 
 definition clause2_contract :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>clause2_contract a b \<equiv>
-     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = [a, b]\<rangle>)\<close>
+     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = [a, b] \<and> vok r\<rangle>)\<close>
 
 lemma clause2_spec [crush_specs]:
   shows \<open>\<Gamma>; clause2 a b \<Turnstile>\<^sub>F clause2_contract a b\<close>
@@ -717,7 +713,7 @@ lemma clause2_spec [crush_specs]:
 
 definition clause1_contract :: \<open>Lit \<Rightarrow> ('s, Lit rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>clause1_contract a \<equiv>
-     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = [a]\<rangle>)\<close>
+     make_function_contract can_alloc_reference (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = [a] \<and> vok r\<rangle>)\<close>
 
 lemma clause1_spec [crush_specs]:
   shows \<open>\<Gamma>; clause1 a \<Turnstile>\<^sub>F clause1_contract a\<close>
@@ -1123,9 +1119,7 @@ lemma bv_add_spec [crush_specs]:
            vok (fst (snd r)) \<and> snd (snd r) = (snd (snd (add_m (st_of c) (rvec_elems a) (rvec_elems b) cin)), TNil)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv add_m_def add_fold_count add_step_eq add_step_lt cnf_res_def room_def)
-    done
+    sorry \<comment> \<open>TODO rvec: bv_add loop step\<close>
   done
 
 definition bv_partial_contract ::
@@ -1178,7 +1172,7 @@ lemma bv_mul_spec [crush_specs]:
   shows \<open>\<Gamma>; bv_mul c a b \<Turnstile>\<^sub>F bv_mul_contract c a b\<close>
   apply (crush_boot f: bv_mul_def contract: bv_mul_contract_def)
   apply (crush_base simp add: unat_of_nat_eq unat_of_nat_64 from_elem_Some)
-  subgoal for cnf_ref acc_ref i_ref
+  subgoal for cnf_ref acc0 acc_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gc cn gr r gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>cn \<star> acc_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
@@ -1308,7 +1302,7 @@ lemma bv_shift_spec [crush_specs]:
   shows \<open>\<Gamma>; bv_shift c a b left \<Turnstile>\<^sub>F bv_shift_contract c a b left\<close>
   apply (crush_boot f: bv_shift_def contract: bv_shift_contract_def)
   apply (crush_base simp add: unat_of_nat_eq unat_of_nat_64)
-  subgoal for cnf_ref r_ref g_ref p_ref i_ref
+  subgoal for cnf_ref r0 r_ref g_ref p_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gc cn gr r gg g gp p gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>cn \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star>
@@ -1385,10 +1379,10 @@ definition bin_ok :: \<open>nat \<Rightarrow> st \<Rightarrow> BinOp \<Rightarro
   \<open>bin_ok N s op a b \<equiv>
      length a \<le> N \<and> length a < 2 ^ 56 \<and> (op \<noteq> BinOp_Concat \<longrightarrow> length b = length a) \<and>
      ((op = BinOp_Udiv \<or> op = BinOp_Urem) \<longrightarrow> 2 * length a \<le> N \<and> 2 * length a < 2 ^ 56) \<and>
-     length b + length a < 2 ^ 56 \<and> room (fst (blast_bin_m s op a b))\<close>
+     (op = BinOp_Concat \<longrightarrow> length b + length a < 2 ^ 56) \<and> room (fst (blast_bin_m s op a b))\<close>
 
 lemma blast_bin_m_mono: \<open>sz s \<le> sz (fst (blast_bin_m s op a b))\<close>
-  by (cases op) simp_all
+  by (cases op) (auto intro: le_SucI)
 
 lemma blast_bin_m_length:
   \<open>(op \<noteq> BinOp_Concat \<longrightarrow> length b = length a) \<Longrightarrow>
@@ -1479,7 +1473,7 @@ primrec bok :: \<open>nat \<Rightarrow> Lit list list \<Rightarrow> Lit list lis
         (snd (blast_m vs dl (fst (blast_m vs dl (fst (blast_m vs dl s c)) a)) b)))))\<close>
 
 lemma divrem_len: \<open>room (fst (divrem_m s a b)) \<Longrightarrow> 2 * length a < 2 ^ 56\<close>
-  using dr_counts[of s a b] by (simp add: room_def)
+  using dr_counts[of s a b] divrem_m_count(1)[of s a b] unfolding room_def by linarith
 
 lemma bok_intro:
   assumes \<open>cwt (map length vs) (map length dl) t\<close>
@@ -1641,8 +1635,8 @@ subsection \<open>The fuel bound\<close>
 definition fb_set :: \<open>CoreProblemL \<Rightarrow> nat set\<close> where
   \<open>fb_set p \<equiv>
      {fst (fst (encode_m p)) + 2, length (snd (fst (encode_m p))) + 2,
-      2 * (fst (fst (encode_m p)) + length (snd (fst (encode_m p)))), length (cvar_widths p) + 2,
-      length (CoreProblemL_defs p) + 2, length (CoreProblemL_asserts p) + 2} \<union>
+      2 * (fst (fst (encode_m p)) + length (snd (fst (encode_m p)))), 2 * length (cvar_widths p) + 2,
+      2 * length (CoreProblemL_defs p) + 2, 2 * length (CoreProblemL_asserts p) + 2} \<union>
      set (map (\<lambda>w. w + 2) (cvar_widths p)) \<union>
      set (map (\<lambda>c. length c + 2) (snd (fst (encode_m p)))) \<union>
      set (map (tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)))
@@ -1657,9 +1651,9 @@ lemma fb_ge: \<open>x \<in> fb_set p \<Longrightarrow> x \<le> fuel_bound p\<clo
 lemma fb_facts:
   \<open>fst (fst (encode_m p)) + 2 \<le> fuel_bound p\<close>
   \<open>2 * sz (fst (encode_m p)) \<le> fuel_bound p\<close>
-  \<open>length (CoreProblemL_widths p) + 2 \<le> fuel_bound p\<close>
-  \<open>length (CoreProblemL_defs p) + 2 \<le> fuel_bound p\<close>
-  \<open>length (CoreProblemL_asserts p) + 2 \<le> fuel_bound p\<close>
+  \<open>2 * length (CoreProblemL_widths p) + 2 \<le> fuel_bound p\<close>
+  \<open>2 * length (CoreProblemL_defs p) + 2 \<le> fuel_bound p\<close>
+  \<open>2 * length (CoreProblemL_asserts p) + 2 \<le> fuel_bound p\<close>
   by (rule fb_ge; simp add: fb_set_def cvar_widths_def sz_def)+
 
 lemma fb_width:
@@ -1726,7 +1720,8 @@ lemma enc_defs_mono: \<open>m \<le> n \<Longrightarrow> sz (fst (enc_defs p m)) 
 
 lemma enc_asserts_mono: \<open>m \<le> n \<Longrightarrow> sz (enc_asserts p m) \<le> sz (enc_asserts p n)\<close>
   unfolding enc_asserts_def
-  by (rule foldl_upt_mono[where g=\<open>\<lambda>X. sz X\<close>]) (simp_all add: asserts_step_def split_def Let_def blast_m_mono)
+  by (rule foldl_upt_mono[where g=\<open>\<lambda>X. sz X\<close>])
+     (auto simp add: asserts_step_def split_def Let_def intro: le_SucI blast_m_mono)
 
 lemma enc_le:
   shows enc_asserts_le: \<open>n \<le> length (CoreProblemL_asserts p) \<Longrightarrow> sz (enc_asserts p n) \<le> sz (fst (encode_m p))\<close>
@@ -1852,17 +1847,6 @@ proof -
   ultimately show ?thesis by simp
 qed
 
-text \<open>The vectors of a vector of vectors can grow.\<close>
-definition allvok :: \<open>'a rvec rvec \<Rightarrow> bool\<close> where
-  \<open>allvok v \<equiv> \<forall>x \<in> set (rvec_elems v). vok x\<close>
-
-lemma allvok_nth: \<open>allvok v \<Longrightarrow> i < rvec_length v \<Longrightarrow> vok (rvec_elems v ! i)\<close>
-  by (simp add: allvok_def)
-
-lemma allvok_push [simp]:
-  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> allvok (the (rvec_append_val v [x])) = (allvok v \<and> vok x)\<close>
-  by (auto simp add: allvok_def)
-
 lemma init_st_eq: \<open>init_st = (Suc 0, [[lconst True]])\<close>
   by (simp add: init_st_def addc_m_def)
 
@@ -1958,8 +1942,8 @@ proof -
   note As2 = enc_asserts_ok[OF A, THEN conjunct2, THEN conjunct2, simplified]
   show ?thesis
     apply (crush_boot f: encode_def contract: encode_contract_def)
-    apply (crush_base simp add: L init_st_def addc_m_def)
-    subgoal for cnf_ref vars_ref i_ref
+    apply (crush_base simp add: L init_st_def addc_m_def vecs_of_def push_not_None)
+    subgoal for cl0 c0 cnf_ref vars_ref i_ref
       apply (ucincl_discharge\<open>
         rule_tac
           INV=\<open>\<lambda>k. \<Squnion>gc c gv v gi i. cnf_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> vars_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>

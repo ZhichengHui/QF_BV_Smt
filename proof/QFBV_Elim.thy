@@ -1276,37 +1276,37 @@ qed
 theorem elim_fuel_lt:
   assumes \<open>2 + sum_list (cvar_widths q) + length (CoreProblemL_asserts q) +
      sum_list (map (ccount (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblemL_defs q)))
-                   (CoreProblemL_defs q @ CoreProblemL_asserts q)) < 2 ^ 63\<close>
-    \<open>length (cvar_widths q) < 2 ^ 63\<close> \<open>length (CoreProblemL_defs q) < 2 ^ 63\<close>
-    \<open>length (CoreProblemL_asserts q) < 2 ^ 63\<close>
+                   (CoreProblemL_defs q @ CoreProblemL_asserts q)) < 2 ^ 56\<close>
+    \<open>length (cvar_widths q) < 2 ^ 56\<close> \<open>length (CoreProblemL_defs q) < 2 ^ 56\<close>
+    \<open>length (CoreProblemL_asserts q) < 2 ^ 56\<close>
     \<open>\<forall>t \<in> set (CoreProblemL_defs q @ CoreProblemL_asserts q).
-       tbound (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblemL_defs q)) t < 2 ^ 63\<close>
-  shows \<open>fuel_bound q2 < 2 ^ 64\<close>
+       tbound (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblemL_defs q)) t < 2 ^ 56\<close>
+  shows \<open>fuel_bound q2 < 2 ^ 57\<close>
 proof (rule fuel_bound_lt)
   have cc: \<open>sum_list (map (ccount ews eds) D2) \<le> sum_list (map (ccount ews eds) eD)\<close>
     by (rule sum_list_map_nth_le) (simp_all add: D2(1) en_def D2_size)
   show \<open>cproblem_wt q2\<close> by (rule q2_wt)
   show \<open>2 + sum_list (cvar_widths q2) + length (CoreProblemL_asserts q2) +
      sum_list (map (ccount (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)))
-                   (CoreProblemL_defs q2 @ CoreProblemL_asserts q2)) < 2 ^ 63\<close>
+                   (CoreProblemL_defs q2 @ CoreProblemL_asserts q2)) < 2 ^ 56\<close>
     using assms(1) cc D2_defs by (simp add: q2_ws q2_parts ews_def eds_def eD_def eA_def)
-  show \<open>length (cvar_widths q2) < 2 ^ 63\<close> using assms(2) by (simp add: q2_ws ews_def)
-  show \<open>length (CoreProblemL_defs q2) < 2 ^ 63\<close> using assms(3) D2(1) by (simp add: q2_parts en_def eD_def)
-  show \<open>length (CoreProblemL_asserts q2) < 2 ^ 63\<close> using assms(4) by (simp add: q2_parts eA_def)
+  show \<open>length (cvar_widths q2) < 2 ^ 56\<close> using assms(2) by (simp add: q2_ws ews_def)
+  show \<open>length (CoreProblemL_defs q2) < 2 ^ 56\<close> using assms(3) D2(1) by (simp add: q2_parts en_def eD_def)
+  show \<open>length (CoreProblemL_asserts q2) < 2 ^ 56\<close> using assms(4) by (simp add: q2_parts eA_def)
   show \<open>\<forall>t \<in> set (CoreProblemL_defs q2 @ CoreProblemL_asserts q2).
-       tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)) t < 2 ^ 63\<close>
+       tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)) t < 2 ^ 56\<close>
   proof
     fix t assume t: \<open>t \<in> set (CoreProblemL_defs q2 @ CoreProblemL_asserts q2)\<close>
-    have T: \<open>\<forall>t \<in> set (eD @ eA). tbound ews eds t < 2 ^ 63\<close>
+    have T: \<open>\<forall>t \<in> set (eD @ eA). tbound ews eds t < 2 ^ 56\<close>
       using assms(5) by (simp add: ews_def eds_def eD_def eA_def)
-    show \<open>tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)) t < 2 ^ 63\<close>
+    show \<open>tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)) t < 2 ^ 56\<close>
     proof (cases \<open>t \<in> set eA\<close>)
       case True
       then show ?thesis using T D2_defs by (simp add: q2_ws q2_parts)
     next
       case False
       then obtain j where j: \<open>j < en\<close> \<open>t = D2 ! j\<close> using t D2(1) by (auto simp: q2_parts in_set_conv_nth)
-      have \<open>tbound ews eds (eD ! j) < 2 ^ 63\<close> using T j(1) by (simp add: en_def)
+      have \<open>tbound ews eds (eD ! j) < 2 ^ 56\<close> using T j(1) by (simp add: en_def)
       then show ?thesis using D2_size[OF j(1)] D2_defs j by (simp add: q2_ws q2_parts)
     qed
   qed

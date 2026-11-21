@@ -349,6 +349,24 @@ lemma vecs_of_simps [simp]:
   \<open>i < rvec_length v \<Longrightarrow> vecs_of v ! i = rvec_elems (rvec_elems v ! i)\<close>
   by (simp_all add: vecs_of_def)
 
+lemma vecs_of_new [simp]: \<open>vecs_of (rvec_new_val l) = []\<close>
+  by (simp add: vecs_of_def)
+
+lemma vecs_of_push [simp]:
+  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> vecs_of (the (rvec_append_val v [x])) = vecs_of v @ [rvec_elems x]\<close>
+  by (simp add: vecs_of_def)
+
+text \<open>The vectors of a vector of vectors can grow.\<close>
+definition allvok :: \<open>'a rvec rvec \<Rightarrow> bool\<close> where
+  \<open>allvok v \<equiv> \<forall>x \<in> set (rvec_elems v). vok x\<close>
+
+lemma allvok_nth: \<open>allvok v \<Longrightarrow> i < rvec_length v \<Longrightarrow> vok (rvec_elems v ! i)\<close>
+  by (simp add: allvok_def)
+
+lemma allvok_push [simp]:
+  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> allvok (the (rvec_append_val v [x])) = (allvok v \<and> vok x)\<close>
+  by (auto simp add: allvok_def)
+
 subsection \<open>Values\<close>
 
 text \<open>The number a bit list denotes, least significant bit first (\<open>bv2nat\<close>).\<close>

@@ -366,7 +366,7 @@ next
   have EB: \<open>env_ok ws L2 kb (width ws ds b)\<close> using Sb by blast
   have Ia: \<open>lpre N ws dm L a\<close> using TermL_Bin.IH(1)[OF wt(1) TermL_Bin.prems(2,3)] TermL_Bin.prems(5) a B1 by simp
   have Ib: \<open>lpre N ws dm L1 b\<close> using TermL_Bin.IH(2)[OF wt(2) L1 D1] TermL_Bin.prems(5) b B2 by simp
-  have len: \<open>length (fst L2) + 1 < 2 ^ 64\<close> using lower_bin_m_len[of L2 op ka kb] r B' by (simp add: bnd_def)
+  have len: \<open>length (fst (fst (lower_bin_m L2 op ka kb))) < 2 ^ 56\<close> using r B' by (simp add: bnd_def)
   have cc: \<open>op = Op_Concat \<Longrightarrow> width ws ds a + width ws ds b < 2 ^ 64\<close>
   proof -
     assume \<open>op = Op_Concat\<close>
@@ -418,7 +418,7 @@ next
   have pL2: \<open>L2 = (fst L1 @ [CoreTermL_Const []], snd L1 @ [0])\<close> using p by (simp add: push_m_def)
   have len3: \<open>length (fst L3) = length (fst L1) + 1 + unat i\<close>
     using repeat_F_len[of ka ?wa L2 k0 0 \<open>unat i\<close>] f by (simp add: pL2)
-  have len: \<open>length (fst L1) + 1 + unat i < 2 ^ 64\<close> using B3 len3 by (simp add: bnd_def)
+  have len: \<open>length (fst L1) + 1 + unat i < 2 ^ 56\<close> using B3 len3 by (simp add: bnd_def)
   show ?case using TermL_Repeat.IH[OF wt(1) TermL_Repeat.prems(2,3)] TermL_Repeat.prems(5) a B1 kok_of_env[OF EA] iN ov len by simp
 next
   case (TermL_ZeroExtend i a)
@@ -534,7 +534,11 @@ subsection \<open>The builders of core terms\<close>
 text \<open>A function on a \<^verbatim>\<open>Lower\<close> computes the model \<open>m\<close> of the state: the result is a
   well-formed \<^verbatim>\<open>Lower\<close> of the state that \<open>m\<close> gives, and the index that \<open>m\<close> gives.\<close>
 definition low_res :: \<open>Lower \<times> 64 word \<times> tnil \<Rightarrow> lst \<times> nat \<Rightarrow> bool\<close> where
-  \<open>low_res r m \<equiv> lower_ok (fst r) \<and> lst_of (fst r) = fst m \<and> snd r = (word_of_nat (snd m), TNil)\<close>
+  \<open>low_res r m \<equiv> lower_ok (fst r) \<and> lst_of (fst r) = fst m \<and> rvec_length (Lower_defs (fst r)) = length (fst (fst m)) \<and>
+     rvec_length (Lower_widths (fst r)) = length (fst (fst m)) \<and> snd r = (word_of_nat (snd m), TNil)\<close>
+
+lemma unat_add_nov: \<open>unat a + unat b < 2 ^ 64 \<Longrightarrow> unat (a + b) = unat a + unat b\<close> for a b :: \<open>64 word\<close>
+  using unat_add_lem by auto
 
 definition push_def_contract :: \<open>Lower \<Rightarrow> CoreTerm \<Rightarrow> 64 word \<Rightarrow> ('s, Lower \<times> 64 word \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>push_def_contract l t w \<equiv>
@@ -731,7 +735,7 @@ lemma lower_bin_spec [crush_specs]:
   apply (crush_boot f: lower_bin_def contract: lower_bin_contract_def)
   apply (cases op; simp only: Op_case_simps)
   apply (crush_base simp add: kok_def lower_bin_m_def push_m_def unat_of_nat_64' unat_plus_of_nat unat_1_plus_wn
-      low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def)+
+      low_res_def lower_ok_def from_elem_Some rvec_from_elem_val_def unat_add_nov nth_map)+
   done
 
 subsection \<open>\<^verbatim>\<open>lower\<close>\<close>

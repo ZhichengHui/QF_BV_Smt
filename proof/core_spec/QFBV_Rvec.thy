@@ -92,4 +92,12 @@ lemma clone_elems [simp]: \<open>rvec_elems (rvec_clone_val v) = rvec_elems v\<c
 lemma clone_vok [simp]: \<open>vok v \<Longrightarrow> vok (rvec_clone_val v)\<close>
   by (simp add: vok_def rvec_clone_val)
 
+text \<open>Removing elements keeps the capacity (\<^verbatim>\<open>pop\<close>, \<^verbatim>\<open>truncate\<close>).\<close>
+lemma vok_shrink [simp]:
+  \<open>vok v \<Longrightarrow> length (f (rvec_elems v)) \<le> rvec_length v \<Longrightarrow> vok (update_rvec_elems f v)\<close>
+  by (simp add: vok_def rvec_wf_update_elems)
+
+lemma vok_butlast [simp]: \<open>vok v \<Longrightarrow> vok (update_rvec_elems butlast v)\<close>
+  by (simp add: vok_shrink)
+
 end

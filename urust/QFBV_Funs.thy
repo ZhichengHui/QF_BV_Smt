@@ -1005,6 +1005,138 @@ definition "cut" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow
     * v
   \<rbrakk>\<close>
 
+(* Rust: set_pos *)
+definition "set_pos" :: \<open>((64 word) list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>set_pos \<equiv> \<lambda>tp trail k. FunctionBody \<lbrakk>
+    let mut tp = { let init_1 = tp; \<llangle>init_1 :: (64 word) list\<rrangle> };
+    let mut k = k;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(trail) {
+      * (tp[trail[* k].Lit_var]) = * k;
+      * k += 1_usize;
+    };
+    * tp
+  \<rbrakk>\<close>
+
+(* Rust: analyze_clause *)
+definition "analyze_clause" :: \<open>(Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> (Lit list) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool list) \<times> (Lit list) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze_clause \<equiv> \<lambda>c tp start seen learned cnt. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool list\<rrangle> };
+    let mut learned = { let init_2 = learned; \<llangle>init_2 :: Lit list\<rrangle> };
+    let mut cnt = cnt;
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(c) {
+      let l = c[* k];
+      if !((* seen)[l.Lit_var]) {
+        * (seen[l.Lit_var]) = true;
+        if (tp[l.Lit_var]) >= start {
+          * cnt += 1_usize;
+        } else {
+          vec_push(learned, l);
+        }
+      };
+      * k += 1_usize;
+    };
+    (* seen, * learned, * cnt)
+  \<rbrakk>\<close>
+
+(* Rust: analyze *)
+definition "analyze" :: \<open>((Lit list) list) \<Rightarrow> (Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> (bool list) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((Lit list) \<times> (bool list) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze \<equiv> \<lambda>cs trail rs tp start seen cf. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool list\<rrangle> };
+    let mut learned = { let init_3 = { let res_2 = []; \<llangle>res_2 :: Lit list\<rrangle> }; \<llangle>init_3 :: Lit list\<rrangle> };
+    vec_push(learned, Lit_mk { Lit_var: 0_usize, Lit_neg: false });
+    let destr_4 = analyze_clause(cs[cf], tp, start, * seen, * learned, 0_usize);
+    let s1 = destr_4.0;
+    let l1 = destr_4.1;
+    let c1 = destr_4.2;
+    * seen = s1;
+    * learned = l1;
+    let mut cnt = c1;
+    let mut i = len(trail);
+    let mut ok_v = (* cnt) > 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* ok_v) && (start < (* i)) {
+      * i -= 1_usize;
+      if (* seen)[trail[* i].Lit_var] {
+        if (* cnt) <= 1_usize {
+          * (learned[0_usize]) = lit_neg(trail[* i]);
+          * ok_v = false;
+        } else {
+          let destr_5 = analyze_clause(cs[rs[* i]], tp, start, * seen, * learned, (* cnt) - 1_usize);
+          let s2 = destr_5.0;
+          let l2 = destr_5.1;
+          let c2 = destr_5.2;
+          * seen = s2;
+          * learned = l2;
+          * cnt = c2;
+        }
+      }
+    };
+    let found = ((* cnt) == 1_usize) && (!(* ok_v));
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(* learned) {
+      * (seen[(* learned)[* k].Lit_var]) = false;
+      * k += 1_usize;
+    };
+    let mut j = start;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < len(trail) {
+      * (seen[trail[* j].Lit_var]) = false;
+      * j += 1_usize;
+    };
+    (* learned, * seen, found)
+  \<rbrakk>\<close>
+
+(* Rust: second_watch *)
+definition "second_watch" :: \<open>(Lit list) \<Rightarrow> ((64 word) list) \<Rightarrow> ('s, Lit list, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>second_watch \<equiv> \<lambda>c tp. FunctionBody \<lbrakk>
+    let mut c = { let init_1 = c; \<llangle>init_1 :: Lit list\<rrangle> };
+    let mut b = 1_usize;
+    let mut k = 2_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < len(* c) {
+      if (tp[(* c)[* k].Lit_var]) > (tp[(* c)[* b].Lit_var]) {
+        * b = * k;
+      };
+      * k += 1_usize;
+    };
+    let l = (* c)[1_usize];
+    * (c[1_usize]) = (* c)[* b];
+    * (c[* b]) = l;
+    * c
+  \<rbrakk>\<close>
+
+(* Rust: level_of *)
+definition "level_of" :: \<open>((64 word) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>level_of \<equiv> \<lambda>lim p. FunctionBody \<lbrakk>
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* j) < len(lim)) && ((lim[* j]) <= p) {
+      * j += 1_usize;
+    };
+    * j
+  \<rbrakk>\<close>
+
+(* Rust: add_clause_watched *)
+definition "add_clause_watched" :: \<open>((Lit list) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> ((64 word) list) \<Rightarrow> (Lit list) \<Rightarrow> ('s, (((Lit list) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> ((64 word) list) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>add_clause_watched \<equiv> \<lambda>cs pos next_v head c. FunctionBody \<lbrakk>
+    let mut cs = { let init_1 = cs; \<llangle>init_1 :: (Lit list) list\<rrangle> };
+    let mut pos = { let init_2 = pos; \<llangle>init_2 :: (64 word) list\<rrangle> };
+    let mut next_v = { let init_3 = next_v; \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let mut head = { let init_4 = head; \<llangle>init_4 :: (64 word) list\<rrangle> };
+    let s = len(* next_v);
+    vec_push(pos, 0_usize);
+    vec_push(pos, 1_usize);
+    vec_push(next_v, 18446744073709551615_usize);
+    vec_push(next_v, 18446744073709551615_usize);
+    if len(c) >= 2_usize {
+      let x0 = lit_index(c[0_usize]);
+      * (next_v[s]) = (* head)[x0];
+      * (head[x0]) = s;
+      let x1 = lit_index(c[1_usize]);
+      * (next_v[s + 1_usize]) = (* head)[x1];
+      * (head[x1]) = s + 1_usize;
+    };
+    vec_push(cs, c);
+    (* cs, * pos, * next_v, * head)
+  \<rbrakk>\<close>
+
 (* Rust: dpll *)
 definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool option) list) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>dpll \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>
@@ -1012,33 +1144,38 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
     let pos0 = destr_1.0;
     let next0 = destr_1.1;
     let head0 = destr_1.2;
-    let mut pos = { let init_2 = pos0; \<llangle>init_2 :: (64 word) list\<rrangle> };
-    let mut next_v = { let init_3 = next0; \<llangle>init_3 :: (64 word) list\<rrangle> };
-    let mut head = { let init_4 = head0; \<llangle>init_4 :: (64 word) list\<rrangle> };
-    let destr_7 = propagate_pass(cs, vec_from_elem(None, n), { let res_5 = []; \<llangle>res_5 :: Lit list\<rrangle> }, { let res_6 = []; \<llangle>res_6 :: (64 word) list\<rrangle> });
-    let a0 = destr_7.0;
-    let t0 = destr_7.1;
-    let r0 = destr_7.2;
-    let ok0 = destr_7.3;
+    let mut db = { let init_2 = cs; \<llangle>init_2 :: (Lit list) list\<rrangle> };
+    let mut pos = { let init_3 = pos0; \<llangle>init_3 :: (64 word) list\<rrangle> };
+    let mut next_v = { let init_4 = next0; \<llangle>init_4 :: (64 word) list\<rrangle> };
+    let mut head = { let init_5 = head0; \<llangle>init_5 :: (64 word) list\<rrangle> };
+    let destr_8 = propagate_pass(cs, vec_from_elem(None, n), { let res_6 = []; \<llangle>res_6 :: Lit list\<rrangle> }, { let res_7 = []; \<llangle>res_7 :: (64 word) list\<rrangle> });
+    let a0 = destr_8.0;
+    let t0 = destr_8.1;
+    let r0 = destr_8.2;
+    let ok0 = destr_8.3;
     if !ok0 {
       return None;
     };
-    let mut a = { let init_8 = a0; \<llangle>init_8 :: (bool option) list\<rrangle> };
-    let mut trail = { let init_9 = t0; \<llangle>init_9 :: Lit list\<rrangle> };
-    let mut rs = { let init_10 = r0; \<llangle>init_10 :: (64 word) list\<rrangle> };
-    let mut lim = { let init_12 = { let res_11 = []; \<llangle>res_11 :: (64 word) list\<rrangle> }; \<llangle>init_12 :: (64 word) list\<rrangle> };
+    let mut a = { let init_9 = a0; \<llangle>init_9 :: (bool option) list\<rrangle> };
+    let mut trail = { let init_10 = t0; \<llangle>init_10 :: Lit list\<rrangle> };
+    let mut rs = { let init_11 = r0; \<llangle>init_11 :: (64 word) list\<rrangle> };
+    let mut tp = { let init_12 = set_pos(vec_from_elem(0_usize, n), * trail, 0_usize); \<llangle>init_12 :: (64 word) list\<rrangle> };
+    let mut seen = { let init_13 = vec_from_elem(false, n); \<llangle>init_13 :: bool list\<rrangle> };
+    let mut lim = { let init_15 = { let res_14 = []; \<llangle>res_14 :: (64 word) list\<rrangle> }; \<llangle>init_15 :: (64 word) list\<rrangle> };
     let mut q = 0_usize;
+    let mut learn = true;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
-      let destr_13 = wpropagate(cs, * pos, * next_v, * head, * a, * trail, * rs, * q);
-      let p1 = destr_13.0;
-      let n1 = destr_13.1;
-      let h1 = destr_13.2;
-      let a1 = destr_13.3;
-      let t1 = destr_13.4;
-      let r1 = destr_13.5;
-      let q1 = destr_13.6;
-      let ok_v = destr_13.7;
-      let v_cf = destr_13.8;
+      let q0 = len(* trail);
+      let destr_16 = wpropagate(* db, * pos, * next_v, * head, * a, * trail, * rs, * q);
+      let p1 = destr_16.0;
+      let n1 = destr_16.1;
+      let h1 = destr_16.2;
+      let a1 = destr_16.3;
+      let t1 = destr_16.4;
+      let r1 = destr_16.5;
+      let q1 = destr_16.6;
+      let ok_v = destr_16.7;
+      let cf = destr_16.8;
       * pos = p1;
       * next_v = n1;
       * head = h1;
@@ -1046,6 +1183,7 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
       * trail = t1;
       * rs = r1;
       * q = q1;
+      * tp = set_pos(* tp, * trail, q0);
       if ok_v {
         match find_unassigned(* a) {
           None \<Rightarrow> {
@@ -1054,28 +1192,77 @@ definition "dpll" :: \<open>((Lit list) list) \<Rightarrow> (64 word) \<Rightarr
           Some(v) \<Rightarrow> {
             vec_push(lim, len(* trail));
             * (a[v]) = Some(true);
+            * (tp[v]) = len(* trail);
             vec_push(trail, Lit_mk { Lit_var: v, Lit_neg: false });
             vec_push(rs, 0_usize);
           }
         }
       };
       if !ok_v {
-        match vec_pop(lim) {
-          None \<Rightarrow> {
-            return None;
-          },
-          Some(p) \<Rightarrow> {
-            let d = (* trail)[p];
-            let destr_14 = backtrack(* a, * trail, p);
-            let a2 = destr_14.0;
-            let t2 = destr_14.1;
-            * a = a2;
-            * trail = t2;
-            * rs = cut(* rs, p);
-            * (a[d.Lit_var]) = Some(d.Lit_neg);
-            vec_push(trail, lit_neg(d));
-            vec_push(rs, 0_usize);
-            * q = p;
+        if len(* lim) == 0_usize {
+          return None;
+        };
+        let mut found = false;
+        let mut c = { let init_18 = { let res_17 = []; \<llangle>res_17 :: Lit list\<rrangle> }; \<llangle>init_18 :: Lit list\<rrangle> };
+        if (* learn) && (len(* db) < (18446744073709551615_usize / 4_usize)) {
+          let start = (* lim)[len(* lim) - 1_usize];
+          let destr_19 = analyze(* db, * trail, * rs, * tp, start, * seen, cf);
+          let c1 = destr_19.0;
+          let s1 = destr_19.1;
+          let f1 = destr_19.2;
+          * c = c1;
+          * seen = s1;
+          * found = f1;
+        };
+        if * found {
+          let mut j = 0_usize;
+          if len(* c) >= 2_usize {
+            * c = second_watch(* c, * tp);
+            * j = level_of(* lim, (* tp)[(* c)[1_usize].Lit_var]);
+          };
+          let p = (* lim)[* j];
+          * lim = cut(* lim, * j);
+          let destr_20 = backtrack(* a, * trail, p);
+          let a2 = destr_20.0;
+          let t2 = destr_20.1;
+          * a = a2;
+          * trail = t2;
+          * rs = cut(* rs, p);
+          let l = (* c)[0_usize];
+          let destr_21 = add_clause_watched(* db, * pos, * next_v, * head, * c);
+          let d1 = destr_21.0;
+          let p1 = destr_21.1;
+          let n1 = destr_21.2;
+          let h1 = destr_21.3;
+          vec_push(rs, len(d1) - 1_usize);
+          * db = d1;
+          * pos = p1;
+          * next_v = n1;
+          * head = h1;
+          * (a[l.Lit_var]) = Some(!(l.Lit_neg));
+          * (tp[l.Lit_var]) = p;
+          vec_push(trail, l);
+          * q = p;
+        } else {
+          * learn = false;
+          match vec_pop(lim) {
+            None \<Rightarrow> {
+              return None;
+            },
+            Some(p) \<Rightarrow> {
+              let d = (* trail)[p];
+              let destr_22 = backtrack(* a, * trail, p);
+              let a2 = destr_22.0;
+              let t2 = destr_22.1;
+              * a = a2;
+              * trail = t2;
+              * rs = cut(* rs, p);
+              * (a[d.Lit_var]) = Some(d.Lit_neg);
+              * (tp[d.Lit_var]) = p;
+              vec_push(trail, lit_neg(d));
+              vec_push(rs, 0_usize);
+              * q = p;
+            }
           }
         }
       }

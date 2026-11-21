@@ -705,6 +705,23 @@ fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
     best
 }
 
+/// The `i`-th element (from 0) of the Luby sequence 1, 1, 2, 1, 1, 2, 4, ...
+fn luby(i: usize) -> usize {
+    let mut size: usize = 1;
+    let mut seq: usize = 0;
+    while size < i + 1 {
+        seq += 1;
+        size = 2 * size + 1;
+    }
+    let mut x = i;
+    while size - 1 != x {
+        size = (size - 1) / 2;
+        seq -= 1;
+        x = x % size;
+    }
+    1 << seq
+}
+
 /// Halves every activity `r` times (shift right), once the increment is large.
 fn rescale(act: Vec<usize>, r: usize) -> Vec<usize> {
     let mut act = act;
@@ -1114,6 +1131,9 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut act: Vec<usize> = vec![0; n];
     let mut inc: usize = 1 << 10;
     let mut ph: Vec<bool> = vec![false; n];
+    let mut conflicts: usize = 0;
+    let mut restarts: usize = 0;
+    let mut budget: usize = 100 * luby(0);
     loop {
         let q0 = trail.len();
         let (p1, n1, h1, a1, t1, r1, q1, ok, cf) = wpropagate(&db, pos, next, head, a, trail, rs, q);
@@ -1125,6 +1145,19 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         rs = r1;
         q = q1;
         tp = set_pos(tp, &trail, q0);
+        if ok && learn && conflicts >= budget && restarts < 1 << 20 && lim.len() > 0 {
+            let p = lim[0];
+            lim = cut(lim, 0);
+            ph = save_phase(ph, &trail, p);
+            let (a2, t2) = backtrack(a, trail, p);
+            a = a2;
+            trail = t2;
+            rs = cut(rs, p);
+            q = p;
+            restarts += 1;
+            conflicts = 0;
+            budget = 100 * luby(restarts);
+        }
         if ok {
             match pick(&a, &act) {
                 None => return Some(a),
@@ -1150,6 +1183,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 seen = s1;
                 found = f1;
                 act = ac1;
+                conflicts += 1;
                 inc = inc + inc / 20;
                 if inc >= 1 << 40 {
                     act = rescale(act, 30);

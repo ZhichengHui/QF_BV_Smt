@@ -1119,7 +1119,7 @@ subsection \<open>The environment of a core definition\<close>
 text \<open>The core definition \<open>k\<close> of the well-formed state \<open>L\<close> has the width \<open>w\<close>, with the bounds the
   built terms need.\<close>
 definition env_ok :: \<open>nat list \<Rightarrow> lst \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool\<close> where
-  \<open>env_ok ws L k w \<equiv> lok ws L \<and> k < length (fst L) \<and> k < 2 ^ 64 \<and> snd L ! k = w \<and> 1 \<le> w \<and> w < 2 ^ 64\<close>
+  \<open>env_ok ws L k w \<equiv> lok ws L \<and> k < length (fst L) \<and> k < 2 ^ 64 \<and> snd L ! k = w \<and> 1 \<le> w \<and> w < 2 ^ 56\<close>
 
 definition vs0 :: \<open>nat list \<Rightarrow> nat list\<close> where
   \<open>vs0 ws \<equiv> map (\<lambda>_. 0) ws\<close>
@@ -1152,7 +1152,7 @@ lemma env_lt:
 
 lemma env_push:
   assumes \<open>lok ws L\<close> \<open>cwt ws (snd L) t\<close> \<open>cwidth ws (snd L) t = w\<close> \<open>push_m L t w = (L', k)\<close>
-    \<open>1 \<le> w\<close> \<open>w < 2 ^ 64\<close> \<open>length (fst L') < 2 ^ 64\<close>
+    \<open>1 \<le> w\<close> \<open>w < 2 ^ 56\<close> \<open>length (fst L') < 2 ^ 64\<close>
   shows \<open>env_ok ws L' k w\<close>
   using push_ok[OF assms(1-4)] lok_length[OF assms(1)] assms(5-7) by (simp add: env_ok_def nth_append)
 
@@ -1225,7 +1225,7 @@ lemma lower_bin_correct:
   assumes EA: \<open>env_ok ws L ka wa\<close> and EB: \<open>env_ok ws L kb wb\<close>
     and eqw: \<open>op \<noteq> Op_Concat \<longrightarrow> wb = wa\<close>
     and R: \<open>lower_bin_m L op ka kb = (L', k)\<close>
-    and B: \<open>length (fst L') < 2 ^ 64\<close>
+    and B: \<open>length (fst L') < 2 ^ 56\<close>
   shows \<open>lext ws L L' \<and> k < length (fst L') \<and> snd L' ! k = op_width op wa wb \<and>
      (\<forall>vs. vs_ok ws vs \<longrightarrow> CV ws vs L' ! k = bin_sem op wa (CV ws vs L ! ka) wb (CV ws vs L ! kb))\<close>
 proof -
@@ -1509,7 +1509,7 @@ subsection \<open>Terms\<close>
 
 text \<open>The bounds the rewriting of a term needs: every index and every width fits in a word.\<close>
 definition bnd :: \<open>lst \<Rightarrow> bool\<close> where
-  \<open>bnd L \<equiv> length (fst L) < 2 ^ 64 \<and> (\<forall>w \<in> set (snd L). w < 2 ^ 64)\<close>
+  \<open>bnd L \<equiv> length (fst L) < 2 ^ 56 \<and> (\<forall>w \<in> set (snd L). w < 2 ^ 56)\<close>
 
 lemma bnd_pfx: \<open>pfx L L' \<Longrightarrow> bnd L' \<Longrightarrow> bnd L\<close>
   using pfx_length[of L L'] pfx_set[of L L'] by (auto simp add: bnd_def)

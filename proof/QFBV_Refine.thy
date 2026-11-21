@@ -668,36 +668,32 @@ lemma st_of_simps [simp]:
   \<open>snd (st_of c) = vecs_of (Cnf_clauses c)\<close>
   by (simp_all add: st_of_def)
 
+text \<open>A function on a \<^verbatim>\<open>Cnf\<close> computes the model \<open>m\<close> of the state: the result is a well-formed
+  \<^verbatim>\<open>Cnf\<close> of the state that \<open>m\<close> gives, and the literal that \<open>m\<close> gives.\<close>
+definition cnf_res :: \<open>Cnf \<times> 'a \<times> tnil \<Rightarrow> st \<times> 'a \<Rightarrow> bool\<close> where
+  \<open>cnf_res r m \<equiv> cnf_ok (fst r) \<and> st_of (fst r) = fst m \<and> snd r = (snd m, TNil)\<close>
+
 definition fresh_fn_contract :: \<open>Cnf \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>fresh_fn_contract c \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>Suc (fst (st_of c)) < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star>
-          \<langle>r = (make_Cnf (Cnf_num_vars c + 1) (Cnf_clauses c), snd (fresh_m (st_of c)), TNil)\<rangle>)\<close>
+     make_function_contract (can_alloc_reference \<star> \<langle>cnf_ok c \<and> Suc (fst (st_of c)) < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>cnf_res r (fresh_m (st_of c))\<rangle>)\<close>
 
 lemma fresh_fn_spec [crush_specs]:
   shows \<open>\<Gamma>; fresh_fn c \<Turnstile>\<^sub>F fresh_fn_contract c\<close>
   apply (crush_boot f: fresh_fn_def contract: fresh_fn_contract_def)
-  apply (crush_base simp add: fresh_m_def)
+  apply (crush_base simp add: fresh_m_def cnf_res_def cnf_ok_def unat_word_Suc_simp)
   done
 
 definition add_clause_contract :: \<open>Cnf \<Rightarrow> Lit rvec \<Rightarrow> ('s, Cnf, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>add_clause_contract c cl \<equiv>
      make_function_contract (can_alloc_reference \<star> \<langle>cnf_ok c \<and> length (snd (st_of c)) < 2 ^ 56\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star>
-          \<langle>r = make_Cnf (Cnf_num_vars c) (the (rvec_append_val (Cnf_clauses c) [cl]))\<rangle>)\<close>
+       (\<lambda>r. can_alloc_reference \<star> \<langle>cnf_ok r \<and> st_of r = addc_m (st_of c) (rvec_elems cl)\<rangle>)\<close>
 
 lemma add_clause_spec [crush_specs]:
   shows \<open>\<Gamma>; add_clause c cl \<Turnstile>\<^sub>F add_clause_contract c cl\<close>
   apply (crush_boot f: add_clause_def contract: add_clause_contract_def)
-  apply (crush_base simp add: cnf_ok_def vecs_of_def push_not_None)
+  apply (crush_base simp add: cnf_ok_def push_not_None addc_m_def)
   done
-
-text \<open>The state after adding a clause.\<close>
-lemma add_clause_st [simp]:
-  assumes \<open>cnf_ok c\<close> \<open>length (snd (st_of c)) < 2 ^ 56\<close>
-  shows \<open>st_of (make_Cnf n (the (rvec_append_val (Cnf_clauses c) [cl]))) = (unat n, snd (st_of c) @ [rvec_elems cl])\<close>
-    and \<open>cnf_ok (make_Cnf n (the (rvec_append_val (Cnf_clauses c) [cl])))\<close>
-  using assms by (simp_all add: st_of_def cnf_ok_def vecs_of_def)
 
 definition clause3_contract :: \<open>Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Lit rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>clause3_contract a b d \<equiv>
@@ -729,11 +725,6 @@ lemma clause1_spec [crush_specs]:
   apply (crush_base simp add: push_not_None)
   done
 
-text \<open>A function on a \<^verbatim>\<open>Cnf\<close> computes the model \<open>m\<close> of the state: the result is a well-formed
-  \<^verbatim>\<open>Cnf\<close> of the state that \<open>m\<close> gives, and the literal that \<open>m\<close> gives.\<close>
-definition cnf_res :: \<open>Cnf \<times> 'a \<times> tnil \<Rightarrow> st \<times> 'a \<Rightarrow> bool\<close> where
-  \<open>cnf_res r m \<equiv> cnf_ok (fst r) \<and> st_of (fst r) = fst m \<and> snd r = (snd m, TNil)\<close>
-
 text \<open>The same for a function that also returns a vector of literals.\<close>
 definition cnfv_res :: \<open>Cnf \<times> Lit rvec \<times> tnil \<Rightarrow> st \<times> Lit list \<Rightarrow> bool\<close> where
   \<open>cnfv_res r m \<equiv> cnf_ok (fst r) \<and> st_of (fst r) = fst m \<and> rvec_elems (fst (snd r)) = snd m \<and>
@@ -747,8 +738,7 @@ definition tseitin_and_contract :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Li
 lemma tseitin_and_spec [crush_specs]:
   shows \<open>\<Gamma>; tseitin_and c a b \<Turnstile>\<^sub>F tseitin_and_contract c a b\<close>
   apply (crush_boot f: tseitin_and_def contract: tseitin_and_contract_def)
-  apply (crush_base simp add: and_t_def fresh_m_def addc_m_def room_def cnf_res_def cnf_ok_def sz_def
-      unat_word_Suc_simp)
+  apply (crush_base simp add: and_t_def fresh_m_def addc_m_def room_def cnf_res_def sz_def)
   done
 
 definition tseitin_xor_contract :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
@@ -759,8 +749,7 @@ definition tseitin_xor_contract :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Li
 lemma tseitin_xor_spec [crush_specs]:
   shows \<open>\<Gamma>; tseitin_xor c a b \<Turnstile>\<^sub>F tseitin_xor_contract c a b\<close>
   apply (crush_boot f: tseitin_xor_def contract: tseitin_xor_contract_def)
-  apply (crush_base simp add: xor_t_def fresh_m_def addc_m_def room_def cnf_res_def cnf_ok_def sz_def
-      unat_word_Suc_simp)
+  apply (crush_base simp add: xor_t_def fresh_m_def addc_m_def room_def cnf_res_def sz_def)
   done
 
 definition tseitin_ite_contract :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
@@ -771,8 +760,7 @@ definition tseitin_ite_contract :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Li
 lemma tseitin_ite_spec [crush_specs]:
   shows \<open>\<Gamma>; tseitin_ite c x a b \<Turnstile>\<^sub>F tseitin_ite_contract c x a b\<close>
   apply (crush_boot f: tseitin_ite_def contract: tseitin_ite_contract_def)
-  apply (crush_base simp add: ite_t_def fresh_m_def addc_m_def room_def cnf_res_def cnf_ok_def sz_def
-      unat_word_Suc_simp)
+  apply (crush_base simp add: ite_t_def fresh_m_def addc_m_def room_def cnf_res_def sz_def)
   done
 
 definition gate_and_contract :: \<open>Cnf \<Rightarrow> Lit \<Rightarrow> Lit \<Rightarrow> ('s, Cnf \<times> Lit \<times> tnil, 'abort) function_contract\<close> where
@@ -1053,7 +1041,7 @@ lemma bv_fresh_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        take_Suc_conv_app_nth antisym_conv cnfv_res_def room_def sz_def st_of_def)
+        take_Suc_conv_app_nth antisym_conv cnfv_res_def room_def cnf_res_def st_of_def)
     done
   done
 

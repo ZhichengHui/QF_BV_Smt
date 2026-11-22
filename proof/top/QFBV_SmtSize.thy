@@ -110,9 +110,9 @@ function (sequential) cnt :: \<open>SmtProblem \<Rightarrow> nat \<Rightarrow> S
   where
   \<open>cnt p n (SmtTerm_Def d args) =
      (if dpar (sdefs p ! unat d) = [] then 0
-      else if unat d < n then cnt_args p n args + cnt p (unat d) (SmtDef_body (sdefs p ! unat d))
+      else if unat d < n then cnt_args p n (rvec_elems args) + cnt p (unat d) (SmtDef_body (sdefs p ! unat d))
       else 0)\<close>
-| \<open>cnt p n (SmtTerm_App op args) = cnt_args p n args\<close>
+| \<open>cnt p n (SmtTerm_App op args) = cnt_args p n (rvec_elems args)\<close>
 | \<open>cnt p n _ = 0\<close>
 | \<open>cnt_args p n [] = 0\<close>
 | \<open>cnt_args p n (a # rest) = Suc (cnt p n a) + cnt_args p n rest\<close>
@@ -120,7 +120,7 @@ function (sequential) cnt :: \<open>SmtProblem \<Rightarrow> nat \<Rightarrow> S
 termination
   by (relation \<open>measures [\<lambda>x. case x of Inl (_, n, _) \<Rightarrow> n | Inr (_, n, _) \<Rightarrow> n,
                           \<lambda>x. case x of Inl (_, _, t) \<Rightarrow> size t | Inr (_, _, ts) \<Rightarrow> size_list size ts]\<close>)
-     auto
+     (auto simp: le_imp_less_Suc size_list_rvec_elems)
 
 lemma tr_term_args_length:
   \<open>length (fst (tr_term_m p dm env n S t)) = length S + cnt p n t\<close>
@@ -181,8 +181,8 @@ text \<open>\<open>dok n F t\<close>: every definition \<open>t\<close> applies 
   a loop).\<close>
 fun dok :: \<open>nat \<Rightarrow> nat \<Rightarrow> SmtTerm \<Rightarrow> bool\<close> where
   \<open>dok n F (SmtTerm_Def d args) =
-     (unat d < n \<and> length args < 2 ^ 63 \<and> length args \<le> F \<and> (\<forall>a \<in> set args. dok n F a))\<close>
-| \<open>dok n F (SmtTerm_App op args) = (length args < 2 ^ 63 \<and> length args \<le> F \<and> (\<forall>a \<in> set args. dok n F a))\<close>
+     (unat d < n \<and> rvec_length args < 2 ^ 63 \<and> rvec_length args \<le> F \<and> (\<forall>a \<in> set (rvec_elems args). dok n F a))\<close>
+| \<open>dok n F (SmtTerm_App op args) = (rvec_length args < 2 ^ 63 \<and> rvec_length args \<le> F \<and> (\<forall>a \<in> set (rvec_elems args). dok n F a))\<close>
 | \<open>dok n F _ = True\<close>
 
 text \<open>Every definition has fewer than \<open>2^64\<close> parameters (so that \<^verbatim>\<open>len\<close> reads their
@@ -515,19 +515,21 @@ qed
 lemma nst_le64: \<open>unat (n :: 64 word) \<le> 2 ^ 64\<close>
   using unat_lt2p[of n] by simp
 
-text \<open>The loop of \<^verbatim>\<open>stages\<close>: \<open>p\<close> is \<open>2^i\<close> saturated, and \<open>i\<close> stays at most \<^const>\<open>nst\<close>.\<close>
+text \<open>The loop of \<^verbatim>\<open>stages\<close>: \<open>p\<close> is \<open>2^i\<close> saturated, and \<open>i\<close> stays at most \<^const>\<open>nst\<close>
+  when \<open>n\<close> is at most the saturation bound \<open>2^56\<close> (otherwise \<open>p\<close> stays below \<open>n\<close> and the loop
+  runs to 64).\<close>
 lemma stages_step:
-  \<open>p = sat (2 ^ i) \<Longrightarrow> p < n \<Longrightarrow> i < 64 \<Longrightarrow> Suc i \<le> nst n \<and> sat (p * 2) = sat (2 ^ Suc i)\<close>
+  \<open>p = sat (2 ^ i) \<Longrightarrow> p < n \<Longrightarrow> n \<le> 2 ^ 56 \<Longrightarrow> Suc i \<le> nst n\<close>
 proof -
-  assume a: \<open>p = sat (2 ^ i)\<close> \<open>p < n\<close> \<open>i < 64\<close>
-  have \<open>(2::nat) ^ i \<le> 2 ^ 56\<close> using a(3) by (intro power_increasing) simp_all
-  then have \<open>p = 2 ^ i\<close> using a(1) by (simp add: sat_def)
+  assume a: \<open>p = sat (2 ^ i)\<close> \<open>p < n\<close> \<open>n \<le> 2 ^ 56\<close>
+  have \<open>p < 2 ^ 56\<close> using a(2,3) by simp
+  then have \<open>p = 2 ^ i\<close> using a(1) by (simp add: sat_def min_def split: if_splits)
   then have \<open>\<not> n \<le> 2 ^ i\<close> using a(2) by simp
-  then have \<open>Suc i \<le> nst n\<close> using nst_le_iff[of n i] by simp
-  moreover have \<open>sat (p * 2) = sat (2 ^ Suc i)\<close>
-    using sat_mul_sat[of \<open>2 ^ i\<close> 2] a(1) by (simp add: sat_def mult.commute)
-  ultimately show ?thesis by simp
+  then show \<open>Suc i \<le> nst n\<close> using nst_le_iff[of n i] by simp
 qed
+
+lemma stages_dbl: \<open>p = sat (2 ^ i) \<Longrightarrow> sat (p * 2) = sat (2 ^ Suc i)\<close>
+  using sat_mul_sat[of \<open>2 ^ i\<close> 2] by (simp add: sat_def mult.commute)
 
 lemma sat2a: \<open>sat (sat x * 2) = sat (2 * x)\<close>
   using sat_mul_sat_l[of x 2] by (simp add: mult.commute)
@@ -536,21 +538,65 @@ lemma sat2b: \<open>sat (2 * sat x) = sat (2 * x)\<close>
   using sat_mul_sat_l[of x 2] by (simp add: mult.commute)
 
 lemma stages_exit:
-  \<open>p = sat (2 ^ i) \<Longrightarrow> i \<le> 64 \<Longrightarrow> i \<le> nst n \<Longrightarrow> n \<le> 2 ^ 64 \<Longrightarrow> \<not> (p < n \<and> i < 64) \<Longrightarrow> i = nst n\<close>
+  \<open>p = sat (2 ^ i) \<Longrightarrow> i \<le> 64 \<Longrightarrow> (n \<le> 2 ^ 56 \<longrightarrow> i \<le> nst n) \<Longrightarrow> n \<le> 2 ^ 64 \<Longrightarrow>
+   \<not> (p < n \<and> i < 64) \<Longrightarrow> i = (if n \<le> 2 ^ 56 then nst n else 64)\<close>
 proof -
-  assume a: \<open>p = sat (2 ^ i)\<close> \<open>i \<le> 64\<close> \<open>i \<le> nst n\<close> \<open>n \<le> 2 ^ 64\<close> \<open>\<not> (p < n \<and> i < 64)\<close>
-  have \<open>nst n \<le> i\<close>
-  proof (cases \<open>i < 64\<close>)
+  assume a: \<open>p = sat (2 ^ i)\<close> \<open>i \<le> 64\<close> \<open>n \<le> 2 ^ 56 \<longrightarrow> i \<le> nst n\<close> \<open>n \<le> 2 ^ 64\<close> \<open>\<not> (p < n \<and> i < 64)\<close>
+  have pl: \<open>p \<le> 2 ^ i\<close> \<open>p \<le> 2 ^ 56\<close> using a(1) by (simp_all add: sat_def)
+  show ?thesis
+  proof (cases \<open>n \<le> 2 ^ 56\<close>)
     case True
-    then have \<open>n \<le> p\<close> using a(5) by simp
-    moreover have \<open>p \<le> 2 ^ i\<close> using a(1) by (simp add: sat_def)
-    ultimately show ?thesis using nst_le_iff by (meson order_trans)
+    have \<open>nst n \<le> i\<close>
+    proof (cases \<open>i < 64\<close>)
+      case True
+      then have \<open>n \<le> p\<close> using a(5) by simp
+      then show ?thesis using pl(1) nst_le_iff by (meson order_trans)
+    next
+      case False
+      then show ?thesis using a(2,4) nst_le_iff[of n 64] by simp
+    qed
+    then show ?thesis using a(3) True by simp
   next
     case False
-    then show ?thesis using a(2,4) nst_le_iff[of n 64] by simp
+    then have \<open>\<not> i < 64\<close> using a(5) pl(2) by auto
+    then show ?thesis using a(2) False by simp
   qed
-  then show ?thesis using a(3) by simp
 qed
+
+text \<open>What \<^verbatim>\<open>stages\<close> returns: \<^const>\<open>nst\<close> up to the saturation bound, 64 above it.\<close>
+definition stg :: \<open>nat \<Rightarrow> nat\<close> where
+  \<open>stg n \<equiv> if n \<le> 2 ^ 56 then nst n else 64\<close>
+
+lemma stages_exit_stg:
+  \<open>p = sat (2 ^ i) \<Longrightarrow> i \<le> 64 \<Longrightarrow> (n \<le> 2 ^ 56 \<longrightarrow> i \<le> nst n) \<Longrightarrow> n \<le> 2 ^ 64 \<Longrightarrow>
+   \<not> (p < n \<and> i < 64) \<Longrightarrow> i = stg n\<close>
+  unfolding stg_def by (rule stages_exit)
+
+lemma stages_exit_le:
+  \<open>p = sat (2 ^ i) \<Longrightarrow> i \<le> 64 \<Longrightarrow> (n \<le> 2 ^ 56 \<longrightarrow> i \<le> nst n) \<Longrightarrow> n \<le> 2 ^ 64 \<Longrightarrow>
+   \<not> (p < n \<and> i < 64) \<Longrightarrow> n \<le> 2 ^ 56 \<Longrightarrow> i = nst n\<close>
+  using stages_exit[of p i n] by simp
+
+lemma stages_exit_gt:
+  \<open>p = sat (2 ^ i) \<Longrightarrow> i \<le> 64 \<Longrightarrow> \<not> (p < n \<and> i < 64) \<Longrightarrow> \<not> n \<le> 2 ^ 56 \<Longrightarrow> i = 64\<close>
+  using sat_le[of \<open>2 ^ i\<close>] by auto
+
+text \<open>Above the saturation bound, the number of stages does not matter for a saturated cost.\<close>
+lemma sat_stages:
+  assumes \<open>1 \<le> a\<close>
+  shows \<open>sat (a * w * stg w) = sat (a * w * nst w)\<close>
+proof (cases \<open>w \<le> 2 ^ 56\<close>)
+  case False
+  have n: \<open>1 \<le> nst w\<close> using False nst_le_iff[of w 0] by (cases \<open>nst w\<close>) auto
+  have \<open>2 ^ 56 \<le> a * w\<close> using False assms by (metis less_imp_le_nat mult_le_mono1 mult_1 not_le order_trans)
+  then have \<open>2 ^ 56 \<le> a * w * nst w\<close> \<open>2 ^ 56 \<le> a * w * 64\<close> using n
+    by (metis le_trans mult_le_mono2 nat_mult_1_right one_le_numeral)+
+  then show ?thesis using False by (simp add: sat_def stg_def)
+qed (simp add: stg_def)
+
+text \<open>A generated term and its list view have the same size (constants count 0).\<close>
+lemma size_term_of: \<open>size (term_of t) = size t\<close>
+  by (induction t) simp_all
 
 context QFBV_ctx
 begin
@@ -595,21 +641,21 @@ subsection \<open>\<^verbatim>\<open>tr_count\<close> and \<^verbatim>\<open>tr_
 text \<open>The \<open>k\<close>-th unfolding of the mutual recursion: its precondition requires the recursion depth
   to be at most \<open>k\<close>. The table \<open>dc\<close> is \<^const>\<open>dcw\<close> of its length \<open>n\<close>, and definitions are expanded
   below \<open>n\<close>.\<close>
-definition tr_count_contract :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> 64 word list \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
+definition tr_count_contract :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> 64 word rvec \<Rightarrow> SmtTerm \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>tr_count_contract k p dc t \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-        \<langle>Suc (size t) \<le> k \<and> dc = dcw p (length dc) \<and> length dc \<le> length (sdefs p) \<and>
-         params_ok p \<and> dok (length dc) urust_fuel t\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = sat (cnt p (length dc) t)\<rangle>)\<close>
+        \<langle>Suc (size t) \<le> k \<and> rvec_elems dc = dcw p (rvec_length dc) \<and> rvec_length dc \<le> length (sdefs p) \<and>
+         params_ok p \<and> dok (rvec_length dc) urust_fuel t\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = sat (cnt p (rvec_length dc) t)\<rangle>)\<close>
 
-definition tr_count_args_contract :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> 64 word list \<Rightarrow> SmtTerm list \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
+definition tr_count_args_contract :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> 64 word rvec \<Rightarrow> SmtTerm rvec \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>tr_count_args_contract k p dc ts \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-        \<langle>Suc (size_list size ts) \<le> k \<and> dc = dcw p (length dc) \<and> length dc \<le> length (sdefs p) \<and>
-         params_ok p \<and> length ts < 2 ^ 63 \<and> length ts \<le> urust_fuel \<and> (\<forall>a \<in> set ts. dok (length dc) urust_fuel a)\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = sat (cnt_args p (length dc) ts)\<rangle>)\<close>
+        \<langle>Suc (size_list size (rvec_elems ts)) \<le> k \<and> rvec_elems dc = dcw p (rvec_length dc) \<and> rvec_length dc \<le> length (sdefs p) \<and>
+         params_ok p \<and> rvec_length ts < 2 ^ 63 \<and> rvec_length ts \<le> urust_fuel \<and> (\<forall>a \<in> set (rvec_elems ts). dok (rvec_length dc) urust_fuel a)\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = sat (cnt_args p (rvec_length dc) (rvec_elems ts))\<rangle>)\<close>
 
 lemma tr_count_step_spec:
   assumes IH1: \<open>\<And>p dc t. \<Gamma>; f p dc t \<Turnstile>\<^sub>F tr_count_contract k p dc t\<close>
@@ -623,15 +669,13 @@ proof -
     show ?thesis unfolding SmtTerm_Def tr_count_rec_step_def prod.case fst_conv
       apply (crush_boot contract: tr_count_contract_def)
       apply (crush_base specs add: IH2 contracts add: tr_count_args_contract_def)
-        apply (auto simp: dc_unat dcv_def sat_add_sat params_ok_nth)
-      apply (simp add: sat_def)
-      done
+      using size_list_rvec_elems[of size args] by (auto simp: dc_unat dcv_def sat_add_sat params_ok_nth sat_def)
   next
     case (SmtTerm_App op args)
     show ?thesis unfolding SmtTerm_App tr_count_rec_step_def prod.case fst_conv
       apply (crush_boot contract: tr_count_contract_def)
       apply (crush_base specs add: IH2 contracts add: tr_count_args_contract_def)
-      done
+      using size_list_rvec_elems[of size args] by auto
   next
     case (SmtTerm_BoolConst b)
     show ?thesis unfolding SmtTerm_BoolConst tr_count_rec_step_def prod.case fst_conv
@@ -665,11 +709,11 @@ proof -
       apply (ucincl_discharge\<open>
         rule_tac
           INV=\<open>\<lambda>j. \<Squnion>gn n gi i. n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-                 \<langle>unat i \<le> length ts \<and> unat n = sat (cnt_args p (length dc) (take (unat i) ts)) \<and>
-                  length ts - unat i \<le> j\<rangle>\<close> and
+                 \<langle>unat i \<le> rvec_length ts \<and> unat n = sat (cnt_args p (rvec_length dc) (take (unat i) (rvec_elems ts))) \<and>
+                  rvec_length ts - unat i \<le> j\<rangle>\<close> and
           INV'=\<open>\<lambda>j. \<Squnion>gn n gi i. n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-                 \<langle>unat i < length ts \<and> unat n = sat (cnt_args p (length dc) (take (unat i) ts)) \<and>
-                  length ts - unat i \<le> Suc j\<rangle>\<close> and
+                 \<langle>unat i < rvec_length ts \<and> unat n = sat (cnt_args p (rvec_length dc) (take (unat i) (rvec_elems ts))) \<and>
+                  rvec_length ts - unat i \<le> Suc j\<rangle>\<close> and
           \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
           \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
@@ -711,7 +755,7 @@ text \<open>What \<^verbatim>\<open>tr_size\<close> needs: the definitions refer
 definition tsize_pre :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> bool\<close> where
   \<open>tsize_pre F p \<equiv>
      let ds = sdefs p in
-     params_ok p \<and> length ds < 2 ^ 63 \<and> length ds \<le> F \<and>
+     params_ok p \<and> length ds < 2 ^ 56 \<and> length ds \<le> F \<and>
      length (sasserts p) < 2 ^ 63 \<and> length (sasserts p) \<le> F \<and>
      (\<forall>d < length ds. dok d F (SmtDef_body (ds ! d)) \<and> Suc (size (SmtDef_body (ds ! d))) \<le> F) \<and>
      (\<forall>t \<in> set (sasserts p). dok (length ds) F t \<and> Suc (size t) \<le> F)\<close>
@@ -730,31 +774,31 @@ lemma tr_size_spec [crush_specs]:
       rule_tac
         INV=\<open>\<lambda>j. \<Squnion>gc c gn n gd d. dc_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star>
                can_alloc_reference \<star>
-               \<langle>unat d \<le> length (sdefs p) \<and> c = dcw p (unat d) \<and> unat n = sat (dsum p (unat d)) \<and>
+               \<langle>unat d \<le> length (sdefs p) \<and> rvec_elems c = dcw p (unat d) \<and> vok c \<and> unat n = sat (dsum p (unat d)) \<and>
                 length (sdefs p) - unat d \<le> j\<rangle>\<close> and
         INV'=\<open>\<lambda>j. \<Squnion>gc c gn n gd d. dc_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star>
                can_alloc_reference \<star>
-               \<langle>unat d < length (sdefs p) \<and> c = dcw p (unat d) \<and> unat n = sat (dsum p (unat d)) \<and>
+               \<langle>unat d < length (sdefs p) \<and> rvec_elems c = dcw p (unat d) \<and> vok c \<and> unat n = sat (dsum p (unat d)) \<and>
                 length (sdefs p) - unat d \<le> Suc j\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: vec_push_def contracts add: tr_count_contract_def
+    apply (crush_base contracts add: tr_count_contract_def
         simp add: word_less_nat_alt unat_inc dsum_Suc dsum_0 dcw_Suc dcw_0 length_dcw sat_step sat_step'
-          unat_of_nat_eq params_ok_nth sat_0)
+          unat_of_nat_eq params_ok_nth sat_0 push_ex push_the vok_new)
     prefer 3
-    subgoal for gc gn n gd d j_ref
+    subgoal for gc c gn n gd d j_ref
       apply (ucincl_discharge\<open>
         rule_tac
-          INV=\<open>\<lambda>j. \<Squnion>gc gn n gj jj. dc_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>dcw p (length (sdefs p)) \<star>
+          INV=\<open>\<lambda>j. \<Squnion>gc c gn n gj jj. dc_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star>
                  n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star> can_alloc_reference \<star>
-                 \<langle>unat jj \<le> length (sasserts p) \<and>
+                 \<langle>rvec_elems c = dcw p (length (sdefs p)) \<and> unat jj \<le> length (sasserts p) \<and>
                   unat n = sat (dsum p (length (sdefs p)) +
                      sum_list (map (cnt p (length (sdefs p))) (take (unat jj) (sasserts p)))) \<and>
                   length (sasserts p) - unat jj \<le> j\<rangle>\<close> and
-          INV'=\<open>\<lambda>j. \<Squnion>gc gn n gj jj. dc_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>dcw p (length (sdefs p)) \<star>
+          INV'=\<open>\<lambda>j. \<Squnion>gc c gn n gj jj. dc_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star>
                  n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star> can_alloc_reference \<star>
-                 \<langle>unat jj < length (sasserts p) \<and>
+                 \<langle>rvec_elems c = dcw p (length (sdefs p)) \<and> unat jj < length (sasserts p) \<and>
                   unat n = sat (dsum p (length (sdefs p)) +
                      sum_list (map (cnt p (length (sdefs p))) (take (unat jj) (sasserts p)))) \<and>
                   length (sasserts p) - unat jj \<le> Suc j\<rangle>\<close> and
@@ -774,7 +818,7 @@ subsection \<open>\<^verbatim>\<open>term_size\<close>\<close>
 definition stages_contract :: \<open>64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>stages_contract n \<equiv>
      make_function_contract (can_alloc_reference \<star> \<langle>64 \<le> urust_fuel\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = nst (unat n)\<rangle>)\<close>
+       (\<lambda>r. can_alloc_reference \<star> \<langle>unat r = stg (unat n)\<rangle>)\<close>
 
 lemma stages_spec [crush_specs]:
   shows \<open>\<Gamma>; stages n \<Turnstile>\<^sub>F stages_contract n\<close>
@@ -784,18 +828,20 @@ lemma stages_spec [crush_specs]:
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>j. \<Squnion>gi i gp p. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> can_alloc_reference \<star>
-               \<langle>unat p = sat (2 ^ unat i) \<and> unat i \<le> 64 \<and> unat i \<le> nst (unat n) \<and>
+               \<langle>unat p = sat (2 ^ unat i) \<and> unat i \<le> 64 \<and> (unat n \<le> 2 ^ 56 \<longrightarrow> unat i \<le> nst (unat n)) \<and>
                 (if unat p < unat n \<and> unat i < 64 then 64 - unat i else 0) \<le> j\<rangle>\<close> and
         INV'=\<open>\<lambda>j. \<Squnion>gi i gp p. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> can_alloc_reference \<star>
-               \<langle>unat p = sat (2 ^ unat i) \<and> unat i < 64 \<and> unat p < unat n \<and> unat i \<le> nst (unat n) \<and>
+               \<langle>unat p = sat (2 ^ unat i) \<and> unat i < 64 \<and> unat p < unat n \<and> (unat n \<le> 2 ^ 56 \<longrightarrow> unat i \<le> nst (unat n)) \<and>
                 64 - unat i \<le> Suc j\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: word_less_nat_alt unat_inc)
     apply (all \<open>(simp only: sat2a sat2b sat_1; fail)?\<close>)
-    apply (all \<open>(rule stages_step[OF refl, THEN conjunct1]; (assumption | simp))?\<close>)
-    apply (rule stages_exit[OF _ _ _ nst_le64]; auto split: if_splits)
+    apply (all \<open>(simp only: stages_dbl; fail)?\<close>)
+    apply (all \<open>(rule stages_step[OF refl]; simp)?\<close>)
+    subgoal for gi gp p r
+      by (rule stages_exit_stg[where p=\<open>sat (2 ^ unat r)\<close>, OF refl _ _ nst_le64]) (auto split: if_splits)
     done
   done
 
@@ -808,7 +854,7 @@ lemma bin_cost_spec [crush_specs]:
   shows \<open>\<Gamma>; bin_cost op w \<Turnstile>\<^sub>F bin_cost_contract op w\<close>
   apply (crush_boot f: bin_cost_def contract: bin_cost_contract_def)
   apply (cases op; simp only: Op_case_simps)
-  apply (crush_base simp add: ebin_def sat_mul_sat_l sat_add_sat_l sat_add_sat_r)+
+  apply (crush_base simp add: ebin_def sat_mul_sat_l sat_add_sat_l sat_add_sat_r sat_stages)+
   done
 
 definition op_width_contract :: \<open>Op \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
@@ -826,55 +872,55 @@ lemma op_width_spec [crush_specs]:
 text \<open>The \<open>k\<close>-th unfolding of \<^verbatim>\<open>term_size\<close>. The width it returns is exact up to saturation
   (for a variable it is the declared width itself), the cost is saturated.\<close>
 definition term_size_contract ::
-  \<open>nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> TermL \<Rightarrow> ('s, 64 word \<times> 64 word \<times> tnil, 'abort) function_contract\<close> where
+  \<open>nat \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> Term \<Rightarrow> ('s, 64 word \<times> 64 word \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>term_size_contract k ws ds t \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>Suc (size t) \<le> k \<and> tix (length ws) (length ds) t \<and> 64 \<le> urust_fuel\<rangle>)
+       (can_alloc_reference \<star> \<langle>Suc (size t) \<le> k \<and> tix (rvec_length ws) (rvec_length ds) (term_of t) \<and> 64 \<le> urust_fuel\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>sat (unat (fst r)) = sat (width (map unat ws) (map unat ds) t) \<and>
-           unat (fst (snd r)) = sat (ow (map unat ws) (map unat ds) t)\<rangle>)\<close>
+          \<langle>sat (unat (fst r)) = sat (width (map unat (rvec_elems ws)) (map unat (rvec_elems ds)) (term_of t)) \<and>
+           unat (fst (snd r)) = sat (ow (map unat (rvec_elems ws)) (map unat (rvec_elems ds)) (term_of t))\<rangle>)\<close>
 
 lemma term_size_step_spec:
   assumes IH: \<open>\<And>ws ds t. \<Gamma>; R ws ds t \<Turnstile>\<^sub>F term_size_contract k ws ds t\<close>
   shows \<open>\<Gamma>; term_size_rec_step R ws ds t \<Turnstile>\<^sub>F term_size_contract (Suc k) ws ds t\<close>
 proof (cases t)
-  case (TermL_Const bs)
-  show ?thesis unfolding TermL_Const
+  case (Term_Const bs)
+  show ?thesis unfolding Term_Const
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_Var i)
-  show ?thesis unfolding TermL_Var
+  case (Term_Var i)
+  show ?thesis unfolding Term_Var
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_Ref i)
-  show ?thesis unfolding TermL_Ref
+  case (Term_Ref i)
+  show ?thesis unfolding Term_Ref
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_Not a)
-  show ?thesis unfolding TermL_Not
+  case (Term_Not a)
+  show ?thesis unfolding Term_Not
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_Neg a)
-  show ?thesis unfolding TermL_Neg
+  case (Term_Neg a)
+  show ?thesis unfolding Term_Neg
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_Bin op a b)
-  show ?thesis unfolding TermL_Bin
+  case (Term_Bin op a b)
+  show ?thesis unfolding Term_Bin
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat width_Bin_opw simp del: width.simps)
      apply (rule fw_plus, rule opw_chain, assumption+)
@@ -882,50 +928,50 @@ next
     apply (cases op; auto simp: opw_def intro: sat_add_cong)
     done
 next
-  case (TermL_Extract hi lo a)
-  show ?thesis unfolding TermL_Extract
+  case (Term_Extract hi lo a)
+  show ?thesis unfolding Term_Extract
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat word_le_nat_alt)
     apply (auto simp: unat_sub_le sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong)
     done
 next
-  case (TermL_Repeat i a)
-  show ?thesis unfolding TermL_Repeat
+  case (Term_Repeat i a)
+  show ?thesis unfolding Term_Repeat
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_ZeroExtend i a)
-  show ?thesis unfolding TermL_ZeroExtend
+  case (Term_ZeroExtend i a)
+  show ?thesis unfolding Term_ZeroExtend
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_SignExtend i a)
-  show ?thesis unfolding TermL_SignExtend
+  case (Term_SignExtend i a)
+  show ?thesis unfolding Term_SignExtend
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_RotateLeft i a)
-  show ?thesis unfolding TermL_RotateLeft
+  case (Term_RotateLeft i a)
+  show ?thesis unfolding Term_RotateLeft
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_RotateRight i a)
-  show ?thesis unfolding TermL_RotateRight
+  case (Term_RotateRight i a)
+  show ?thesis unfolding Term_RotateRight
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
     done
 next
-  case (TermL_Ite c a b)
-  show ?thesis unfolding TermL_Ite
+  case (Term_Ite c a b)
+  show ?thesis unfolding Term_Ite
     apply (crush_boot f: term_size_rec_step_def contract: term_size_contract_def)
     apply (crush_base specs add: IH simp add: ow_eqs sat_add_sat sat_sat)
     apply (auto simp: unat_of_nat_eq sat_sat intro!: fw_one fw_plus sat_add_cong sat_mul_cong sat_cong_ge[OF _ ebin_ge])
@@ -958,15 +1004,15 @@ text \<open>What \<^verbatim>\<open>size_ok\<close> needs: indices in bounds (as
 definition size_pre :: \<open>nat \<Rightarrow> ProblemL \<Rightarrow> bool\<close> where
   \<open>size_pre F q \<equiv>
      let ws = ProblemL_widths q; ds = ProblemL_defs q; ts = ProblemL_asserts q in
-     64 \<le> F \<and> length ws < 2 ^ 63 \<and> length ws \<le> F \<and> length ds < 2 ^ 63 \<and> length ds \<le> F \<and>
+     64 \<le> F \<and> length ws < 2 ^ 63 \<and> length ws \<le> F \<and> length ds < 2 ^ 56 \<and> length ds \<le> F \<and>
      length ts < 2 ^ 63 \<and> length ts \<le> F \<and>
      (\<forall>d < length ds. tix (length ws) d (ds ! d) \<and> Suc (size (ds ! d)) \<le> F) \<and>
      (\<forall>t \<in> set ts. tix (length ws) (length ds) t \<and> Suc (size t) \<le> F)\<close>
 
-definition size_ok_contract :: \<open>ProblemL \<Rightarrow> ('s, bool, 'abort) function_contract\<close> where
+definition size_ok_contract :: \<open>Problem \<Rightarrow> ('s, bool, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>size_ok_contract q \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>size_pre urust_fuel q\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = sizes_ok q\<rangle>)\<close>
+     make_function_contract (can_alloc_reference \<star> \<langle>size_pre urust_fuel (prob_of q)\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = sizes_ok (prob_of q)\<rangle>)\<close>
 
 lemma size_ok_spec [crush_specs]:
   shows \<open>\<Gamma>; size_ok q \<Turnstile>\<^sub>F size_ok_contract q\<close>
@@ -976,30 +1022,30 @@ lemma size_ok_spec [crush_specs]:
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>j. \<Squnion>gs ds gd d. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>ds \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star> can_alloc_reference \<star>
-               \<langle>unat d \<le> length (ProblemL_defs q) \<and>
-                sat_eq (map unat ds) (def_widths (map unat (ProblemL_widths q)) [] (take (unat d) (ProblemL_defs q))) \<and>
-                length (ProblemL_defs q) - unat d \<le> j\<rangle>\<close> and
+               \<langle>unat d \<le> length (ProblemL_defs (prob_of q)) \<and> vok ds \<and> rvec_length ds = unat d \<and>
+                sat_eq (map unat (rvec_elems ds)) (def_widths (map unat (ProblemL_widths (prob_of q))) [] (take (unat d) (ProblemL_defs (prob_of q)))) \<and>
+                length (ProblemL_defs (prob_of q)) - unat d \<le> j\<rangle>\<close> and
         INV'=\<open>\<lambda>j. \<Squnion>gs ds gd d. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>ds \<star> d_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>d \<star> can_alloc_reference \<star>
-               \<langle>unat d < length (ProblemL_defs q) \<and>
-                sat_eq (map unat ds) (def_widths (map unat (ProblemL_widths q)) [] (take (unat d) (ProblemL_defs q))) \<and>
-                length (ProblemL_defs q) - unat d \<le> Suc j\<rangle>\<close> and
+               \<langle>unat d < length (ProblemL_defs (prob_of q)) \<and> vok ds \<and> rvec_length ds = unat d \<and>
+                sat_eq (map unat (rvec_elems ds)) (def_widths (map unat (ProblemL_widths (prob_of q))) [] (take (unat d) (ProblemL_defs (prob_of q)))) \<and>
+                length (ProblemL_defs (prob_of q)) - unat d \<le> Suc j\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: vec_push_def contracts add: term_size_contract_def
-        simp add: word_less_nat_alt unat_inc unat_of_nat_eq sat_eq_Nil def_widths_take_Suc)
-    prefer 3
+    apply (crush_base contracts add: term_size_contract_def
+        simp add: word_less_nat_alt unat_inc unat_of_nat_eq sat_eq_Nil def_widths_take_Suc push_ex push_the vok_new size_term_of)
+    prefer 2
     subgoal for gs ds gd d n_ref i_ref
       apply (ucincl_discharge\<open>
         rule_tac
           INV=\<open>\<lambda>j. \<Squnion>gn n gi i. n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-                 \<langle>unat i \<le> length (ProblemL_widths q) \<and>
-                  unat n = sat (1 + sum_list (map unat (take (unat i) (ProblemL_widths q)))) \<and>
-                  length (ProblemL_widths q) - unat i \<le> j\<rangle>\<close> and
+                 \<langle>unat i \<le> length (ProblemL_widths (prob_of q)) \<and>
+                  unat n = sat (1 + sum_list (map unat (take (unat i) (ProblemL_widths (prob_of q))))) \<and>
+                  length (ProblemL_widths (prob_of q)) - unat i \<le> j\<rangle>\<close> and
           INV'=\<open>\<lambda>j. \<Squnion>gn n gi i. n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-                 \<langle>unat i < length (ProblemL_widths q) \<and>
-                  unat n = sat (1 + sum_list (map unat (take (unat i) (ProblemL_widths q)))) \<and>
-                  length (ProblemL_widths q) - unat i \<le> Suc j\<rangle>\<close> and
+                 \<langle>unat i < length (ProblemL_widths (prob_of q)) \<and>
+                  unat n = sat (1 + sum_list (map unat (take (unat i) (ProblemL_widths (prob_of q))))) \<and>
+                  length (ProblemL_widths (prob_of q)) - unat i \<le> Suc j\<rangle>\<close> and
           \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
           \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
@@ -1010,58 +1056,57 @@ lemma size_ok_spec [crush_specs]:
           rule_tac
             INV=\<open>\<lambda>j. \<Squnion>gs' gn n gk k. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs'\<down>ds \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star>
                    can_alloc_reference \<star>
-                   \<langle>unat k \<le> length (ProblemL_defs q) \<and> sat_eq (map unat ds) (DSq q) \<and>
-                    (\<forall>k' < length (ProblemL_defs q). tix (length (ProblemL_widths q)) (length ds) (ProblemL_defs q ! k')) \<and>
-                    unat n = sat (base q + sum_list (map (ow (map unat (ProblemL_widths q)) (DSq q))
-                                                      (take (unat k) (ProblemL_defs q)))) \<and>
-                    length (ProblemL_defs q) - unat k \<le> j\<rangle>\<close> and
+                   \<langle>unat k \<le> length (ProblemL_defs (prob_of q)) \<and> sat_eq (map unat (rvec_elems ds)) (DSq (prob_of q)) \<and>
+                    (\<forall>k' < length (ProblemL_defs (prob_of q)). tix (length (ProblemL_widths (prob_of q))) (rvec_length ds) (ProblemL_defs (prob_of q) ! k')) \<and>
+                    unat n = sat (base (prob_of q) + sum_list (map (ow (map unat (ProblemL_widths (prob_of q))) (DSq (prob_of q)))
+                                                      (take (unat k) (ProblemL_defs (prob_of q))))) \<and>
+                    length (ProblemL_defs (prob_of q)) - unat k \<le> j\<rangle>\<close> and
             INV'=\<open>\<lambda>j. \<Squnion>gs' gn n gk k. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs'\<down>ds \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star>
                    can_alloc_reference \<star>
-                   \<langle>unat k < length (ProblemL_defs q) \<and> sat_eq (map unat ds) (DSq q) \<and>
-                    (\<forall>k' < length (ProblemL_defs q). tix (length (ProblemL_widths q)) (length ds) (ProblemL_defs q ! k')) \<and>
-                    unat n = sat (base q + sum_list (map (ow (map unat (ProblemL_widths q)) (DSq q))
-                                                      (take (unat k) (ProblemL_defs q)))) \<and>
-                    length (ProblemL_defs q) - unat k \<le> Suc j\<rangle>\<close> and
+                   \<langle>unat k < length (ProblemL_defs (prob_of q)) \<and> sat_eq (map unat (rvec_elems ds)) (DSq (prob_of q)) \<and>
+                    (\<forall>k' < length (ProblemL_defs (prob_of q)). tix (length (ProblemL_widths (prob_of q))) (rvec_length ds) (ProblemL_defs (prob_of q) ! k')) \<and>
+                    unat n = sat (base (prob_of q) + sum_list (map (ow (map unat (ProblemL_widths (prob_of q))) (DSq (prob_of q)))
+                                                      (take (unat k) (ProblemL_defs (prob_of q))))) \<and>
+                    length (ProblemL_defs (prob_of q)) - unat k \<le> Suc j\<rangle>\<close> and
             BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
             \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
             \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
           in wp_bounded_while_framedI\<close>)
         apply (crush_base contracts add: term_size_contract_def
-            simp add: word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def ow_add add.assoc)
+            simp add: size_term_of word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def ow_add add.assoc)
         prefer 2
         subgoal for gs' gna n gk k j_ref
           apply (ucincl_discharge\<open>
             rule_tac
               INV=\<open>\<lambda>j. \<Squnion>gs' gn n gj jj. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs'\<down>ds \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star>
                      can_alloc_reference \<star>
-                     \<langle>unat jj \<le> length (ProblemL_asserts q) \<and> sat_eq (map unat ds) (DSq q) \<and>
-                      (\<forall>t \<in> set (ProblemL_asserts q). tix (length (ProblemL_widths q)) (length ds) t) \<and>
-                      unat n = sat (base q +
-                        sum_list (map (ow (map unat (ProblemL_widths q)) (DSq q)) (ProblemL_defs q)) +
-                        sum_list (map (ow (map unat (ProblemL_widths q)) (DSq q))
-                                   (take (unat jj) (ProblemL_asserts q)))) \<and>
-                      length (ProblemL_asserts q) - unat jj \<le> j\<rangle>\<close> and
+                     \<langle>unat jj \<le> length (ProblemL_asserts (prob_of q)) \<and> sat_eq (map unat (rvec_elems ds)) (DSq (prob_of q)) \<and>
+                      (\<forall>t \<in> set (ProblemL_asserts (prob_of q)). tix (length (ProblemL_widths (prob_of q))) (rvec_length ds) t) \<and>
+                      unat n = sat (base (prob_of q) +
+                        sum_list (map (ow (map unat (ProblemL_widths (prob_of q))) (DSq (prob_of q))) (ProblemL_defs (prob_of q))) +
+                        sum_list (map (ow (map unat (ProblemL_widths (prob_of q))) (DSq (prob_of q)))
+                                   (take (unat jj) (ProblemL_asserts (prob_of q))))) \<and>
+                      length (ProblemL_asserts (prob_of q)) - unat jj \<le> j\<rangle>\<close> and
               INV'=\<open>\<lambda>j. \<Squnion>gs' gn n gj jj. ds_ref \<mapsto>\<langle>\<top>\<rangle> gs'\<down>ds \<star> n_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>n \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star>
                      can_alloc_reference \<star>
-                     \<langle>unat jj < length (ProblemL_asserts q) \<and> sat_eq (map unat ds) (DSq q) \<and>
-                      (\<forall>t \<in> set (ProblemL_asserts q). tix (length (ProblemL_widths q)) (length ds) t) \<and>
-                      unat n = sat (base q +
-                        sum_list (map (ow (map unat (ProblemL_widths q)) (DSq q)) (ProblemL_defs q)) +
-                        sum_list (map (ow (map unat (ProblemL_widths q)) (DSq q))
-                                   (take (unat jj) (ProblemL_asserts q)))) \<and>
-                      length (ProblemL_asserts q) - unat jj \<le> Suc j\<rangle>\<close> and
+                     \<langle>unat jj < length (ProblemL_asserts (prob_of q)) \<and> sat_eq (map unat (rvec_elems ds)) (DSq (prob_of q)) \<and>
+                      (\<forall>t \<in> set (ProblemL_asserts (prob_of q)). tix (length (ProblemL_widths (prob_of q))) (rvec_length ds) t) \<and>
+                      unat n = sat (base (prob_of q) +
+                        sum_list (map (ow (map unat (ProblemL_widths (prob_of q))) (DSq (prob_of q))) (ProblemL_defs (prob_of q))) +
+                        sum_list (map (ow (map unat (ProblemL_widths (prob_of q))) (DSq (prob_of q)))
+                                   (take (unat jj) (ProblemL_asserts (prob_of q))))) \<and>
+                      length (ProblemL_asserts (prob_of q)) - unat jj \<le> Suc j\<rangle>\<close> and
               BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
               \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
               \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
             in wp_bounded_while_framedI\<close>)
           apply (crush_base contracts add: term_size_contract_def
-              simp add: word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def ow_add add.assoc)
-          subgoal by (subst ow_add[where D=\<open>DSq q\<close>]) (auto simp: add.assoc)
+              simp add: size_term_of word_less_nat_alt unat_inc unat_of_nat_eq take_Suc_conv_app_nth base_def ow_add add.assoc)
+          subgoal by (subst ow_add[where D=\<open>DSq (prob_of q)\<close>]) (auto simp: add.assoc)
           subgoal by (simp add: final_cmp4 sizes_ok_def ovf_bound_eq base_def add.assoc)
-          subgoal by (blast intro: tix_assert_q)
           done
-        subgoal by (subst ow_add[where D=\<open>DSq q\<close>]) (auto simp: add.assoc)
-        subgoal using tix_full by blast
+        subgoal by (subst ow_add[where D=\<open>DSq (prob_of q)\<close>]) (auto simp: add.assoc)
+        subgoal for k' by (rule tix_mono[of _ k']) auto
         subgoal by (simp add: DSq_def)
         done
       done
@@ -1083,29 +1128,29 @@ lemma tsort_dok:
   \<open>smt_tsort fs ds ps t \<noteq> None \<Longrightarrow> smt_term_repr t \<Longrightarrow> size t \<le> F \<Longrightarrow> dok (length ds) F t\<close>
 proof (induction t arbitrary: ps)
   case (SmtTerm_Def d args)
-  have a: \<open>smt_tsort fs ds ps x \<noteq> None\<close> if \<open>x \<in> set args\<close> for x
+  have a: \<open>smt_tsort fs ds ps x \<noteq> None\<close> if \<open>x \<in> set (rvec_elems args)\<close> for x
   proof -
-    have m: \<open>map (smt_tsort fs ds ps) args = map Some (dpar (ds ! unat d))\<close>
+    have m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (dpar (ds ! unat d))\<close>
       using SmtTerm_Def.prems(1) by (auto split: if_splits)
     then have \<open>smt_tsort fs ds ps x \<in> set (map Some (dpar (ds ! unat d)))\<close>
       using that by (metis image_eqI list.set_map)
     then show ?thesis by auto
   qed
-  have s: \<open>size x \<le> F\<close> if \<open>x \<in> set args\<close> for x
-    using size_arg_le[OF that] SmtTerm_Def.prems(3) by simp
-  have d: \<open>dok (length ds) F x\<close> if \<open>x \<in> set args\<close> for x
-    using SmtTerm_Def.IH[OF that a[OF that]] SmtTerm_Def.prems(2) s[OF that] that by simp
+  have s: \<open>size x \<le> F\<close> if \<open>x \<in> set (rvec_elems args)\<close> for x
+    using size_arg_le[OF that] size_list_rvec_elems[of size args] SmtTerm_Def.prems(3) by simp
+  have d: \<open>dok (length ds) F x\<close> if \<open>x \<in> set (rvec_elems args)\<close> for x
+    using SmtTerm_Def.IH[unfolded set_rvec_elems, OF that a[OF that]] SmtTerm_Def.prems(2) s[OF that] that by simp
   have u: \<open>unat d < length ds\<close> using SmtTerm_Def.prems(1) by (auto split: if_splits)
-  show ?case using SmtTerm_Def.prems(2,3) size_args_le[of args] d u by auto
+  show ?case using SmtTerm_Def.prems(2,3) size_args_le[of \<open>rvec_elems args\<close>] size_list_rvec_elems[of size args] d u by auto
 next
   case (SmtTerm_App op args)
-  have a: \<open>smt_tsort fs ds ps x \<noteq> None\<close> if \<open>x \<in> set args\<close> for x
+  have a: \<open>smt_tsort fs ds ps x \<noteq> None\<close> if \<open>x \<in> set (rvec_elems args)\<close> for x
     using SmtTerm_App.prems(1) that by (auto split: if_splits) (metis image_eqI not_None_eq)
-  have s: \<open>size x \<le> F\<close> if \<open>x \<in> set args\<close> for x
-    using size_arg_le[OF that] SmtTerm_App.prems(3) by simp
-  have d: \<open>dok (length ds) F x\<close> if \<open>x \<in> set args\<close> for x
-    using SmtTerm_App.IH[OF that a[OF that]] SmtTerm_App.prems(2) s[OF that] that by simp
-  show ?case using SmtTerm_App.prems(2,3) size_args_le[of args] d by auto
+  have s: \<open>size x \<le> F\<close> if \<open>x \<in> set (rvec_elems args)\<close> for x
+    using size_arg_le[OF that] size_list_rvec_elems[of size args] SmtTerm_App.prems(3) by simp
+  have d: \<open>dok (length ds) F x\<close> if \<open>x \<in> set (rvec_elems args)\<close> for x
+    using SmtTerm_App.IH[unfolded set_rvec_elems, OF that a[OF that]] SmtTerm_App.prems(2) s[OF that] that by simp
+  show ?case using SmtTerm_App.prems(2,3) size_args_le[of \<open>rvec_elems args\<close>] size_list_rvec_elems[of size args] d by auto
 qed auto
 
 text \<open>Every constant in \<open>t\<close> has fewer than \<open>2^64\<close> bits.\<close>
@@ -1165,12 +1210,12 @@ proof (induction p dm env n S t and p dm env n S ts rule: tr_term_m_tr_args_m.in
     show ?thesis
     proof (cases \<open>unat d < n\<close>)
       case True
-      have A: \<open>\<forall>a \<in> set (fst (tr_args_m p dm env n S args)). cok a\<close>
+      have A: \<open>\<forall>a \<in> set (fst (tr_args_m p dm env n S (rvec_elems args))). cok a\<close>
         using 5(1)[OF F True] 5(3-6) by simp
       have r: \<open>smt_term_repr (SmtDef_body (sdefs p ! unat d))\<close> using 5(4,5) True by simp
-      have B: \<open>(\<forall>a \<in> set (fst (tr_term_m p dm (snd (tr_args_m p dm env n S args)) (unat d) (fst (tr_args_m p dm env n S args))
+      have B: \<open>(\<forall>a \<in> set (fst (tr_term_m p dm (snd (tr_args_m p dm env n S (rvec_elems args))) (unat d) (fst (tr_args_m p dm env n S (rvec_elems args)))
                    (SmtDef_body (sdefs p ! unat d)))). cok a) \<and>
-              cok (snd (tr_term_m p dm (snd (tr_args_m p dm env n S args)) (unat d) (fst (tr_args_m p dm env n S args))
+              cok (snd (tr_term_m p dm (snd (tr_args_m p dm env n S (rvec_elems args))) (unat d) (fst (tr_args_m p dm env n S (rvec_elems args)))
                    (SmtDef_body (sdefs p ! unat d))))\<close>
         using 5(2)[OF F True refl r _ 5(5) A] 5(4) True by simp
       show ?thesis using F True B by (simp add: Let_def)
@@ -1281,7 +1326,7 @@ begin
 
 lemma size_pre_of_wt:
   assumes \<open>problem_wt q\<close> \<open>\<forall>t \<in> set (ProblemL_defs q @ ProblemL_asserts q). cok t\<close>
-    \<open>length (ProblemL_widths q) < 2 ^ 63\<close> \<open>length (ProblemL_defs q) < 2 ^ 63\<close>
+    \<open>length (ProblemL_widths q) < 2 ^ 63\<close> \<open>length (ProblemL_defs q) < 2 ^ 56\<close>
     \<open>length (ProblemL_asserts q) < 2 ^ 63\<close> \<open>fuel_q q \<le> F\<close>
   shows \<open>size_pre F q\<close>
 proof -
@@ -1308,7 +1353,7 @@ proof -
 qed
 
 lemma tsize_pre_of_wf:
-  assumes \<open>smt_wf p\<close> \<open>smt_repr_ok p\<close> \<open>fuel_smt p \<le> F\<close>
+  assumes \<open>smt_wf p\<close> \<open>smt_repr_ok p\<close> \<open>fuel_smt p \<le> F\<close> \<open>length (sdefs p) < 2 ^ 56\<close>
   shows \<open>tsize_pre F p\<close>
 proof -
   let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close> and ?as = \<open>sasserts p\<close>
@@ -1340,7 +1385,7 @@ proof -
   have da: \<open>dok (length ?ds) F t\<close> if \<open>t \<in> set ?as\<close> for t
     using tsort_dok[OF ta[OF that] ra[OF that]] sa[OF that] by simp
   have po: \<open>params_ok p\<close> using assms(2) by (auto simp: smt_repr_ok_def params_ok_def)
-  have ln: \<open>length ?ds < 2 ^ 63\<close> \<open>length ?as < 2 ^ 63\<close> using assms(2) by (simp_all add: smt_repr_ok_def)
+  have ln: \<open>length ?ds < 2 ^ 56\<close> \<open>length ?as < 2 ^ 63\<close> using assms(2,4) by (simp_all add: smt_repr_ok_def)
   have lf: \<open>length ?ds \<le> F\<close> \<open>length ?as \<le> F\<close> using assms(3) by (simp_all add: fuel_smt_def)
   show ?thesis using sd sa dd da po ln lf by (simp add: tsize_pre_def Let_def)
 qed

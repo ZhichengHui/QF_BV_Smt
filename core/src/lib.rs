@@ -2467,9 +2467,11 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
 // Size checks. The solver of the extended language (`solve`) is verified for problems whose
 // `ovf_bound` (proof/core_spec/QFBV_CoreSpec.thy) is below 2^56, so that every vector it grows
 // stays below 2^56 elements (a `push` then never exceeds the largest capacity), and the
-// translation indexes its definitions by `usize`. `check_sat` answers `Unknown` when the translation would add 2^56 definitions or
-// more, or when the translated problem is too large for `solve`. The computations below saturate
-// at 2^56: each returns the exact value if it is below 2^56, and 2^56 otherwise.
+// translation indexes its definitions by `usize`. `check_sat` answers `Unknown` when the problem has
+// 2^56 definitions or more (`tr_size` pushes one count per definition), when the translation would
+// add 2^56 definitions or more, or when the translated problem is too large for `solve`. The
+// computations below saturate at 2^56: each returns the exact value if it is below 2^56, and 2^56
+// otherwise.
 
 /// The bound at which the size computations saturate: 2^56.
 fn cap() -> usize {
@@ -2666,6 +2668,9 @@ fn size_ok(q: &Problem) -> bool {
 /// language and solved.
 pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
     if !in_fragment(p) {
+        return SmtAnswer::Unknown;
+    }
+    if p.defs.len() >= cap() {
         return SmtAnswer::Unknown;
     }
     if tr_size(p) >= cap() {

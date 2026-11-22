@@ -762,16 +762,6 @@ proof -
     using eok_len[of N vs dv c] by (simp add: eok_def)
 qed
 
-text \<open>The constants of a core term are well-formed vectors (the evaluation clones them).\<close>
-primrec ct_vok :: \<open>CoreTerm \<Rightarrow> bool\<close> where
-  \<open>ct_vok (CoreTerm_Const bs) = vok bs\<close>
-| \<open>ct_vok (CoreTerm_Var i) = True\<close>
-| \<open>ct_vok (CoreTerm_Ref i) = True\<close>
-| \<open>ct_vok (CoreTerm_Not a) = ct_vok a\<close>
-| \<open>ct_vok (CoreTerm_Bin op a b) = (ct_vok a \<and> ct_vok b)\<close>
-| \<open>ct_vok (CoreTerm_Extract hi lo a) = ct_vok a\<close>
-| \<open>ct_vok (CoreTerm_Ite c a b) = (ct_vok c \<and> ct_vok a \<and> ct_vok b)\<close>
-
 definition edefs_ok :: \<open>nat \<Rightarrow> CoreProblemL \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
   \<open>edefs_ok N p m \<equiv>
      let ws = map length m in let D = CoreProblemL_defs p in
@@ -1154,6 +1144,30 @@ lemma bits_extract_spec [crush_specs]:
     done
   done
 
+definition bits_copy_contract :: \<open>bool rvec \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
+  [crush_contracts]: \<open>bits_copy_contract a \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>rvec_length a \<le> urust_fuel \<and> rvec_length a < 2 ^ 56\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = rvec_elems a \<and> vok r\<rangle>)\<close>
+
+lemma bits_copy_spec [crush_specs]:
+  shows \<open>\<Gamma>; bits_copy a \<Turnstile>\<^sub>F bits_copy_contract a\<close>
+  apply (crush_boot f: bits_copy_def contract: bits_copy_contract_def)
+  apply (crush_base)
+  subgoal for r_ref i_ref
+    apply (ucincl_discharge\<open>
+      rule_tac
+        INV=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i \<le> rvec_length a \<and> rvec_elems r = take (unat i) (rvec_elems a) \<and> vok r \<and> rvec_length a - unat i \<le> k\<rangle>\<close> and
+        INV'=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
+               \<langle>unat i < rvec_length a \<and> rvec_elems r = take (unat i) (rvec_elems a) \<and> vok r \<and> rvec_length a - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = rvec_elems a \<and> vok r\<rangle>\<close> and
+        \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+      in wp_bounded_while_framedI\<close>)
+    apply (crush_base simp add: push_not_None word_less_nat_alt take_Suc_conv_app_nth)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len take_Suc_conv_app_nth)
+    done
+  done
+
 definition bits_concat_contract :: \<open>bool rvec \<Rightarrow> bool rvec \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_concat_contract hi lo \<equiv>
      make_function_contract (can_alloc_reference \<star> \<langle>rvec_length hi \<le> urust_fuel \<and> rvec_length lo + rvec_length hi < 2 ^ 56 \<and> vok lo\<rangle>)
@@ -1302,7 +1316,7 @@ definition eval_term_contract ::
   [crush_contracts]: \<open>eval_term_contract k vs dv t \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-        \<langle>Suc (size t) \<le> k \<and> allvok vs \<and> allvok dv \<and> ct_vok t \<and> eok urust_fuel (vecs_of vs) (vecs_of dv) (ct_of t)\<rangle>)
+        \<langle>Suc (size t) \<le> k \<and> allvok vs \<and> allvok dv \<and> eok urust_fuel (vecs_of vs) (vecs_of dv) (ct_of t)\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = eval_m (vecs_of vs) (vecs_of dv) (ct_of t) \<and> vok r\<rangle>)\<close>
 
 lemma eval_term_rec_step_spec:
@@ -1313,7 +1327,9 @@ proof (cases t)
   show ?thesis unfolding CoreTerm_Const
   proof (crush_boot f: eval_term_rec_step_def contract: eval_term_contract_def, goal_cases)
     case 1
-    note 1
+    have E0: \<open>2 * rvec_length bs + 2 \<le> urust_fuel \<and> 2 * rvec_length bs + 2 < 2 ^ 56\<close>
+      using 1 eok_width[of urust_fuel \<open>vecs_of vs\<close> \<open>vecs_of dv\<close> \<open>ct_of (CoreTerm_Const bs)\<close>] by simp
+    note 1 E0
     then show ?case by (crush_base specs add: IH simp add: allvok_nth)
   qed
 next
@@ -1414,7 +1430,7 @@ definition eval_defs_contract :: \<open>CoreProblem \<Rightarrow> bool rvec rvec
      make_function_contract
        (can_alloc_reference \<star>
         \<langle>rvec_length (CoreProblem_defs p) \<le> urust_fuel \<and> rvec_length (CoreProblem_defs p) < 2 ^ 56 \<and>
-         allvok m \<and> (\<forall>t \<in> set (rvec_elems (CoreProblem_defs p)). ct_vok t) \<and> edefs_ok urust_fuel (cprob_of p) (vecs_of m)\<rangle>)
+         allvok m \<and> edefs_ok urust_fuel (cprob_of p) (vecs_of m)\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>vecs_of r = eval_defs_m (cprob_of p) (vecs_of m) \<and> vok r \<and> allvok r\<rangle>)\<close>
 
 lemma eval_defs_spec [crush_specs]:

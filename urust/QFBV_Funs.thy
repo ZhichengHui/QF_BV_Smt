@@ -3163,6 +3163,9 @@ definition "check_sat" :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort
     if !in_fragment(p) {
       return SmtAnswer_Unknown;
     };
+    if rvec_len(p.SmtProblem_defs) >= cap() {
+      return SmtAnswer_Unknown;
+    };
     if tr_size(p) >= cap() {
       return SmtAnswer_Unknown;
     };

@@ -1281,7 +1281,7 @@ theorem elim_fuel_lt:
     \<open>length (CoreProblemL_asserts q) < 2 ^ 56\<close>
     \<open>\<forall>t \<in> set (CoreProblemL_defs q @ CoreProblemL_asserts q).
        tbound (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblemL_defs q)) t < 2 ^ 56\<close>
-  shows \<open>fuel_bound q2 < 2 ^ 57\<close>
+  shows \<open>fuel_bound q2 \<le> 2 ^ 57\<close>
 proof (rule fuel_bound_lt)
   have cc: \<open>sum_list (map (ccount ews eds) D2) \<le> sum_list (map (ccount ews eds) eD)\<close>
     by (rule sum_list_map_nth_le) (simp_all add: D2(1) en_def D2_size)

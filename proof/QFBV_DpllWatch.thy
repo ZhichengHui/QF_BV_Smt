@@ -363,17 +363,17 @@ definition dpll_watch_init_contract ::
 
 text \<open>The loop of \<^verbatim>\<open>watch_init\<close> has set up the watches of the first \<open>c\<close> clauses.\<close>
 definition wl_init :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
-  \<open>wl_init (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<equiv> (\<exists>Ls. wl_lists (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h) Ls) \<and> (\<forall>s. 2 * c \<le> s \<and> s < 2 * length (vecs_of cs) \<longrightarrow> (rvec_elems p) ! s = 0)\<close>
+  \<open>wl_init cs c p nx h \<equiv> (\<exists>Ls. wl_lists cs c p nx h Ls) \<and> (\<forall>s. 2 * c \<le> s \<and> s < 2 * length cs \<longrightarrow> p ! s = 0)\<close>
 
 lemma wl_init_0:
-  assumes \<open>length (vecs_of cs) < 9223372036854775808\<close>
-  shows \<open>wl_init (vecs_of cs) 0 (replicate (2 * length (vecs_of cs)) 0) (replicate (2 * length (vecs_of cs)) 18446744073709551615)
+  assumes \<open>length cs < 9223372036854775808\<close>
+  shows \<open>wl_init cs 0 (replicate (2 * length cs) 0) (replicate (2 * length cs) 18446744073709551615)
            (replicate (2 * m) 18446744073709551615)\<close>
 proof -
-  have \<open>wl_lists (vecs_of cs) 0 (replicate (2 * length (vecs_of cs)) 0) (replicate (2 * length (vecs_of cs)) 18446744073709551615)
+  have \<open>wl_lists cs 0 (replicate (2 * length cs) 0) (replicate (2 * length cs) 18446744073709551615)
            (replicate (2 * m) 18446744073709551615) (replicate (2 * m) [])\<close>
-    using wl_init_empty[of \<open>replicate (2 * length \<open>vecs_of cs\<close>) 0\<close> \<open>vecs_of cs\<close>
-      \<open>replicate (2 * length \<open>vecs_of cs\<close>) 18446744073709551615\<close> \<open>replicate (2 * m) 18446744073709551615\<close>] assms
+    using wl_init_empty[of \<open>replicate (2 * length cs) 0\<close> cs
+      \<open>replicate (2 * length cs) 18446744073709551615\<close> \<open>replicate (2 * m) 18446744073709551615\<close>] assms
     by simp
   then show ?thesis unfolding wl_init_def by auto
 qed
@@ -381,112 +381,112 @@ qed
 lemma lends_init: \<open>lends (replicate k 18446744073709551615) (replicate m 18446744073709551615)\<close>
   unfolding lends_def by (auto simp: set_replicate_conv_if)
 
-lemma lends_nth_nx: \<open>lends (rvec_elems nx) (rvec_elems h) \<Longrightarrow> i < rvec_length nx \<Longrightarrow> unat ((rvec_elems nx) ! i) < rvec_length nx \<or> unat ((rvec_elems nx) ! i) = 2 ^ 64 - 1\<close>
+lemma lends_nth_nx: \<open>lends nx h \<Longrightarrow> i < length nx \<Longrightarrow> unat (nx ! i) < length nx \<or> unat (nx ! i) = 2 ^ 64 - 1\<close>
   by (simp add: lends_def)
 
-lemma lends_nth_h: \<open>lends (rvec_elems nx) (rvec_elems h) \<Longrightarrow> i < rvec_length h \<Longrightarrow> unat ((rvec_elems h) ! i) < rvec_length nx \<or> unat ((rvec_elems h) ! i) = 2 ^ 64 - 1\<close>
+lemma lends_nth_h: \<open>lends nx h \<Longrightarrow> i < length h \<Longrightarrow> unat (h ! i) < length nx \<or> unat (h ! i) = 2 ^ 64 - 1\<close>
   by (simp add: lends_def)
 
 lemma lends_nx:
-  assumes \<open>lends (rvec_elems nx) (rvec_elems h)\<close> \<open>unat v < rvec_length nx \<or> unat v = 2 ^ 64 - 1\<close>
-  shows \<open>lends ((rvec_elems nx)[i := v]) (rvec_elems h)\<close>
+  assumes \<open>lends nx h\<close> \<open>unat v < length nx \<or> unat v = 2 ^ 64 - 1\<close>
+  shows \<open>lends (nx[i := v]) h\<close>
 proof -
-  have \<open>set ((rvec_elems nx)[i := v]) \<subseteq> insert v (set (rvec_elems nx))\<close> by (rule set_update_subset_insert)
+  have \<open>set (nx[i := v]) \<subseteq> insert v (set nx)\<close> by (rule set_update_subset_insert)
   then show ?thesis using assms unfolding lends_def by auto
 qed
 
 lemma lends_h:
-  assumes \<open>lends (rvec_elems nx) (rvec_elems h)\<close> \<open>unat v < rvec_length nx \<or> unat v = 2 ^ 64 - 1\<close>
-  shows \<open>lends (rvec_elems nx) ((rvec_elems h)[i := v])\<close>
+  assumes \<open>lends nx h\<close> \<open>unat v < length nx \<or> unat v = 2 ^ 64 - 1\<close>
+  shows \<open>lends nx (h[i := v])\<close>
 proof -
-  have \<open>set ((rvec_elems h)[i := v]) \<subseteq> insert v (set (rvec_elems h))\<close> by (rule set_update_subset_insert)
+  have \<open>set (h[i := v]) \<subseteq> insert v (set h)\<close> by (rule set_update_subset_insert)
   then show ?thesis using assms unfolding lends_def by auto
 qed
 
 lemma lends_add:
-  assumes \<open>lends (rvec_elems nx) (rvec_elems h)\<close> \<open>unat sw < rvec_length nx\<close> \<open>unat ow < rvec_length nx\<close> \<open>x0 < rvec_length h\<close> \<open>x1 < rvec_length h\<close>
-  shows \<open>lends ((rvec_elems nx)[i := (rvec_elems h) ! x0, j := (rvec_elems h)[x0 := sw] ! x1]) ((rvec_elems h)[x0 := sw, x1 := ow])\<close>
+  assumes \<open>lends nx h\<close> \<open>unat sw < length nx\<close> \<open>unat ow < length nx\<close> \<open>x0 < length h\<close> \<open>x1 < length h\<close>
+  shows \<open>lends (nx[i := h ! x0, j := h[x0 := sw] ! x1]) (h[x0 := sw, x1 := ow])\<close>
 proof -
-  have a: \<open>lends ((rvec_elems nx)[i := (rvec_elems h) ! x0]) (rvec_elems h)\<close> using lends_nx[OF assms(1) lends_nth_h[OF assms(1,4)]] .
-  have b: \<open>lends ((rvec_elems nx)[i := (rvec_elems h) ! x0]) ((rvec_elems h)[x0 := sw])\<close> by (rule lends_h[OF a]) (use assms(2) in simp)
-  have c: \<open>unat ((rvec_elems h)[x0 := sw] ! x1) < rvec_length nx \<or> unat ((rvec_elems h)[x0 := sw] ! x1) = 2 ^ 64 - 1\<close>
+  have a: \<open>lends (nx[i := h ! x0]) h\<close> using lends_nx[OF assms(1) lends_nth_h[OF assms(1,4)]] .
+  have b: \<open>lends (nx[i := h ! x0]) (h[x0 := sw])\<close> by (rule lends_h[OF a]) (use assms(2) in simp)
+  have c: \<open>unat (h[x0 := sw] ! x1) < length nx \<or> unat (h[x0 := sw] ! x1) = 2 ^ 64 - 1\<close>
     using lends_nth_h[OF assms(1,5)] assms(2,5) by (cases \<open>x0 = x1\<close>) simp_all
-  have d: \<open>lends ((rvec_elems nx)[i := (rvec_elems h) ! x0, j := (rvec_elems h)[x0 := sw] ! x1]) ((rvec_elems h)[x0 := sw])\<close>
+  have d: \<open>lends (nx[i := h ! x0, j := h[x0 := sw] ! x1]) (h[x0 := sw])\<close>
     by (rule lends_nx[OF b]) (use c in simp)
   show ?thesis by (rule lends_h[OF d]) (use assms(3) in simp)
 qed
 
 lemma lends_addw:
   fixes r :: \<open>64 word\<close>
-  assumes \<open>lends (rvec_elems nx) (rvec_elems h)\<close> \<open>unat r < length (vecs_of cs)\<close> \<open>length (vecs_of cs) < 9223372036854775808\<close> \<open>rvec_length nx = 2 * length (vecs_of cs)\<close>
-    \<open>x0 < rvec_length h\<close> \<open>x1 < rvec_length h\<close>
-  shows \<open>lends ((rvec_elems nx)[i := (rvec_elems h) ! x0, j := (rvec_elems h)[x0 := 2 * r] ! x1]) ((rvec_elems h)[x0 := 2 * r, x1 := 2 * r + 1])\<close>
+  assumes \<open>lends nx h\<close> \<open>unat r < length cs\<close> \<open>length cs < 9223372036854775808\<close> \<open>length nx = 2 * length cs\<close>
+    \<open>x0 < length h\<close> \<open>x1 < length h\<close>
+  shows \<open>lends (nx[i := h ! x0, j := h[x0 := 2 * r] ! x1]) (h[x0 := 2 * r, x1 := 2 * r + 1])\<close>
   using lends_add[OF assms(1) _ _ assms(5,6)] unat64_dbl_lt[OF assms(2,3)] assms(2,4) by simp
 
 lemma len2_ne: \<open>2 \<le> length xs \<Longrightarrow> xs \<noteq> []\<close>
   by auto
 
 lemma xlt:
-  \<open>\<forall>i < length (vecs_of cs). \<forall>j < length ((vecs_of cs) ! i). 2 * lv ((vecs_of cs) ! i ! j) < M \<and> lv ((vecs_of cs) ! i ! j) < N \<Longrightarrow>
-   rvec_length h = 2 * N \<Longrightarrow> i < length (vecs_of cs) \<Longrightarrow> j < length ((vecs_of cs) ! i) \<Longrightarrow>
-   2 * lv ((vecs_of cs) ! i ! j) < rvec_length h \<and> Suc (2 * lv ((vecs_of cs) ! i ! j)) < rvec_length h\<close>
+  \<open>\<forall>i < length cs. \<forall>j < length (cs ! i). 2 * lv (cs ! i ! j) < M \<and> lv (cs ! i ! j) < N \<Longrightarrow>
+   length h = 2 * N \<Longrightarrow> i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow>
+   2 * lv (cs ! i ! j) < length h \<and> Suc (2 * lv (cs ! i ! j)) < length h\<close>
   by fastforce
 
-lemma wl_init_end: \<open>wl_init (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<Longrightarrow> c = length (vecs_of cs) \<Longrightarrow> wl_ok (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h)\<close>
+lemma wl_init_end: \<open>wl_init cs c p nx h \<Longrightarrow> c = length cs \<Longrightarrow> wl_ok cs p nx h\<close>
   by (auto simp: wl_init_def wl_ok_def)
 
 lemma wl_init_skip:
-  assumes \<open>wl_init (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h)\<close> \<open>c < length (vecs_of cs)\<close> \<open>\<not> 2 \<le> length ((vecs_of cs) ! c)\<close>
-  shows \<open>wl_init (vecs_of cs) (Suc c) (rvec_elems p) (rvec_elems nx) (rvec_elems h)\<close>
+  assumes \<open>wl_init cs c p nx h\<close> \<open>c < length cs\<close> \<open>\<not> 2 \<le> length (cs ! c)\<close>
+  shows \<open>wl_init cs (Suc c) p nx h\<close>
 proof -
-  obtain Ls where L: \<open>wl_lists (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h) Ls\<close> and z: \<open>\<forall>s. 2 * c \<le> s \<and> s < 2 * length (vecs_of cs) \<longrightarrow> (rvec_elems p) ! s = 0\<close>
+  obtain Ls where L: \<open>wl_lists cs c p nx h Ls\<close> and z: \<open>\<forall>s. 2 * c \<le> s \<and> s < 2 * length cs \<longrightarrow> p ! s = 0\<close>
     using assms(1) by (auto simp: wl_init_def)
-  have \<open>wl_lists (vecs_of cs) (Suc c) (rvec_elems p) (rvec_elems nx) (rvec_elems h) Ls\<close> using wl_init_short[OF L assms(2,3)] .
+  have \<open>wl_lists cs (Suc c) p nx h Ls\<close> using wl_init_short[OF L assms(2,3)] .
   then show ?thesis using z unfolding wl_init_def by auto
 qed
 
 lemma wl_init_add:
   fixes sw ow :: \<open>64 word\<close>
-  assumes \<open>wl_init (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h)\<close> \<open>c < length (vecs_of cs)\<close> \<open>2 \<le> length ((vecs_of cs) ! c)\<close>
-    \<open>lidx ((vecs_of cs) ! c ! 0) = x0\<close> \<open>lidx ((vecs_of cs) ! c ! 1) = x1\<close> \<open>x0 < rvec_length h\<close> \<open>x1 < rvec_length h\<close>
-    \<open>2 * length (vecs_of cs) < 2 ^ 64\<close> \<open>unat sw = 2 * c\<close> \<open>unat ow = Suc (2 * c)\<close>
-  shows \<open>wl_init (vecs_of cs) (Suc c) ((rvec_elems p)[Suc (2 * c) := 1]) (((rvec_elems nx)[2 * c := (rvec_elems h) ! x0])[Suc (2 * c) := ((rvec_elems h)[x0 := sw]) ! x1])
-           (((rvec_elems h)[x0 := sw])[x1 := ow])\<close>
+  assumes \<open>wl_init cs c p nx h\<close> \<open>c < length cs\<close> \<open>2 \<le> length (cs ! c)\<close>
+    \<open>lidx (cs ! c ! 0) = x0\<close> \<open>lidx (cs ! c ! 1) = x1\<close> \<open>x0 < length h\<close> \<open>x1 < length h\<close>
+    \<open>2 * length cs < 2 ^ 64\<close> \<open>unat sw = 2 * c\<close> \<open>unat ow = Suc (2 * c)\<close>
+  shows \<open>wl_init cs (Suc c) (p[Suc (2 * c) := 1]) ((nx[2 * c := h ! x0])[Suc (2 * c) := (h[x0 := sw]) ! x1])
+           ((h[x0 := sw])[x1 := ow])\<close>
 proof -
-  obtain Ls where L: \<open>wl_lists (vecs_of cs) c (rvec_elems p) (rvec_elems nx) (rvec_elems h) Ls\<close> and z: \<open>\<forall>s. 2 * c \<le> s \<and> s < 2 * length (vecs_of cs) \<longrightarrow> (rvec_elems p) ! s = 0\<close>
+  obtain Ls where L: \<open>wl_lists cs c p nx h Ls\<close> and z: \<open>\<forall>s. 2 * c \<le> s \<and> s < 2 * length cs \<longrightarrow> p ! s = 0\<close>
     using assms(1) by (auto simp: wl_init_def)
   have w: \<open>sw = word_of_nat (2 * c)\<close> \<open>ow = word_of_nat (Suc (2 * c))\<close>
     using assms(9,10) by (metis word_unat.Rep_inverse)+
   note S = wl_init_step[OF L assms(2,3) z assms(4-8)]
-  have \<open>\<forall>s. 2 * Suc c \<le> s \<and> s < 2 * length (vecs_of cs) \<longrightarrow> (rvec_elems p)[Suc (2 * c) := 1] ! s = 0\<close> using z by auto
+  have \<open>\<forall>s. 2 * Suc c \<le> s \<and> s < 2 * length cs \<longrightarrow> p[Suc (2 * c) := 1] ! s = 0\<close> using z by auto
   then show ?thesis using S w unfolding wl_init_def by blast
 qed
 
 lemma wl_init_addw:
   fixes r :: \<open>64 word\<close>
-  assumes \<open>wl_init (vecs_of cs) (unat r) (rvec_elems p) (rvec_elems nx) (rvec_elems h)\<close> \<open>unat r < length (vecs_of cs)\<close> \<open>2 \<le> length ((vecs_of cs) ! unat r)\<close>
-    \<open>lidx ((vecs_of cs) ! unat r ! 0) = x0\<close> \<open>lidx ((vecs_of cs) ! unat r ! Suc 0) = x1\<close>
-    \<open>\<forall>i < length (vecs_of cs). length ((vecs_of cs) ! i) < 18446744073709551616 \<and>
-       (\<forall>j < length ((vecs_of cs) ! i). 2 * unat (Lit_var ((vecs_of cs) ! i ! j)) < 18446744073709551615 \<and>
-          unat (Lit_var ((vecs_of cs) ! i ! j)) < N)\<close>
-    \<open>rvec_length h = 2 * N\<close> \<open>length (vecs_of cs) < 9223372036854775808\<close>
-  shows \<open>wl_init (vecs_of cs) (Suc (unat r)) ((rvec_elems p)[unat (2 * r + 1) := 1])
-           ((rvec_elems nx)[unat (2 * r) := (rvec_elems h) ! x0, unat (2 * r + 1) := (rvec_elems h)[x0 := 2 * r] ! x1]) ((rvec_elems h)[x0 := 2 * r, x1 := 2 * r + 1])\<close>
+  assumes \<open>wl_init cs (unat r) p nx h\<close> \<open>unat r < length cs\<close> \<open>2 \<le> length (cs ! unat r)\<close>
+    \<open>lidx (cs ! unat r ! 0) = x0\<close> \<open>lidx (cs ! unat r ! Suc 0) = x1\<close>
+    \<open>\<forall>i < length cs. length (cs ! i) < 18446744073709551616 \<and>
+       (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < 18446744073709551615 \<and>
+          unat (Lit_var (cs ! i ! j)) < N)\<close>
+    \<open>length h = 2 * N\<close> \<open>length cs < 9223372036854775808\<close>
+  shows \<open>wl_init cs (Suc (unat r)) (p[unat (2 * r + 1) := 1])
+           (nx[unat (2 * r) := h ! x0, unat (2 * r + 1) := h[x0 := 2 * r] ! x1]) (h[x0 := 2 * r, x1 := 2 * r + 1])\<close>
 proof -
   have u: \<open>unat (2 * r) = 2 * unat r\<close> \<open>unat (2 * r + 1) = Suc (2 * unat r)\<close>
     using unat64_dbl_lt[OF assms(2,8)] by simp_all
-  have l: \<open>0 < length ((vecs_of cs) ! unat r)\<close> \<open>Suc 0 < length ((vecs_of cs) ! unat r)\<close> using assms(3) by auto
-  have v0: \<open>unat (Lit_var ((vecs_of cs) ! unat r ! 0)) < N\<close> using assms(6)[rule_format, OF assms(2)] l(1) by blast
-  have v1: \<open>unat (Lit_var ((vecs_of cs) ! unat r ! Suc 0)) < N\<close> using assms(6)[rule_format, OF assms(2)] l(2) by blast
-  have x: \<open>x0 < rvec_length h\<close> \<open>x1 < rvec_length h\<close> using v0 v1 assms(4,5,7) by (auto simp: lidx_def)
-  have \<open>2 * length (vecs_of cs) < 2 ^ 64\<close> using assms(8) by simp
+  have l: \<open>0 < length (cs ! unat r)\<close> \<open>Suc 0 < length (cs ! unat r)\<close> using assms(3) by auto
+  have v0: \<open>unat (Lit_var (cs ! unat r ! 0)) < N\<close> using assms(6)[rule_format, OF assms(2)] l(1) by blast
+  have v1: \<open>unat (Lit_var (cs ! unat r ! Suc 0)) < N\<close> using assms(6)[rule_format, OF assms(2)] l(2) by blast
+  have x: \<open>x0 < length h\<close> \<open>x1 < length h\<close> using v0 v1 assms(4,5,7) by (auto simp: lidx_def)
+  have \<open>2 * length cs < 2 ^ 64\<close> using assms(8) by simp
   note A = wl_init_add[OF assms(1,2,3,4), of x1, OF _ x this, of \<open>2 * r\<close> \<open>2 * r + 1\<close>]
   show ?thesis using A assms(5) u by simp
 qed
 
 lemma wl_init_skipw:
-  \<open>wl_init (vecs_of cs) (unat r) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<Longrightarrow> unat r < length (vecs_of cs) \<Longrightarrow> \<not> 2 \<le> length ((vecs_of cs) ! unat r) \<Longrightarrow>
-   wl_init (vecs_of cs) (Suc (unat r)) (rvec_elems p) (rvec_elems nx) (rvec_elems h)\<close>
+  \<open>wl_init cs (unat r) p nx h \<Longrightarrow> unat r < length cs \<Longrightarrow> \<not> 2 \<le> length (cs ! unat r) \<Longrightarrow>
+   wl_init cs (Suc (unat r)) p nx h\<close>
   by (rule wl_init_skip)
 
 lemma dpll_watch_init_spec [crush_specs]:
@@ -570,7 +570,7 @@ text \<open>The clauses mention only variables below \<open>n\<close>, the watch
 definition dpll_wpre :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
   \<open>dpll_wpre cs n p nx h \<equiv>
      wcs_ok cs n urust_fuel \<and> length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * n \<and>
-     2 * length cs \<le> urust_fuel \<and> 2 * length cs < 2 ^ 64 \<and> 2 * n < 2 ^ 57\<close>
+     2 * length cs \<le> urust_fuel \<and> 2 * length cs < 2 ^ 64 \<and> 2 * n < 2 ^ 64\<close>
 
 lemma Suc2_lt: \<open>v < L \<Longrightarrow> Suc (2 * v) < 2 * L\<close> for v L :: nat
   by linarith
@@ -748,15 +748,15 @@ lemma oslot_odd: \<open>s mod 2 = 1 \<Longrightarrow> oslot s (s - 1)\<close>
   by (simp add: oslot_def)
 
 lemma var_bnd:
-  \<open>\<forall>i < length (vecs_of cs). F1 i \<and> F2 i \<and> F3 i \<and>
-     (\<forall>j < length ((vecs_of cs) ! i). 2 * unat (Lit_var ((vecs_of cs) ! i ! j)) < M \<and> unat (Lit_var ((vecs_of cs) ! i ! j)) < N) \<Longrightarrow>
-   i < length (vecs_of cs) \<Longrightarrow> j < length ((vecs_of cs) ! i) \<Longrightarrow> Suc (2 * unat (Lit_var ((vecs_of cs) ! i ! j))) < 2 * N\<close>
+  \<open>\<forall>i < length cs. F1 i \<and> F2 i \<and> F3 i \<and>
+     (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < M \<and> unat (Lit_var (cs ! i ! j)) < N) \<Longrightarrow>
+   i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow> Suc (2 * unat (Lit_var (cs ! i ! j))) < 2 * N\<close>
   by fastforce
 
 lemma var_bnd2:
-  \<open>\<forall>i < length (vecs_of cs). F1 i \<and> F2 i \<and> F3 i \<and>
-     (\<forall>j < length ((vecs_of cs) ! i). 2 * unat (Lit_var ((vecs_of cs) ! i ! j)) < M \<and> unat (Lit_var ((vecs_of cs) ! i ! j)) < N) \<Longrightarrow>
-   \<forall>i < length (vecs_of cs). \<forall>j < length ((vecs_of cs) ! i). Suc (2 * unat (Lit_var ((vecs_of cs) ! i ! j))) < 2 * N\<close>
+  \<open>\<forall>i < length cs. F1 i \<and> F2 i \<and> F3 i \<and>
+     (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < M \<and> unat (Lit_var (cs ! i ! j)) < N) \<Longrightarrow>
+   \<forall>i < length cs. \<forall>j < length (cs ! i). Suc (2 * unat (Lit_var (cs ! i ! j))) < 2 * N\<close>
   by fastforce
 
 lemma dpll_visit_slot_spec [crush_specs]:
@@ -796,10 +796,11 @@ definition vinvx ::
 lemma wpre_wf: \<open>dpll_wpre cs n p nx h \<Longrightarrow> dpll_wf n cs\<close>
   by (auto simp: dpll_wpre_def wcs_ok_def dpll_wf_def in_set_conv_nth)
 
-lemma vx_entry:
-  assumes \<open>wl_ok cs p nx h\<close> \<open>unat x < length h\<close> \<open>\<exists>w. lidx w = unat x \<and> lneg w \<in> set t\<close>
-  shows \<open>vinvx cs (unat x) p t p nx h t (unat (h ! unat x)) (length nx) 0\<close>
-  using vinv_entry[OF assms(1,2)] assms(3) by (auto simp: vinvx_def)
+lemma vx_entry':
+  \<open>wl_ok cs p nx h \<Longrightarrow> unat x < length h \<Longrightarrow> lidx w = unat x \<Longrightarrow> lneg w \<in> set t \<Longrightarrow>
+   length nx = 2 * length cs \<Longrightarrow> length cs < 9223372036854775808 \<Longrightarrow>
+   vinvx cs (unat x) p t p nx h t (unat (h ! unat x)) (unat (2 * word64_of_nat (length cs))) 0\<close>
+  using vx_entry[of cs p nx h x t] unat2_len[of \<open>length cs\<close>] by auto
 
 lemma vx_step:
   assumes \<open>vinvx cs (unat x) p t p' nx' h' t' (unat s) (unat pr) st\<close> \<open>unat s < length nx'\<close>

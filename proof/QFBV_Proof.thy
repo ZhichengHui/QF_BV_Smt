@@ -987,7 +987,7 @@ qed
 theorem lower_fuel_lt:
   assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
   shows \<open>fuel_bound (lower_problem_m p) < 2 ^ 64\<close>
-  by (rule fb_hyps_lt[OF lower_problem_correct(1)[OF assms(1) prob_bnd[OF assms]] lower_fb_hyps[OF assms]])
+  using fb_hyps_lt[OF lower_problem_correct(1)[OF assms(1) prob_bnd[OF assms]] lower_fb_hyps[OF assms]] by simp
 
 section \<open>The top-level theorem\<close>
 

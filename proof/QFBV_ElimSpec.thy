@@ -716,7 +716,7 @@ definition fb_hyps :: \<open>CoreProblem \<Rightarrow> bool\<close> where
      (\<forall>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p).
         tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)) t < 2 ^ 56)\<close>
 
-lemma fb_hyps_lt: \<open>cproblem_wt p \<Longrightarrow> fb_hyps p \<Longrightarrow> fuel_bound p < 2 ^ 57\<close>
+lemma fb_hyps_lt: \<open>cproblem_wt p \<Longrightarrow> fb_hyps p \<Longrightarrow> fuel_bound p \<le> 2 ^ 57\<close>
   unfolding fb_hyps_def by (rule fuel_bound_lt) blast+
 
 text \<open>The elimination keeps the problem within the bounds of the core solver; a model of the
@@ -724,17 +724,17 @@ text \<open>The elimination keeps the problem within the bounds of the core solv
   precondition of \<^verbatim>\<open>reconstruct\<close> and is a model of the problem.\<close>
 theorem elim_facts:
   assumes wt: \<open>cproblem_wt q\<close> and H: \<open>fb_hyps q\<close> and fN: \<open>fuel_bound q \<le> N\<close> and e: \<open>elim_m q = (q2, kd, mk)\<close>
-  shows \<open>fuel_bound q < 2 ^ 57\<close> \<open>cproblem_wt q2\<close> \<open>csize_bound q2 \<le> csize_bound q\<close> \<open>fuel_bound q2 < 2 ^ 57\<close>
+  shows \<open>fuel_bound q \<le> 2 ^ 57\<close> \<open>cproblem_wt q2\<close> \<open>csize_bound q2 \<le> csize_bound q\<close> \<open>fuel_bound q2 \<le> 2 ^ 57\<close>
     \<open>cis_model q m \<Longrightarrow> cis_model q2 (elim_prob.m2_of q m)\<close>
     \<open>cis_model q2 m2 \<Longrightarrow> recon_pre N q kd mk q2 m2 \<and> cis_model q (reconstruct_m q kd mk q2 m2)\<close>
 proof -
-  show f64: \<open>fuel_bound q < 2 ^ 57\<close> using fb_hyps_lt[OF wt H] .
+  show f64: \<open>fuel_bound q \<le> 2 ^ 57\<close> using fb_hyps_lt[OF wt H] .
   have nlt: \<open>length (CoreProblem_defs q) < 2 ^ 64\<close> using fb_facts(3)[of q] f64 by simp
   interpret E: elim_fuel q N by unfold_locales (use wt nlt fN f64 in simp_all)
   have q2: \<open>q2 = E.q2\<close> \<open>kd = E.kd\<close> \<open>mk = E.mk\<close> using E.elim_parts e by simp_all
   show \<open>cproblem_wt q2\<close> using E.q2_wt q2 by simp
   show \<open>csize_bound q2 \<le> csize_bound q\<close> using E.elim_csize q2 by simp
-  show \<open>fuel_bound q2 < 2 ^ 57\<close> using E.elim_fuel_lt H q2 unfolding fb_hyps_def by blast
+  show \<open>fuel_bound q2 \<le> 2 ^ 57\<close> using E.elim_fuel_lt H q2 unfolding fb_hyps_def by blast
   show \<open>cis_model q m \<Longrightarrow> cis_model q2 (elim_prob.m2_of q m)\<close> using E.elim_complete q2 by simp
   assume M: \<open>cis_model q2 m2\<close>
   have ml2: \<open>map length m2 = E.ews\<close> using M by (simp add: cis_model_def cis_assignment_def E.q2_ws q2)

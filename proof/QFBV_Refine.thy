@@ -1357,8 +1357,10 @@ definition bv_divrem_contract ::
 lemma bv_divrem_spec [crush_specs]:
   shows \<open>\<Gamma>; bv_divrem c a b \<Turnstile>\<^sub>F bv_divrem_contract c a b\<close>
   apply (crush_boot f: bv_divrem_def contract: bv_divrem_contract_def)
-  apply (crush_base simp add: cnfv_res_def)
-  apply (auto simp add: unat_of_nat_eq unat_of_nat_64 unat_double unat_double2 divrem_m_dr dr_fold dr_lt cnf_res_def room_def dest!: from_elem_lit)
+  apply (crush_base simp add: cnfv_res_def cnf_res_def divrem_m_dr dr_fold dr_lt room_def)
+  apply (auto simp add: unat_of_nat_eq unat_of_nat_64 unat_double unat_double2 room_def
+      divrem_m_dr[where s=\<open>st_of c\<close>, simplified] dr_fold[where s=\<open>st_of c\<close>, simplified]
+      dr_lt[where s=\<open>st_of c\<close>, unfolded divrem_m_dr room_def, simplified] dest!: from_elem_lit)
   done
 
 end

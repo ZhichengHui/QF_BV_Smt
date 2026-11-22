@@ -735,11 +735,20 @@ definition lower_bin_contract :: \<open>Lower \<Rightarrow> Op \<Rightarrow> 64 
          (op = Op_Concat \<longrightarrow> snd (lst_of l) ! unat ka + snd (lst_of l) ! unat kb < 2 ^ 64)\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>low_res r (lower_bin_m (lst_of l) op (unat ka) (unat kb))\<rangle>)\<close>
 
+text \<open>\<open>kok\<close> on the state of a \<^verbatim>\<open>Lower\<close>, stated on its vector of widths.\<close>
+lemma kok_lst:
+  \<open>kok (lst_of l) k = (k < rvec_length (Lower_widths l) \<and> k < 2 ^ 64 \<and>
+     unat (rvec_elems (Lower_widths l) ! k) < 2 ^ 56 \<and> 1 \<le> unat (rvec_elems (Lower_widths l) ! k))\<close>
+  by (auto simp add: kok_def)
+
 lemma lower_bin_spec [crush_specs]:
   shows \<open>\<Gamma>; lower_bin l op ka kb \<Turnstile>\<^sub>F lower_bin_contract l op ka kb\<close>
   apply (crush_boot f: lower_bin_def contract: lower_bin_contract_def)
   apply (cases op; simp only: Op_case_simps)
-  sorry \<comment> \<open>TODO rvec: the cases of lower_bin (as lower_rec_step: low_res_def, widths_nth, lst_of_def)\<close>
+  apply (crush_base simp add: low_res_def)
+  apply (simp_all add: lower_bin_m_def push_m_def kok_lst nth_map unat_of_nat_64' unat_add_nov split_def Let_def)
+  apply (simp add: from_elem_Some)
+  done
 
 subsection \<open>\<^verbatim>\<open>lower\<close>\<close>
 

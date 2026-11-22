@@ -512,6 +512,18 @@ fn bv_extract(a: &Vec<Lit>, hi: usize, lo: usize) -> Vec<Lit> {
     r
 }
 
+/// A copy of `a` in a new vector (a clone would keep the capacity of `a`, which the evaluation
+/// then grows).
+fn bits_copy(a: &Vec<bool>) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < a.len() {
+        r.push(a[i]);
+        i += 1;
+    }
+    r
+}
+
 /// The concatenation with `hi` as the high part.
 fn bv_concat(hi: &Vec<Lit>, lo: &Vec<Lit>) -> Vec<Lit> {
     let mut r = lo.clone();
@@ -1539,7 +1551,7 @@ fn eval_bin(op: &BinOp, a: &Vec<bool>, b: &Vec<bool>) -> Vec<bool> {
 /// The value of `t`, given the values `vars` of the variables and `defs` of the definitions.
 pub fn eval_term(vars: &Vec<Vec<bool>>, defs: &Vec<Vec<bool>>, t: &CoreTerm) -> Vec<bool> {
     match t {
-        CoreTerm::Const(bits) => bits.clone(),
+        CoreTerm::Const(bits) => bits_copy(bits),
         CoreTerm::Var(i) => vars[*i].clone(),
         CoreTerm::Ref(i) => defs[*i].clone(),
         CoreTerm::Not(a) => bits_not(&eval_term(vars, defs, a)),

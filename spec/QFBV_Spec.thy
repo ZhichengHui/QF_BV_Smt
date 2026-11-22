@@ -102,10 +102,10 @@ locale QFBV_heap =
   + ref_3: reference_allocatable reference_types _ _ _ _ _ _ _ prism_3 \<comment> \<open>64 word\<close>
   + ref_4: reference_allocatable reference_types _ _ _ _ _ _ _ prism_4 \<comment> \<open>Cnf\<close>
   + ref_5: reference_allocatable reference_types _ _ _ _ _ _ _ prism_5 \<comment> \<open>Lit\<close>
-  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>Lit option\<close>
-  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>bool\<close>
-  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>(bool option) rvec\<close>
-  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>bool rvec\<close>
+  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>bool rvec\<close>
+  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>Lit option\<close>
+  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>bool\<close>
+  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>(bool option) rvec\<close>
   + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool rvec) rvec\<close>
   + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>(64 word) rvec\<close>
   + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>CoreTerm rvec\<close>
@@ -120,10 +120,10 @@ locale QFBV_heap =
   and prism_3 :: \<open>('gv, 64 word) prism\<close>
   and prism_4 :: \<open>('gv, Cnf) prism\<close>
   and prism_5 :: \<open>('gv, Lit) prism\<close>
-  and prism_6 :: \<open>('gv, Lit option) prism\<close>
-  and prism_7 :: \<open>('gv, bool) prism\<close>
-  and prism_8 :: \<open>('gv, (bool option) rvec) prism\<close>
-  and prism_9 :: \<open>('gv, bool rvec) prism\<close>
+  and prism_6 :: \<open>('gv, bool rvec) prism\<close>
+  and prism_7 :: \<open>('gv, Lit option) prism\<close>
+  and prism_8 :: \<open>('gv, bool) prism\<close>
+  and prism_9 :: \<open>('gv, (bool option) rvec) prism\<close>
   and prism_10 :: \<open>('gv, (bool rvec) rvec) prism\<close>
   and prism_11 :: \<open>('gv, (64 word) rvec) prism\<close>
   and prism_12 :: \<open>('gv, CoreTerm rvec) prism\<close>

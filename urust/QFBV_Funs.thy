@@ -496,6 +496,18 @@ definition "bv_extract" :: \<open>(Lit rvec) \<Rightarrow> (64 word) \<Rightarro
     * r
   \<rbrakk>\<close>
 
+(* Rust: bits_copy *)
+definition "bits_copy" :: \<open>(bool rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>bits_copy \<equiv> \<lambda>a. FunctionBody \<lbrakk>
+    let mut r = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 1 1\<rrangle>); \<llangle>vec_1 :: bool rvec\<rrangle> }; \<llangle>res_2 :: bool rvec\<rrangle> }; \<llangle>init_3 :: bool rvec\<rrangle> };
+    let mut i = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* i) < rvec_len(a) {
+      rvec_push(r, \<llangle>rvec_elems\<rrangle>\<^sub>1(a)[* i]);
+      * i += 1_usize;
+    };
+    * r
+  \<rbrakk>\<close>
+
 (* Rust: bv_concat *)
 definition "bv_concat" :: \<open>(Lit rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>bv_concat \<equiv> \<lambda>hi lo. FunctionBody \<lbrakk>
@@ -2294,7 +2306,7 @@ definition "eval_term_rec_step" :: \<open>((((bool rvec) rvec) \<Rightarrow> ((b
   \<open>eval_term_rec_step \<equiv> \<lambda>rec_eval_term. (\<lambda>vars defs t. FunctionBody \<lbrakk>
     match t {
       CoreTerm_Const(bits) \<Rightarrow> {
-        rvec_clone(bits)
+        bits_copy(bits)
       },
       CoreTerm_Var(i) \<Rightarrow> {
         rvec_clone(\<llangle>rvec_elems\<rrangle>\<^sub>1(vars)[i])

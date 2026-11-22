@@ -322,6 +322,10 @@ lemma repeat_F_wlen:
   \<open>length (snd (fst (foldl (repeat_step ka w) (L, k, acc) [0..<j]))) = length (snd L) + j\<close>
   by (induction j) (simp_all add: repeat_step_comp)
 
+lemma rep_fold_wlen:
+  \<open>length (snd (fst (rep_fold ws dm L a j))) = length (snd (fst (lower_m ws dm L a))) + 1 + j\<close>
+  by (simp add: rep_fold_def repeat_F_wlen push_m_def)
+
 lemma lower_bin_m_len_eq:
   \<open>length (snd L) = length (fst L) \<Longrightarrow>
    length (snd (fst (lower_bin_m L op ka kb))) = length (fst (fst (lower_bin_m L op ka kb)))\<close>
@@ -957,6 +961,23 @@ lemma widths_lst:
   \<open>k < length (snd (lst_of l)) \<Longrightarrow> unat (rvec_elems (Lower_widths l) ! k) = snd (lst_of l) ! k\<close>
   by (simp add: lst_of_def)
 
+lemma widths_word:
+  \<open>k < length (snd (lst_of l)) \<Longrightarrow> rvec_elems (Lower_widths l) ! k = word_of_nat (snd (lst_of l) ! k)\<close>
+  by (simp add: lst_of_def)
+
+lemma lst_lengths:
+  \<open>rvec_length (Lower_defs l) = length (fst (lst_of l))\<close>
+  \<open>rvec_length (Lower_widths l) = length (snd (lst_of l))\<close>
+  by (simp_all add: lst_of_def)
+
+lemma rep_acc_bound: \<open>j < i \<Longrightarrow> W * i < N \<Longrightarrow> W * j + W < (N :: nat)\<close>
+proof -
+  assume \<open>j < i\<close> \<open>W * i < N\<close>
+  moreover have \<open>W * j + W = W * Suc j\<close> by simp
+  moreover have \<open>W * Suc j \<le> W * i\<close> using \<open>j < i\<close> by (intro mult_le_mono2) simp
+  ultimately show ?thesis by linarith
+qed
+
 lemma widths_add:
   \<open>map unat (rvec_elems w) = ys \<Longrightarrow> k < length ys \<Longrightarrow> ys ! k + unat i < 2 ^ 64 \<Longrightarrow>
    unat (rvec_elems w ! k + i) = ys ! k + unat i\<close> for w :: \<open>64 word rvec\<close> and i :: \<open>64 word\<close>
@@ -1067,28 +1088,31 @@ next
 next
   case (Term_Repeat i a)
   show ?thesis unfolding Term_Repeat
+    supply lst_of_eq[simp del] lst_of_simps(1,2)[simp del]
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map lower_m_Repeat'' Let_def)
+    apply (crush_base specs add: IH simp add: low_res_def lower_m_Repeat'')
     subgoal for la lb l_ref k_ref acc_ref j_ref
       apply (ucincl_discharge\<open>rule_tac
         INV=\<open>\<lambda>c. \<Squnion>gl ll gk kk ga aa gj jj. l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>ll \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kk \<star>
              acc_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>aa \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star> can_alloc_reference \<star>
-             \<langle>unat jj \<le> unat i \<and> length (fst (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a)))) + 1 + unat jj < 2 ^ 64 \<and>
-              lower_ok ll \<and> lst_of ll = fst (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)) \<and>
+             \<langle>unat jj \<le> unat i \<and> lower_ok ll \<and>
+              lst_of ll = fst (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)) \<and>
               kk = word_of_nat (fst (snd (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)))) \<and>
               aa = word_of_nat (snd (snd (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)))) \<and>
               unat i - unat jj \<le> c\<rangle>\<close> and
         INV'=\<open>\<lambda>c. \<Squnion>gl ll gk kk ga aa gj jj. l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>ll \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>kk \<star>
              acc_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>aa \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>jj \<star> can_alloc_reference \<star>
-             \<langle>unat jj < unat i \<and> length (fst (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a)))) + 1 + unat jj < 2 ^ 64 \<and>
-              lower_ok ll \<and> lst_of ll = fst (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)) \<and>
+             \<langle>unat jj < unat i \<and> lower_ok ll \<and>
+              lst_of ll = fst (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)) \<and>
               kk = word_of_nat (fst (snd (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)))) \<and>
               aa = word_of_nat (snd (snd (rep_fold (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a) (unat jj)))) \<and>
               unat i - unat jj \<le> Suc c\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
-      sorry \<comment> \<open>TODO rvec: the Repeat loop step\<close>
-    apply (metis length_map)
+      apply (crush_base simp add: low_res_def)
+      apply (simp_all add: kok_lit widths_word lst_lengths rep_fold_acc rep_fold_len rep_fold_unat_Suc unat_Suc_of_lt repeat_step_lst repeat_step_comp push_m_def lower_m_Repeat'' word_less_nat_alt unat_of_nat_64' rep_fold_Suc rep_fold_0 rep_unat_acc_W rep_unat_acc rep_acc_bound rep_fold_wlen lm_len_eq lst_len_eq rep_cr_idx rep_acc_ov)
+      done
+    apply (simp only: kok_lit unat_of_nat_64' lm_len_eq lst_len_eq)
     done
 next
   case (Term_ZeroExtend i a)

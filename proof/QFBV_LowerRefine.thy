@@ -542,6 +542,14 @@ definition low_res :: \<open>Lower \<times> 64 word \<times> tnil \<Rightarrow> 
   \<open>low_res r m \<equiv> lower_ok (fst r) \<and> lst_of (fst r) = fst m \<and> rvec_length (Lower_defs (fst r)) = length (fst (fst m)) \<and>
      rvec_length (Lower_widths (fst r)) = length (fst (fst m)) \<and> snd r = (word_of_nat (snd m), TNil)\<close>
 
+text \<open>The same, oriented to express the model's state by the fields of the result.\<close>
+lemma low_res_def':
+  \<open>low_res r m = (lower_ok (fst r) \<and> fst (fst m) = map ct_of (rvec_elems (Lower_defs (fst r))) \<and>
+     snd (fst m) = map unat (rvec_elems (Lower_widths (fst r))) \<and>
+     rvec_length (Lower_defs (fst r)) = length (fst (fst m)) \<and>
+     rvec_length (Lower_widths (fst r)) = length (fst (fst m)) \<and> snd r = (word_of_nat (snd m), TNil))\<close>
+  unfolding low_res_def lst_of_eq by auto
+
 lemma unat_add_nov: \<open>unat a + unat b < 2 ^ 64 \<Longrightarrow> unat (a + b) = unat a + unat b\<close> for a b :: \<open>64 word\<close>
   using unat_add_lem[of a b] by (simp add: word_size)
 
@@ -896,13 +904,83 @@ proof -
     and \<open>length (fst (fst (lower_m ws dm L a))) < N\<close> using 1 2 by simp_all
 qed
 
+lemma lm_ite_len:
+  assumes \<open>length (fst (fst (lower_m ws dm L (TermL_Ite c a b)))) < N\<close>
+  shows \<open>length (fst (fst (lower_m ws dm (fst (lower_m ws dm (fst (lower_m ws dm L c)) a)) b))) < N\<close>
+    and \<open>length (fst (fst (lower_m ws dm (fst (lower_m ws dm L c)) a))) < N\<close>
+    and \<open>length (fst (fst (lower_m ws dm L c))) < N\<close>
+proof -
+  show 3: \<open>length (fst (fst (lower_m ws dm (fst (lower_m ws dm (fst (lower_m ws dm L c)) a)) b))) < N\<close>
+    using assms by (simp add: push_m_def)
+  show 2: \<open>length (fst (fst (lower_m ws dm (fst (lower_m ws dm L c)) a))) < N\<close>
+    using le_less_trans[OF lm_mono 3] .
+  show \<open>length (fst (fst (lower_m ws dm L c))) < N\<close>
+    using le_less_trans[OF lm_mono 2] .
+qed
+
 lemma widths_nth: \<open>map unat (rvec_elems w) = ys \<Longrightarrow> k < length ys \<Longrightarrow> unat (rvec_elems w ! k) = ys ! k\<close>
   by (metis length_map nth_map)
+
+text \<open>A width of a \<^verbatim>\<open>Lower\<close> as its model gives it.\<close>
+lemma widths_lst:
+  \<open>k < length (snd (lst_of l)) \<Longrightarrow> unat (rvec_elems (Lower_widths l) ! k) = snd (lst_of l) ! k\<close>
+  by (simp add: lst_of_def)
 
 lemma widths_add:
   \<open>map unat (rvec_elems w) = ys \<Longrightarrow> k < length ys \<Longrightarrow> ys ! k + unat i < 2 ^ 64 \<Longrightarrow>
    unat (rvec_elems w ! k + i) = ys ! k + unat i\<close> for w :: \<open>64 word rvec\<close> and i :: \<open>64 word\<close>
   using unat_add_nov[of \<open>rvec_elems w ! k\<close> i] widths_nth[of w ys k] by simp
+
+text \<open>The word arithmetic of a rotation by \<open>i\<close> of a term of width \<open>W\<close>, stated on the
+  model's natural numbers.\<close>
+lemma rot_words:
+  fixes i W :: \<open>64 word\<close>
+  assumes \<open>1 \<le> unat W\<close>
+  shows \<open>unat (i mod W) = unat i mod unat W\<close>
+    and \<open>(i mod W = 0) = (unat i mod unat W = 0)\<close>
+    and \<open>W \<noteq> 0\<close>
+    and \<open>1 \<le> W\<close>
+    and \<open>W - 1 = word_of_nat (unat W - 1)\<close>
+    and \<open>i mod W \<le> W - 1\<close>
+    and \<open>i mod W \<le> W\<close>
+    and \<open>W - 1 - i mod W = word_of_nat (unat W - 1 - unat i mod unat W)\<close>
+    and \<open>W - i mod W = word_of_nat (unat W - unat i mod unat W)\<close>
+    and \<open>i mod W = word_of_nat (unat i mod unat W)\<close>
+    and \<open>unat i mod unat W \<noteq> 0 \<Longrightarrow> 1 \<le> i mod W\<close>
+    and \<open>unat i mod unat W \<noteq> 0 \<Longrightarrow> i mod W - 1 = word_of_nat (unat i mod unat W - 1)\<close>
+proof -
+  show m: \<open>unat (i mod W) = unat i mod unat W\<close> by (simp add: unat_mod)
+  have lt: \<open>unat i mod unat W < unat W\<close> using assms by simp
+  show \<open>(i mod W = 0) = (unat i mod unat W = 0)\<close> using m by (metis unat_eq_0')
+  show \<open>W \<noteq> 0\<close> using assms by auto
+  show \<open>1 \<le> W\<close> using assms by (simp add: word_le_nat_alt)
+  show \<open>W - 1 = word_of_nat (unat W - 1)\<close> using assms by (rule word_minus_1_of_nat)
+  have u1: \<open>unat (W - 1) = unat W - 1\<close> using assms by (rule unat_minus_1)
+  show le1: \<open>i mod W \<le> W - 1\<close> using lt m u1 by (simp add: word_le_nat_alt)
+  show le: \<open>i mod W \<le> W\<close> using lt m by (simp add: word_le_nat_alt)
+  have \<open>unat (W - 1 - i mod W) = unat W - 1 - unat i mod unat W\<close>
+    using unat_sub[OF le1] u1 m by simp
+  then show \<open>W - 1 - i mod W = word_of_nat (unat W - 1 - unat i mod unat W)\<close> by (metis wnunat)
+  have \<open>unat (W - i mod W) = unat W - unat i mod unat W\<close> using unat_sub[OF le] m by simp
+  then show \<open>W - i mod W = word_of_nat (unat W - unat i mod unat W)\<close> by (metis wnunat)
+  show \<open>i mod W = word_of_nat (unat i mod unat W)\<close> using m by (metis wnunat)
+  show p: \<open>unat i mod unat W \<noteq> 0 \<Longrightarrow> 1 \<le> i mod W\<close> using m by (simp add: word_le_nat_alt)
+  assume \<open>unat i mod unat W \<noteq> 0\<close>
+  then have \<open>unat (i mod W - 1) = unat i mod unat W - 1\<close> using unat_minus_1[of \<open>i mod W\<close>] m by simp
+  then show \<open>i mod W - 1 = word_of_nat (unat i mod unat W - 1)\<close> by (metis wnunat)
+qed
+
+lemma wn_mod: \<open>word_of_nat (unat i mod unat W) = i mod W\<close> for i W :: \<open>64 word\<close>
+  by (metis unat_mod wnunat)
+
+lemma rot_sub_Suc:
+  fixes i W :: \<open>64 word\<close>
+  assumes \<open>1 \<le> unat W\<close>
+  shows \<open>W - 1 - i mod W = word_of_nat (unat W - Suc (unat i mod unat W))\<close>
+  using rot_words(8)[OF assms, of i] by simp
+
+lemma rot_mod0: \<open>(i mod W = 0) = (unat i mod unat W = 0)\<close> for i W :: \<open>64 word\<close>
+  by (metis unat_eq_0' unat_mod)
 
 lemma lower_rec_step_spec:
   assumes IH: \<open>\<And>wsw dmw l t. \<Gamma>; R wsw dmw l t \<Turnstile>\<^sub>F lower_contract k wsw dmw l t\<close>
@@ -1001,13 +1079,30 @@ next
     done
 next
   case (Term_RotateLeft i a)
-  show ?thesis sorry \<comment> \<open>TODO rvec: the word facts on \<open>rvec_elems (Lower_widths _) ! k\<close> (see 1fdec72)\<close>
+  show ?thesis unfolding Term_RotateLeft
+    apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateLeft' Let_def rot_mod0)
+    apply (all \<open>(match premises in P[thin]: \<open>map unat (rvec_elems (Lower_widths _)) = snd (fst (lower_m _ _ _ _))\<close> \<Rightarrow> \<open>insert P[symmetric], rotate_tac -1\<close>)?\<close>)
+    apply (simp_all add: nth_map rot_words(2,3,4,6,7,11) wn_mod)
+    apply (all \<open>(solves \<open>rule rot_sub_Suc, simp\<close>)?\<close>)
+    apply (auto simp add: push_m_def split: if_split_asm)
+    done
 next
   case (Term_RotateRight i a)
-  show ?thesis sorry \<comment> \<open>TODO rvec: as for RotateLeft\<close>
+  show ?thesis unfolding Term_RotateRight
+    apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
+    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateRight' Let_def rot_mod0)
+    apply (all \<open>(match premises in P[thin]: \<open>map unat (rvec_elems (Lower_widths _)) = snd (fst (lower_m _ _ _ _))\<close> \<Rightarrow> \<open>insert P[symmetric], rotate_tac -1\<close>)?\<close>)
+    apply (simp_all add: nth_map rot_words(2,3,4,6,7,11) wn_mod)
+    apply (auto simp add: push_m_def split: if_split_asm)
+    done
 next
   case (Term_Ite c a b)
-  show ?thesis sorry \<comment> \<open>TODO rvec: as Term_Bin (auto with lst_of_def; a lemma like lm_bin_len for three operands)\<close>
+  show ?thesis unfolding Term_Ite
+    supply lst_of_eq[simp del] lst_of_simps(1,2)[simp del]
+    apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
+    apply (crush_base specs add: IH simp add: low_res_def widths_lst kok_def unat_of_nat_64' push_m_def lm_ite_len)
+    sorry
 qed
 
 lemma lower_rec_spec:

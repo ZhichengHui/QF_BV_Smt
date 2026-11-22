@@ -100,6 +100,9 @@ lemma lst_of_eq':
   \<open>(lst_of l = L) = (fst L = map ct_of (rvec_elems (Lower_defs l)) \<and> snd L = map unat (rvec_elems (Lower_widths l)))\<close>
   by (auto simp add: lst_of_eq)
 
+lemma lst_len_eq: \<open>lower_ok l \<Longrightarrow> length (snd (lst_of l)) = length (fst (lst_of l))\<close>
+  by (simp add: lower_ok_def)
+
 subsection \<open>The precondition of \<^verbatim>\<open>lower\<close>\<close>
 
 text \<open>What each call of the recursion needs: indices in bounds, the arithmetic on widths without
@@ -149,6 +152,10 @@ primrec lpre :: \<open>nat \<Rightarrow> nat list \<Rightarrow> nat list \<Right
 text \<open>The precondition holds for a well-sorted term whose rewriting stays within the bounds.\<close>
 lemma kok_of_env: \<open>env_ok ws L k w \<Longrightarrow> kok L k\<close>
   using lok_length[of ws L] by (simp add: env_ok_def kok_def)
+
+lemma kok_lit:
+  \<open>kok L k = (k < length (snd L) \<and> k < 18446744073709551616 \<and> snd L ! k < 72057594037927936 \<and> 1 \<le> snd L ! k)\<close>
+  by (simp add: kok_def)
 
 text \<open>The loop for \<open>repeat\<close> in closed form: after \<open>j\<close> iterations from the state \<open>(L, k, acc)\<close>, the
   definitions are \<open>j\<close> more, the current definition is the last one, and the width has grown by \<open>j\<close>
@@ -309,6 +316,30 @@ qed
 
 lemma lower_bin_m_len: \<open>length (fst L) + 1 \<le> length (fst (fst (lower_bin_m L op ka kb)))\<close>
   by (cases op) (simp_all add: lower_bin_m_def Let_def push_m_def split_def)
+
+text \<open>The rewriting keeps the definitions and the widths of the state of equal length.\<close>
+lemma repeat_F_wlen:
+  \<open>length (snd (fst (foldl (repeat_step ka w) (L, k, acc) [0..<j]))) = length (snd L) + j\<close>
+  by (induction j) (simp_all add: repeat_step_comp)
+
+lemma lower_bin_m_len_eq:
+  \<open>length (snd L) = length (fst L) \<Longrightarrow>
+   length (snd (fst (lower_bin_m L op ka kb))) = length (fst (fst (lower_bin_m L op ka kb)))\<close>
+  by (cases op) (simp_all add: lower_bin_m_def Let_def push_m_def split_def)
+
+lemma lm_len_eq:
+  \<open>length (snd L) = length (fst L) \<Longrightarrow>
+   length (snd (fst (lower_m ws dm L t))) = length (fst (fst (lower_m ws dm L t)))\<close>
+proof (induction t arbitrary: L)
+  case (TermL_Repeat i a)
+  then show ?case by (simp add: lower_m_Repeat' Let_def repeat_F_len repeat_F_wlen push_m_def)
+next
+  case (TermL_RotateLeft i a)
+  then show ?case by (simp add: lower_m_RotateLeft' Let_def push_m_def)
+next
+  case (TermL_RotateRight i a)
+  then show ?case by (simp add: lower_m_RotateRight' Let_def push_m_def)
+qed (simp_all add: push_m_def lower_bin_m_len_eq)
 
 text \<open>The precondition holds for a well-sorted term whose rewriting stays within the bounds.\<close>
 lemma lpre_intro:
@@ -1101,8 +1132,9 @@ next
   show ?thesis unfolding Term_Ite
     supply lst_of_eq[simp del] lst_of_simps(1,2)[simp del]
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def widths_lst kok_def unat_of_nat_64' push_m_def lm_ite_len)
-    sorry
+    apply (crush_base specs add: IH simp add: low_res_def)
+    apply (simp_all only: kok_lit widths_lst unat_of_nat_64' push_m_def lm_ite_len lower_m_simps'(7) lm_len_eq lst_len_eq fst_conv snd_conv conj_absorb simp_thms)
+    done
 qed
 
 lemma lower_rec_spec:

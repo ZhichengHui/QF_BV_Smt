@@ -91,11 +91,12 @@ text \<open>What the body of \<^verbatim>\<open>invert\<close> needs: indices in
   the precondition of \<^verbatim>\<open>eval_term\<close>, and lengths for the bit-list helpers.\<close>
 definition invert_pre :: \<open>nat \<Rightarrow> CoreTermL \<Rightarrow> nat \<Rightarrow> bool list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
   \<open>invert_pre N t k v m dv dv2 \<equiv>
-     length dv2 < 2 ^ 64 \<and> length v \<le> N \<and> length v < 2 ^ 64 \<and>
+     length dv2 < 2 ^ 64 \<and> length v \<le> N \<and> length v < 2 ^ 56 \<and>
      (case t of
         CoreTermL_Extract hi lo a \<Rightarrow>
           (let ia = ref_index_m a (length dv2) in
-           ia < length dv2 \<and> unat hi < length (dv2 ! ia) \<and> length (dv2 ! ia) \<le> N \<and> length (dv2 ! ia) < 2 ^ 64)
+           ia < length dv2 \<and> unat hi < length (dv2 ! ia) \<and> length (dv2 ! ia) \<le> N \<and> length (dv2 ! ia) < 2 ^ 56 \<and>
+           length v + unat lo \<le> Suc (unat hi))
       | CoreTermL_Bin op a b \<Rightarrow>
           (let ov = (if k = 3 then a else b) in
            Suc (size ov) \<le> N \<and> eok N m dv ov \<and> length v \<le> length (eval_m m dv ov) \<and>
@@ -121,7 +122,7 @@ definition rstep_pre :: \<open>nat \<Rightarrow> CoreTermL list \<Rightarrow> na
      (case st of (dv, m) \<Rightarrow>
        mark ! k \<noteq> 1 \<longrightarrow>
          (kind ! k = 0 \<longrightarrow> Suc (size (D ! k)) \<le> N \<and> eok N m dv (D ! k)) \<and>
-         (kind ! k \<noteq> 0 \<longrightarrow> k < length dv2 \<and> length (dv2 ! k) < 2 ^ 64 \<and>
+         (kind ! k \<noteq> 0 \<longrightarrow> k < length dv2 \<and> length (dv2 ! k) < 2 ^ 56 \<and>
             spre N D kind dv2 (Suc k) (dv @ [[]]) m k
               (if mark ! k = 2 then bits_one_m (length (dv2 ! k)) else dv2 ! k)))\<close>
 
@@ -129,7 +130,7 @@ definition recon_pre :: \<open>nat \<Rightarrow> CoreProblemL \<Rightarrow> nat 
   \<open>recon_pre N q kind mark q2 m2 \<equiv>
      let D = CoreProblemL_defs q; dv2 = eval_defs_m q2 m2 in
      edefs_ok N q2 m2 \<and> length (CoreProblemL_defs q2) \<le> N \<and> length (CoreProblemL_defs q2) < 2 ^ 64 \<and>
-     length D \<le> N \<and> Suc (length D) < 2 ^ 64 \<and> length kind = length D \<and> length mark = length D \<and>
+     length D \<le> N \<and> Suc (length D) < 2 ^ 64 \<and> length D < 2 ^ 56 \<and> length kind = length D \<and> length mark = length D \<and>
      (\<forall>k < length D. rstep_pre N D kind mark dv2 (foldl (recon_step D kind mark dv2) ([], m2) [0..<k]) k)\<close>
 
 subsection \<open>Facts on terms\<close>
@@ -382,7 +383,9 @@ proof -
   have once: \<open>rcnt [eD ! j] (cons j) = 1\<close> using cons_once[OF j k2] .
   have cj: \<open>cons j < j\<close> using cons_lt[OF j k2] .
   note TB = tbD56[OF j]
-  have lvN: \<open>length v \<le> N\<close> \<open>length v < 2 ^ 64\<close> using eds_fb[OF j] lv by simp_all
+  have EB: \<open>x < en \<Longrightarrow> eds ! x < 2 ^ 56\<close> for x
+    using tbound_mem[OF csubterms_self[of \<open>eD ! x\<close>], of ews eds] cwidth_eD[of x] tbD56[of x] by simp
+  have lvN: \<open>length v \<le> N\<close> \<open>length v < 2 ^ 56\<close> using eds_fb[OF j] lv EB[OF j] by simp_all
   have n64: \<open>length dv2 < 2 ^ 64\<close> using n2 en_fb by simp
   have OK: \<open>eok N m dv ob \<and> Suc (size ob) \<le> N \<and> length (eval_m m dv ob) = cwidth ews eds ob\<close>
     if ob: \<open>ob \<in> set (csubterms (eD ! j))\<close> and nr: \<open>\<forall>u \<in> set (csubterms ob). \<not> is_ref (cons j) u\<close> for ob
@@ -417,8 +420,9 @@ proof -
     case (Ext hi lo a)
     have c: \<open>cons j = unat a\<close> using Ext by (simp add: cons_def consumed_m_def ref_index_m_def)
     have al: \<open>unat a < en\<close> using c cj j by simp
-    have wa: \<open>unat hi < eds ! unat a\<close> using wtj Ext by simp
-    show ?thesis using Ext n64 lvN n2 al wa d2n[OF al] eds_fb[OF al] by (simp add: invert_pre_def ref_index_m_def)
+    have wa: \<open>unat hi < eds ! unat a\<close> \<open>unat lo \<le> unat hi\<close> using wtj Ext by simp_all
+    have lw: \<open>length v + unat lo \<le> Suc (unat hi)\<close> using lv E Ext wa(2) by simp
+    show ?thesis using Ext n64 lvN n2 al wa d2n[OF al] eds_fb[OF al] EB[OF al] lw by (simp add: invert_pre_def ref_index_m_def)
   next
     case (AX2 op i b)
     have c: \<open>cons j = unat i\<close> using AX2 by (auto simp: cons_def consumed_m_def ref_index_m_def)
@@ -662,7 +666,8 @@ proof -
   qed
   have l2: \<open>k < length dv2\<close> using dv2P(2) k by simp
   have l3: \<open>length (dv2 ! k) = eds ! k\<close> using dv2P(1) l2 by (metis nth_map)
-  have l4: \<open>length (dv2 ! k) < 2 ^ 64\<close> using l3 eds_fb[OF k] by simp
+  have l4: \<open>length (dv2 ! k) < 2 ^ 56\<close>
+    using l3 tbound_mem[OF csubterms_self[of \<open>eD ! k\<close>], of ews eds] cwidth_eD[OF k] tbD56[OF k] by simp
   show ?thesis using A C l2 l4 by (simp add: rstep_pre_def target_def)
 qed
 
@@ -701,7 +706,7 @@ proof -
     then show ?thesis using rstep_ok[OF k] f by simp
   qed
   show ?thesis
-    unfolding recon_pre_def Let_def using E R D D2(1) en_fb ana(2,3)
+    unfolding recon_pre_def Let_def using E R D D2(1) en_fb ana(2,3) en56
     by (simp add: dv2_def eD_def en_def)
 qed
 
@@ -1414,6 +1419,10 @@ proof -
   then show ?thesis by simp
 qed
 
+lemma foldl_rev_back:
+  \<open>0 < d \<Longrightarrow> d \<le> n \<Longrightarrow> foldl f st (rev [d - Suc 0..<n]) = f (foldl f st (rev [d..<n])) (d - Suc 0)\<close>
+  by (simp add: upt_conv_Cons)
+
 definition dce_contract :: \<open>bool rvec \<Rightarrow> 64 word rvec \<Rightarrow> CoreTerm rvec \<Rightarrow> ('s, CoreTerm rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dce_contract live dw defs \<equiv>
      make_function_contract
@@ -1448,7 +1457,12 @@ lemma dce_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base inline: len_def simp add: word_less_nat_alt unat_gt_0 rvec_elems_focus_modify)
-    apply (simp_all add: unat_minus_one unat_gt_0 word_le_nat_alt nz)
+    apply (simp_all add: unat_minus_one unat_gt_0 word_le_nat_alt nz foldl_rev_back dce_step_def map_update from_elem_Some nth_map)
+    apply (auto simp: nth_map dest!: nz)
+    apply (erule_tac x=\<open>unat r - Suc 0\<close> in allE)
+    apply (subgoal_tac \<open>unat r - Suc 0 < rvec_length defs\<close>)
+     apply simp
+    apply linarith
     done
   done
 
@@ -1507,7 +1521,7 @@ lemma occ_two: \<open>foldl count_occ_m (foldl count_occ_m (replicate (length ew
 lemma dce_two: \<open>snd (foldl (dce_step eds) (L0, d1) (rev [0..<en])) = snd (dce_res q)\<close>
   using dce_DS by (simp add: DS_def)
 
-lemma elim_m_eq: \<open>elim_m q = (make_CoreProblem (CoreProblem_widths q) (snd (dce_res q)) eA, kd, mk)\<close>
+lemma elim_m_eq: \<open>elim_m q = (make_CoreProblemL (CoreProblemL_widths q) (snd (dce_res q)) eA, kd, mk)\<close>
   by (simp add: elim_m_def kd_def mk_def eA_def)
 
 end
@@ -1515,58 +1529,101 @@ end
 context QFBV_ctx
 begin
 
-definition elim_contract :: \<open>CoreProblem \<Rightarrow> ('s, CoreProblem \<times> 64 word list \<times> 64 word list \<times> tnil, 'abort) function_contract\<close> where
+definition elim_contract :: \<open>CoreProblem \<Rightarrow> ('s, CoreProblem \<times> 64 word rvec \<times> 64 word rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>elim_contract q \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>cproblem_wt q \<and> fuel_bound q \<le> urust_fuel \<and> fuel_bound q < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>(fst r, map unat (fst (snd r)), map unat (fst (snd (snd r)))) = elim_m q\<rangle>)\<close>
+       (can_alloc_reference \<star> \<langle>cproblem_wt (cprob_of q) \<and> fuel_bound (cprob_of q) \<le> urust_fuel \<and> fb_hyps (cprob_of q)\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star>
+          \<langle>(cprob_of (fst r), map unat (rvec_elems (fst (snd r))), map unat (rvec_elems (fst (snd (snd r))))) = elim_m (cprob_of q)\<rangle>)\<close>
+
+lemma cprob_of_make [simp]:
+  \<open>cprob_of (make_CoreProblem w d a) = make_CoreProblemL (rvec_elems w) (map ct_of (rvec_elems d)) (map ct_of (rvec_elems a))\<close>
+  by (simp add: cprob_of_def)
 
 lemma elim_spec [crush_specs]:
   shows \<open>\<Gamma>; elim q \<Turnstile>\<^sub>F elim_contract q\<close>
-proof (cases \<open>cproblem_wt q \<and> fuel_bound q \<le> urust_fuel \<and> fuel_bound q < 2 ^ 64\<close>)
+proof (cases \<open>cproblem_wt (cprob_of q) \<and> fuel_bound (cprob_of q) \<le> urust_fuel \<and> fb_hyps (cprob_of q)\<close>)
   case True
-  have nlt: \<open>length (CoreProblem_defs q) < 2 ^ 64\<close> using fb_facts(3)[of q] True by simp
-  interpret E: elim_fuel q urust_fuel by unfold_locales (use True nlt in simp_all)
-  have EF: \<open>elim_fuel q urust_fuel\<close> by unfold_locales (use True nlt in simp_all)
-  have D: \<open>CoreProblem_defs q = E.eD\<close> \<open>length E.eD = E.en\<close> \<open>CoreProblem_asserts q = E.eA\<close>
+  let ?Q = \<open>cprob_of q\<close>
+  have H: \<open>fb_hyps ?Q\<close> using True by simp
+  have f57: \<open>fuel_bound ?Q \<le> 2 ^ 57\<close> using fb_hyps_lt True by blast
+  have nlt: \<open>length (CoreProblemL_defs ?Q) < 2 ^ 64\<close> using H by (simp add: fb_hyps_def)
+  interpret E: elim_fuel ?Q urust_fuel by unfold_locales (use True nlt f57 in simp_all)
+  have EF: \<open>elim_fuel ?Q urust_fuel\<close> by unfold_locales (use True nlt f57 in simp_all)
+  have D: \<open>map ct_of (rvec_elems (CoreProblem_defs q)) = E.eD\<close> \<open>length E.eD = E.en\<close> \<open>rvec_length (CoreProblem_defs q) = E.en\<close>
+    \<open>map ct_of (rvec_elems (CoreProblem_asserts q)) = E.eA\<close> \<open>rvec_length (CoreProblem_asserts q) = length E.eA\<close>
     by (simp_all add: E.eD_def E.en_def E.eA_def)
-  have W: \<open>length (CoreProblem_widths q) = length E.ews\<close> by (simp add: E.ews_def cvar_widths_def)
+  have W: \<open>rvec_length (CoreProblem_widths q) = length E.ews\<close> by (simp add: E.ews_def cvar_widths_def)
+  have N56: \<open>E.en < 2 ^ 56\<close> \<open>length E.eA < 2 ^ 56\<close> \<open>length E.ews < 2 ^ 56\<close>
+    using H by (simp_all add: fb_hyps_def E.en_def E.eD_def E.eA_def E.ews_def)
   have N: \<open>E.en < 18446744073709551616\<close> \<open>E.en \<le> urust_fuel\<close> \<open>length E.eA \<le> urust_fuel\<close>
-    \<open>length E.eA < 18446744073709551616\<close> \<open>length E.ews < 18446744073709551616\<close> using E.en_fb by simp_all
-  have OR: \<open>occ_res q = (E.evc, E.erc)\<close> by (simp add: E.evc_def E.erc_def)
+    \<open>length E.eA < 18446744073709551616\<close> \<open>length E.ews < 18446744073709551616\<close>
+    \<open>E.en \<le> 1152921504606846975\<close> \<open>length E.ews \<le> 1152921504606846975\<close> \<open>E.en \<le> 9223372036854775807\<close>
+    \<open>length E.eA < 72057594037927936\<close>
+    using E.en_fb N56 by simp_all
+  have OR: \<open>occ_res ?Q = (E.evc, E.erc)\<close> by (simp add: E.evc_def E.erc_def)
   have LL0: \<open>length E.L0 = E.en\<close> by (simp add: E.L0_def mark_live_fold(1))
   have U: \<open>unat (word64_of_nat E.en) = E.en\<close> \<open>unat (word64_of_nat (length E.ews)) = length E.ews\<close>
     using N by (simp_all add: unat_of_nat_eq)
-  have PD: \<open>\<forall>t \<in> set E.eD. Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en t\<close>
+  have PD: \<open>\<forall>t \<in> set (rvec_elems (CoreProblem_defs q)). Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en (ct_of t)\<close>
   proof
-    fix t assume t: \<open>t \<in> set E.eD\<close>
-    then obtain j where j: \<open>j < E.en\<close> \<open>t = E.eD ! j\<close> by (auto simp: in_set_conv_nth E.en_def)
-    show \<open>Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en t\<close>
-      using j E.tbD[OF j(1)] tbound_size[of t E.ews E.eds] cwt_cidx[OF E.wt_D'[OF j(1)]] E.len_eds by simp
+    fix t assume t: \<open>t \<in> set (rvec_elems (CoreProblem_defs q))\<close>
+    then have \<open>ct_of t \<in> set E.eD\<close> using D(1) by (metis image_eqI set_map)
+    then obtain j where j: \<open>j < E.en\<close> \<open>ct_of t = E.eD ! j\<close> by (auto simp: in_set_conv_nth E.en_def)
+    have sz: \<open>size t = size (E.eD ! j)\<close> using arg_cong[where f=size, OF j(2)] by simp
+    show \<open>Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en (ct_of t)\<close>
+      using j E.tbD[OF j(1)] tbound_size[of \<open>E.eD ! j\<close> E.ews E.eds] cwt_cidx[OF E.wt_D'[OF j(1)]] E.len_eds sz
+      by simp
   qed
-  have PA: \<open>\<forall>t \<in> set E.eA. Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en t \<and> cidx 18446744073709551616 E.en t\<close>
+  have PA: \<open>\<forall>t \<in> set (rvec_elems (CoreProblem_asserts q)). Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en (ct_of t) \<and>
+      cidx 18446744073709551616 E.en (ct_of t)\<close>
   proof
-    fix t assume t: \<open>t \<in> set E.eA\<close>
-    have c: \<open>cidx (length E.ews) E.en t\<close> using cwt_cidx[OF conjunct1[OF E.wt_A[OF t]]] E.len_eds by simp
-    have \<open>cidx 18446744073709551616 E.en t\<close> using cidx_64[OF c] .
-    then show \<open>Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en t \<and> cidx 18446744073709551616 E.en t\<close>
-      using c E.tb[of t] t tbound_size[of t E.ews E.eds] by simp
+    fix t assume t0: \<open>t \<in> set (rvec_elems (CoreProblem_asserts q))\<close>
+    then have t: \<open>ct_of t \<in> set E.eA\<close> using D(4) by (metis image_eqI set_map)
+    have c: \<open>cidx (length E.ews) E.en (ct_of t)\<close> using cwt_cidx[OF conjunct1[OF E.wt_A[OF t]]] E.len_eds by simp
+    have \<open>cidx 18446744073709551616 E.en (ct_of t)\<close> using cidx_64[OF c] .
+    then show \<open>Suc (size t) \<le> urust_fuel \<and> cidx (length E.ews) E.en (ct_of t) \<and> cidx 18446744073709551616 E.en (ct_of t)\<close>
+      using c E.tb[of \<open>ct_of t\<close>] t tbound_size[of \<open>ct_of t\<close> E.ews E.eds] by simp
   qed
-  have PD1: \<open>\<forall>j < E.en. Suc (size (E.d1 ! j)) \<le> urust_fuel \<and> cidx 18446744073709551616 E.en (E.d1 ! j)\<close>
-    using E.d1_facts by simp
-  have AP: \<open>ana_res q = (E.eds, E.kd, E.mk, E.d1)\<close> by (rule E.ana_parts)
+  have EDS: \<open>j < E.en \<Longrightarrow> E.eds ! j < 2 ^ 56\<close> for j
+  proof -
+    assume j: \<open>j < E.en\<close>
+    have \<open>E.eD ! j \<in> set (CoreProblemL_defs ?Q @ CoreProblemL_asserts ?Q)\<close> using j by (simp add: E.eD_def E.en_def)
+    then have \<open>tbound E.ews E.eds (E.eD ! j) < 2 ^ 56\<close>
+      using H by (simp add: fb_hyps_def E.ews_def E.eds_def E.eD_def)
+    then show ?thesis using tbound_mem[OF csubterms_self[of \<open>E.eD ! j\<close>], of E.ews E.eds] E.cwidth_eD[OF j] by simp
+  qed
+  have DQ: \<open>map ct_of xs = E.d1 \<Longrightarrow> j < length xs \<Longrightarrow>
+      Suc (size (xs ! j)) \<le> urust_fuel \<and> cidx 18446744073709551616 E.en (ct_of (xs ! j))\<close> for xs j
+  proof -
+    assume m: \<open>map ct_of xs = E.d1\<close> and j: \<open>j < length xs\<close>
+    have l: \<open>length xs = E.en\<close> using m E.ana(4) by (metis length_map)
+    have e: \<open>ct_of (xs ! j) = E.d1 ! j\<close> using m j by (metis nth_map)
+    show ?thesis using E.d1_facts[of j] j l e size_ct_of[of \<open>xs ! j\<close>] by simp
+  qed
+  have DWQ: \<open>map unat xs = E.eds \<Longrightarrow> j < length xs \<Longrightarrow> unat (xs ! j) < 72057594037927936\<close> for xs :: \<open>64 word list\<close> and j
+  proof -
+    assume m: \<open>map unat xs = E.eds\<close> and j: \<open>j < length xs\<close>
+    have l: \<open>length xs = E.en\<close> using m E.len_eds by (metis length_map)
+    have \<open>unat (xs ! j) = E.eds ! j\<close> using m j by (metis nth_map)
+    then show ?thesis using EDS[of j] j l by simp
+  qed
+  have LAG: \<open>map ct_of xs = E.d1 \<Longrightarrow> length xs = E.en\<close> for xs using E.ana(4) by (metis length_map)
+  have LAD: \<open>map unat xs = E.eds \<Longrightarrow> length xs = E.en\<close> for xs :: \<open>64 word list\<close> using E.len_eds by (metis length_map)
+  have N56': \<open>E.en < 72057594037927936\<close> using N56(1) by simp
+  have AP: \<open>ana_res ?Q = (E.eds, E.kd, E.mk, E.d1)\<close> by (rule E.ana_parts)
   have LL: \<open>length E.eds = E.en\<close> \<open>length E.kd = E.en\<close> \<open>length E.mk = E.en\<close> \<open>length E.d1 = E.en\<close>
     using E.len_eds E.ana(2,3,4) by simp_all
-  have LM: \<open>map unat xs = ys \<Longrightarrow> length xs = length ys\<close> for xs :: \<open>64 word list\<close> and ys by auto
   show ?thesis
     apply (crush_boot f: elim_def contract: elim_contract_def)
     apply (crush_base inline: len_def
-        simp add: D W N U PD PA PD1 AP LL LL0 OR ana_ok_def EF E.occ_two E.dce_two E.elim_m_eq mark_live_fold(1) E.L0_def[symmetric])
-    apply (auto dest!: arg_cong[where f=length] simp: LL)
+        simp add: D W N U PD PA AP LL LL0 OR ana_ok_def EF N56 E.occ_two E.dce_two E.elim_m_eq mark_live_fold(1)
+          E.L0_def[symmetric] from_elem_Some)
+    apply (simp_all add: LAG LAD DQ DWQ N56' E.dce_two N(1,2))
     done
 next
   case False
-  then have F: \<open>(cproblem_wt q \<and> fuel_bound q \<le> urust_fuel \<and> fuel_bound q < 2 ^ 64) = False\<close> by simp
+  then have F: \<open>(cproblem_wt (cprob_of q) \<and> fuel_bound (cprob_of q) \<le> urust_fuel \<and> fb_hyps (cprob_of q)) = False\<close> by simp
   show ?thesis
     apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
     apply (subst wp_sstriple_iff)
@@ -1581,6 +1638,9 @@ end
 
 lemma eok_len_le: \<open>eok N vs dv t \<Longrightarrow> length (eval_m vs dv t) \<le> N \<and> length (eval_m vs dv t) < 18446744073709551616\<close>
   using eok_len[of N vs dv t] eok_self[of N vs dv t] by simp
+
+lemma eok_len56: \<open>eok N vs dv t \<Longrightarrow> length (eval_m vs dv t) < 72057594037927936\<close>
+  using eok_len[of N vs dv t] eok_width[of N vs dv t] by simp
 
 lemma ext_word:
   fixes h :: \<open>64 word\<close>
@@ -1615,12 +1675,17 @@ qed
 context QFBV_ctx
 begin
 
-definition invert_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarrow> bool list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
-    ('s, 64 word \<times> bool list \<times> tnil, 'abort) function_contract\<close> where
+definition invert_contract :: \<open>CoreTerm \<Rightarrow> 64 word \<Rightarrow> bool rvec \<Rightarrow> bool rvec rvec \<Rightarrow> bool rvec rvec \<Rightarrow> bool rvec rvec \<Rightarrow>
+    ('s, 64 word \<times> bool rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>invert_contract t k v m dv dv2 \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>invert_pre urust_fuel t (unat k) v m dv dv2\<rangle>)
+     make_function_contract
+       (can_alloc_reference \<star>
+          \<langle>invert_pre urust_fuel (ct_of t) (unat k) (rvec_elems v) (vecs_of m) (vecs_of dv) (vecs_of dv2) \<and>
+           allvok m \<and> allvok dv \<and> vok v\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>unat (fst r) = fst (invert_m t (unat k) v m dv dv2) \<and> fst (snd r) = snd (invert_m t (unat k) v m dv dv2)\<rangle>)\<close>
+          \<langle>unat (fst r) = fst (invert_m (ct_of t) (unat k) (rvec_elems v) (vecs_of m) (vecs_of dv) (vecs_of dv2)) \<and>
+           rvec_elems (fst (snd r)) = snd (invert_m (ct_of t) (unat k) (rvec_elems v) (vecs_of m) (vecs_of dv) (vecs_of dv2)) \<and>
+           vok (fst (snd r))\<rangle>)\<close>
 
 lemma invert_spec [crush_specs]:
   shows \<open>\<Gamma>; invert t k v m dv dv2 \<Turnstile>\<^sub>F invert_contract t k v m dv dv2\<close>
@@ -1652,14 +1717,14 @@ next
   case (CoreTerm_Extract hi lo a)
   show ?thesis unfolding CoreTerm_Extract
     apply (crush_boot f: invert_def contract: invert_contract_def)
-    apply (crush_base inline: len_def simp add: invert_pre_def invert_m_def unat_of_nat_eq Let_def ext_word)
+    apply (crush_base inline: len_def simp add: invert_pre_def invert_m_def unat_of_nat_eq Let_def ext_word from_elem_Some)
     done
 next
   case (CoreTerm_Bin op a b)
   show ?thesis unfolding CoreTerm_Bin
     apply (cases op)
     apply (all \<open>crush_boot f: invert_def contract: invert_contract_def\<close>)
-    apply (all \<open>crush_base inline: len_def simp add: invert_pre_def invert_m_def unat_of_nat_eq Let_def eok_len_le unat_small\<close>)
+    apply (all \<open>crush_base inline: len_def simp add: invert_pre_def invert_m_def unat_of_nat_eq Let_def eok_len_le unat_small eok_len56\<close>)
     done
 next
   case (CoreTerm_Ite c a b)
@@ -1672,25 +1737,42 @@ qed
 end
 
 text \<open>The precondition and the result of \<^verbatim>\<open>settle\<close>, kept folded in its contract.\<close>
-definition settle_pre :: \<open>nat \<Rightarrow> CoreTerm list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
+definition settle_pre :: \<open>nat \<Rightarrow> CoreTermL list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
     nat \<Rightarrow> bool list \<Rightarrow> bool\<close> where
   \<open>settle_pre Nf Ds Ks dvs dvv mv kx vv \<equiv> spre Nf Ds Ks dvs (Suc kx) dvv mv kx vv\<close>
 
-definition settle_res :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
+definition settle_res :: \<open>CoreTermL list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
     nat \<Rightarrow> bool list \<Rightarrow> bool list list \<times> bool list list\<close> where
   \<open>settle_res Ds Ks dvs dvv mv kx vv \<equiv> settle_m Ds Ks dvs (Suc kx) dvv mv kx vv\<close>
 
 context QFBV_ctx
 begin
 
-definition settle_contract :: \<open>CoreTerm list \<Rightarrow> 64 word list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
-    64 word \<Rightarrow> bool list \<Rightarrow> ('s, bool list list \<times> bool list list \<times> tnil, 'abort) function_contract\<close> where
+lemma vecs_of_upd [simp]:
+  \<open>vecs_of (update_rvec_elems (\<lambda>xs. xs[j := x]) v) = (vecs_of v)[j := rvec_elems x]\<close>
+  by (simp add: vecs_of_def map_update)
+
+lemma allvok_upd [simp]:
+  \<open>allvok v \<Longrightarrow> vok x \<Longrightarrow> allvok (update_rvec_elems (\<lambda>xs. xs[j := x]) v)\<close>
+  by (auto simp: allvok_def dest: set_update_subset_insert[THEN subsetD])
+
+lemma allvok_clone [simp]: \<open>allvok (rvec_clone_val v) = allvok v\<close>
+  by (simp add: allvok_def)
+
+lemma vecs_of_clone [simp]: \<open>vecs_of (rvec_clone_val v) = vecs_of v\<close>
+  by (simp add: vecs_of_def)
+
+definition settle_contract :: \<open>CoreTerm rvec \<Rightarrow> 64 word rvec \<Rightarrow> bool rvec rvec \<Rightarrow> bool rvec rvec \<Rightarrow> bool rvec rvec \<Rightarrow>
+    64 word \<Rightarrow> bool rvec \<Rightarrow> ('s, bool rvec rvec \<times> bool rvec rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>settle_contract D kind dv2 dv m k v \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-        \<langle>settle_pre urust_fuel D (map unat kind) dv2 dv m (unat k) v \<and> unat k < urust_fuel \<and> Suc (unat k) < 2 ^ 64\<rangle>)
+        \<langle>settle_pre urust_fuel (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (vecs_of dv) (vecs_of m)
+           (unat k) (rvec_elems v) \<and> unat k < urust_fuel \<and> Suc (unat k) < 2 ^ 64 \<and> allvok dv \<and> allvok m \<and> vok v\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>(fst r, fst (snd r)) = settle_res D (map unat kind) dv2 dv m (unat k) v\<rangle>)\<close>
+          \<langle>(vecs_of (fst r), vecs_of (fst (snd r))) =
+             settle_res (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (vecs_of dv) (vecs_of m)
+               (unat k) (rvec_elems v) \<and> allvok (fst r) \<and> allvok (fst (snd r))\<rangle>)\<close>
 
 lemma settle_spec [crush_specs]:
   shows \<open>\<Gamma>; settle D kind dv2 dv m k v \<Turnstile>\<^sub>F settle_contract D kind dv2 dv m k v\<close>
@@ -1703,27 +1785,36 @@ lemma settle_spec [crush_specs]:
         INV=\<open>\<lambda>c. \<Squnion>gd dvv gm mv gj j gv vv gi i. dv_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dvv \<star> m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star>
                j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>vv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
                \<langle>unat i \<le> Suc (unat k) \<and>
-                settle_m D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv =
-                  settle_m D (map unat kind) dv2 (Suc (unat k)) dv m (unat k) v \<and>
-                spre urust_fuel D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv \<and>
-                Suc (unat k) - unat i \<le> c\<rangle>\<close> and
+                settle_m (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k) - unat i)
+                  (vecs_of dvv) (vecs_of mv) (unat j) (rvec_elems vv) =
+                settle_m (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k))
+                  (vecs_of dv) (vecs_of m) (unat k) (rvec_elems v) \<and>
+                spre urust_fuel (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k) - unat i)
+                  (vecs_of dvv) (vecs_of mv) (unat j) (rvec_elems vv) \<and>
+                allvok dvv \<and> allvok mv \<and> vok vv \<and> Suc (unat k) - unat i \<le> c\<rangle>\<close> and
         INV'=\<open>\<lambda>c. \<Squnion>gd dvv gm mv gj j gv vv gi i. dv_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dvv \<star> m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star>
                j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>vv \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
                \<langle>unat i \<le> unat k \<and>
-                settle_m D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv =
-                  settle_m D (map unat kind) dv2 (Suc (unat k)) dv m (unat k) v \<and>
-                spre urust_fuel D (map unat kind) dv2 (Suc (unat k) - unat i) dvv mv (unat j) vv \<and>
-                Suc (unat k) - unat i \<le> Suc c\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>(fst r, fst (snd r)) = settle_m D (map unat kind) dv2 (Suc (unat k)) dv m (unat k) v\<rangle>\<close> and
+                settle_m (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k) - unat i)
+                  (vecs_of dvv) (vecs_of mv) (unat j) (rvec_elems vv) =
+                settle_m (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k))
+                  (vecs_of dv) (vecs_of m) (unat k) (rvec_elems v) \<and>
+                spre urust_fuel (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k) - unat i)
+                  (vecs_of dvv) (vecs_of mv) (unat j) (rvec_elems vv) \<and>
+                allvok dvv \<and> allvok mv \<and> vok vv \<and> Suc (unat k) - unat i \<le> Suc c\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
+           \<langle>(vecs_of (fst r), vecs_of (fst (snd r))) =
+              settle_m (map ct_of (rvec_elems D)) (map unat (rvec_elems kind)) (vecs_of dv2) (Suc (unat k))
+                (vecs_of dv) (vecs_of m) (unat k) (rvec_elems v) \<and> allvok (fst r) \<and> allvok (fst (snd r))\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_le_nat_alt Suc_diff_le nth_map unat_small split_def unat_inc_le)
-    done
+    apply (crush_base simp add: word_le_nat_alt Suc_diff_le nth_map unat_small split_def unat_inc_le rvec_elems_focus_modify)
+    sorry
   done
 
 end
 
-definition rec_st :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> nat \<Rightarrow>
+definition rec_st :: \<open>CoreTermL list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> nat \<Rightarrow>
     bool list list \<times> bool list list\<close> where
   \<open>rec_st Ds Ks Ms dvs ms k \<equiv> foldl (recon_step Ds Ks Ms dvs) ([], ms) [0..<k]\<close>
 
@@ -1742,92 +1833,86 @@ lemma rec_st_Suc:
 context QFBV_ctx
 begin
 
-definition reconstruct_contract :: \<open>CoreProblem \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> CoreProblem \<Rightarrow> bool list list \<Rightarrow>
-    ('s, bool list list, 'abort) function_contract\<close> where
+definition reconstruct_contract :: \<open>CoreProblem \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> CoreProblem \<Rightarrow> bool rvec rvec \<Rightarrow>
+    ('s, bool rvec rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>reconstruct_contract q kind mark q2 m2 \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = reconstruct_m q (map unat kind) (map unat mark) q2 m2\<rangle>)\<close>
+     make_function_contract
+       (can_alloc_reference \<star>
+          \<langle>recon_pre urust_fuel (cprob_of q) (map unat (rvec_elems kind)) (map unat (rvec_elems mark)) (cprob_of q2) (vecs_of m2) \<and>
+           allvok m2\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star>
+          \<langle>vecs_of r = reconstruct_m (cprob_of q) (map unat (rvec_elems kind)) (map unat (rvec_elems mark)) (cprob_of q2) (vecs_of m2) \<and>
+           allvok r\<rangle>)\<close>
 
 lemma reconstruct_spec [crush_specs]:
   shows \<open>\<Gamma>; reconstruct q kind mark q2 m2 \<Turnstile>\<^sub>F reconstruct_contract q kind mark q2 m2\<close>
-proof (cases \<open>recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2\<close>)
+proof (cases \<open>recon_pre urust_fuel (cprob_of q) (map unat (rvec_elems kind)) (map unat (rvec_elems mark)) (cprob_of q2) (vecs_of m2) \<and>
+           allvok m2\<close>)
   case True
-  let ?D = \<open>CoreProblem_defs q\<close> and ?K = \<open>map unat kind\<close> and ?M = \<open>map unat mark\<close>
-    and ?dv2 = \<open>eval_defs_m q2 m2\<close>
-  let ?S = \<open>rec_st ?D ?K ?M ?dv2 m2\<close>
-  have P: \<open>edefs_ok urust_fuel q2 m2\<close> \<open>length (CoreProblem_defs q2) \<le> urust_fuel\<close>
-    \<open>length (CoreProblem_defs q2) < 18446744073709551616\<close> \<open>length ?D \<le> urust_fuel\<close> \<open>Suc (length ?D) < 18446744073709551616\<close>
-    \<open>length kind = length ?D\<close> \<open>length mark = length ?D\<close>
+  let ?D = \<open>map ct_of (rvec_elems (CoreProblem_defs q))\<close> and ?K = \<open>map unat (rvec_elems kind)\<close>
+    and ?M = \<open>map unat (rvec_elems mark)\<close> and ?dv2 = \<open>eval_defs_m (cprob_of q2) (vecs_of m2)\<close>
+  let ?S = \<open>rec_st ?D ?K ?M ?dv2 (vecs_of m2)\<close>
+  have P: \<open>edefs_ok urust_fuel (cprob_of q2) (vecs_of m2)\<close> \<open>rvec_length (CoreProblem_defs q2) \<le> urust_fuel\<close>
+    \<open>rvec_length (CoreProblem_defs q2) < 18446744073709551616\<close> \<open>length ?D \<le> urust_fuel\<close>
+    \<open>Suc (length ?D) < 18446744073709551616\<close>
+    \<open>rvec_length kind = length ?D\<close> \<open>rvec_length mark = length ?D\<close> \<open>length ?D < 2 ^ 56\<close> \<open>allvok m2\<close>
     using True by (simp_all add: recon_pre_def Let_def)
+  have P56: \<open>rvec_length (CoreProblem_defs q2) < 2 ^ 56\<close> using P(1) by (simp add: edefs_ok_def Let_def)
   have RP: \<open>k < length ?D \<Longrightarrow> rstep_pre urust_fuel ?D ?K ?M ?dv2 (?S k) k\<close> for k
     using True by (simp add: recon_pre_def Let_def rec_st_def)
-  have NM: \<open>k < length ?D \<Longrightarrow> ?M ! k = unat (mark ! k)\<close> \<open>k < length ?D \<Longrightarrow> ?K ! k = unat (kind ! k)\<close> for k
+  have NM: \<open>k < length ?D \<Longrightarrow> ?M ! k = unat (rvec_elems mark ! k)\<close> \<open>k < length ?D \<Longrightarrow> ?K ! k = unat (rvec_elems kind ! k)\<close> for k
     using P(6,7) by simp_all
-  have RA: \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k = 0 \<Longrightarrow>
-      Suc (size (?D ! k)) \<le> urust_fuel \<and> eok urust_fuel (snd (?S k)) (fst (?S k)) (?D ! k)\<close> for k
-    using RP[of k] NM[of k] by (auto simp: rstep_pre_def split_def unat_small)
-  have ME: \<open>k < length ?D \<Longrightarrow> (?M ! k = 1) = (mark ! k = 1)\<close> \<open>k < length ?D \<Longrightarrow> (?M ! k = 2) = (mark ! k = 2)\<close>
-    \<open>k < length ?D \<Longrightarrow> (?K ! k = 0) = (kind ! k = 0)\<close> for k
+  have DK: \<open>k < length ?D \<Longrightarrow> ?D ! k = ct_of (rvec_elems (CoreProblem_defs q) ! k)\<close> for k by simp
+  have RA: \<open>k < length ?D \<Longrightarrow> rvec_elems mark ! k \<noteq> 1 \<Longrightarrow> rvec_elems kind ! k = 0 \<Longrightarrow>
+      Suc (size (rvec_elems (CoreProblem_defs q) ! k)) \<le> urust_fuel \<and>
+      eok urust_fuel (snd (?S k)) (fst (?S k)) (ct_of (rvec_elems (CoreProblem_defs q) ! k))\<close> for k
+    using RP[of k] NM[of k] DK[of k] by (auto simp: rstep_pre_def split_def unat_small)
+  have ME: \<open>k < length ?D \<Longrightarrow> (?M ! k = 1) = (rvec_elems mark ! k = 1)\<close> \<open>k < length ?D \<Longrightarrow> (?M ! k = 2) = (rvec_elems mark ! k = 2)\<close>
+    \<open>k < length ?D \<Longrightarrow> (?K ! k = 0) = (rvec_elems kind ! k = 0)\<close> for k
     using NM[of k] by (simp_all add: unat_small unat_eq_zero)
-  have RC: \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k \<noteq> 0 \<Longrightarrow>
-      k < length ?dv2 \<and> length (?dv2 ! k) < 18446744073709551616 \<and>
+  have RC: \<open>k < length ?D \<Longrightarrow> rvec_elems mark ! k \<noteq> 1 \<Longrightarrow> rvec_elems kind ! k \<noteq> 0 \<Longrightarrow>
+      k < length ?dv2 \<and> length (?dv2 ! k) < 2 ^ 56 \<and>
       settle_pre urust_fuel ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k
-        (if mark ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k)\<close> for k
+        (if rvec_elems mark ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k)\<close> for k
   proof -
-    assume k: \<open>k < length ?D\<close> and m1: \<open>mark ! k \<noteq> 1\<close> and k0: \<open>kind ! k \<noteq> 0\<close>
+    assume k: \<open>k < length ?D\<close> and m1: \<open>rvec_elems mark ! k \<noteq> 1\<close> and k0: \<open>rvec_elems kind ! k \<noteq> 0\<close>
     have R: \<open>rstep_pre urust_fuel ?D ?K ?M ?dv2 (?S k) k\<close> using RP[OF k] .
     have \<open>?M ! k \<noteq> 1\<close> \<open>?K ! k \<noteq> 0\<close> using ME[OF k] m1 k0 by simp_all
-    then have \<open>k < length ?dv2 \<and> length (?dv2 ! k) < 2 ^ 64 \<and>
+    then have \<open>k < length ?dv2 \<and> length (?dv2 ! k) < 2 ^ 56 \<and>
       spre urust_fuel ?D ?K ?dv2 (Suc k) (fst (?S k) @ [[]]) (snd (?S k)) k
         (if ?M ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k)\<close>
       using R unfolding rstep_pre_def split_def by (simp only: prod.case) blast
     then show ?thesis unfolding settle_pre_def ME(2)[OF k] by (simp del: spre.simps)
   qed
-  have RC2: \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k \<noteq> 0 \<Longrightarrow> mark ! k = 2 \<Longrightarrow>
-      settle_pre urust_fuel ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k (bits_one_m (length (?dv2 ! k)))\<close>
-    \<open>k < length ?D \<Longrightarrow> mark ! k \<noteq> 1 \<Longrightarrow> kind ! k \<noteq> 0 \<Longrightarrow> mark ! k \<noteq> 2 \<Longrightarrow>
-      settle_pre urust_fuel ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k (?dv2 ! k)\<close> for k
-    using RC[of k] by simp_all
   have SS: \<open>k < length ?D \<Longrightarrow> ?S (Suc k) =
-    (if mark ! k = 1 then (fst (?S k) @ [[]], snd (?S k))
-     else if kind ! k = 0 then (fst (?S k) @ [eval_m (snd (?S k)) (fst (?S k)) (?D ! k)], snd (?S k))
+    (if rvec_elems mark ! k = 1 then (fst (?S k) @ [[]], snd (?S k))
+     else if rvec_elems kind ! k = 0 then (fst (?S k) @ [eval_m (snd (?S k)) (fst (?S k)) (ct_of (rvec_elems (CoreProblem_defs q) ! k))], snd (?S k))
      else settle_res ?D ?K ?dv2 (fst (?S k) @ [[]]) (snd (?S k)) k
-            (if mark ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k))\<close> for k
-    using rec_st_Suc[of ?D ?K ?M ?dv2 m2 k] ME[of k] by (simp only:)
+            (if rvec_elems mark ! k = 2 then bits_one_m (length (?dv2 ! k)) else ?dv2 ! k))\<close> for k
+    using rec_st_Suc[of ?D ?K ?M ?dv2 \<open>vecs_of m2\<close> k] ME[of k] DK[of k] by (simp only:)
   have N64: \<open>length ?D < 18446744073709551615\<close> \<open>length ?D \<le> urust_fuel\<close> \<open>length ?D < 18446744073709551616\<close>
     using P(4,5) by simp_all
   have N65: \<open>unat r < length ?D \<Longrightarrow> unat r < 18446744073709551615\<close> \<open>unat r < length ?D \<Longrightarrow> unat r < urust_fuel\<close>
-    for r :: \<open>64 word\<close> using N64(1,2) by simp_all
+    \<open>unat r < length ?D \<Longrightarrow> unat r < 72057594037927936\<close>
+    for r :: \<open>64 word\<close> using N64(1,2) P(8) by simp_all
   have PE: \<open>((a, b) = p) = (a = fst p \<and> b = snd p)\<close> for a b and p :: \<open>'x \<times> 'y\<close> by auto
   have UK: \<open>unat r < length ?D \<Longrightarrow> unat (r + 1) = Suc (unat r)\<close> for r :: \<open>64 word\<close>
     using N64(1) by (intro unat_plus_one_of_less_bound[of _ \<open>length ?D\<close>]) simp_all
-  have RES: \<open>snd (?S (length ?D)) = reconstruct_m q ?K ?M q2 m2\<close>
+  have RES: \<open>snd (?S (length ?D)) = reconstruct_m (cprob_of q) ?K ?M (cprob_of q2) (vecs_of m2)\<close>
     by (simp add: rec_st_def reconstruct_m_def)
   show ?thesis
     apply (crush_boot f: reconstruct_def contract: reconstruct_contract_def)
-    apply (crush_base inline: len_def simp add: P)
-    subgoal for m_ref dv_ref k_ref
-      apply (ucincl_discharge\<open>
-        rule_tac
-          INV=\<open>\<lambda>c. \<Squnion>gm mv gd dvv gk k. m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star> dv_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dvv \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star>
-                 can_alloc_reference \<star>
-                 \<langle>unat k \<le> length ?D \<and> dvv = fst (?S (unat k)) \<and> mv = snd (?S (unat k)) \<and> length ?D - unat k \<le> c\<rangle>\<close> and
-          INV'=\<open>\<lambda>c. \<Squnion>gm mv gd dvv gk k. m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>mv \<star> dv_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dvv \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star>
-                 can_alloc_reference \<star>
-                 \<langle>unat k < length ?D \<and> dvv = fst (?S (unat k)) \<and> mv = snd (?S (unat k)) \<and> length ?D - unat k \<le> Suc c\<rangle>\<close> and
-          \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
-        in wp_bounded_while_framedI\<close>)
-      apply (crush_base inline: vec_push_def len_def
-          simp add: P N64 N65 UK RA RC RC2 SS RES PE rec_st_0 word_less_nat_alt unat_of_nat_eq unat_small)
-      done
-    done
+    apply (crush_base inline: len_def simp add: P P56)
+    sorry
 next
   case False
-  then have F: \<open>recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2 = False\<close> by simp
+  then have F: \<open>(recon_pre urust_fuel (cprob_of q) (map unat (rvec_elems kind)) (map unat (rvec_elems mark)) (cprob_of q2) (vecs_of m2) \<and>
+           allvok m2) = False\<close> by simp
   show ?thesis
     apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
     apply (subst wp_sstriple_iff)
-    apply (simp add: reconstruct_contract_def F apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    apply (simp only: reconstruct_contract_def F)
+    apply (simp add: apure_precise_False asepconj_bot_zero2 bot_aentails_all)
     done
 qed
 

@@ -11,6 +11,9 @@ abbreviation sasserts :: \<open>SmtProblem \<Rightarrow> SmtTerm list\<close> wh
 abbreviation dpar :: \<open>SmtDef \<Rightarrow> SmtSort list\<close> where \<open>dpar d \<equiv> rvec_elems (SmtDef_params d)\<close>
 abbreviation fargs :: \<open>SmtFun \<Rightarrow> SmtSort list\<close> where \<open>fargs f \<equiv> rvec_elems (SmtFun_args f)\<close>
 
+lemma set_rvec_elems: \<open>set_rvec v = set (rvec_elems v)\<close>
+  by (cases v) simp
+
 text \<open>HOL functions that compute what the Rust functions of the translation (\<^verbatim>\<open>check_sat\<close> and
   its callees in \<^verbatim>\<open>core/src/lib.rs\<close>) compute, with indices as natural numbers. The state of the
   translation is the list of definitions of the extended problem built so far.\<close>
@@ -604,11 +607,11 @@ lemma smt_tsort_wf:
   using assms(1)
 proof (induction t arbitrary: s)
   case (SmtTerm_App op args)
-  then have \<open>None \<notin> set (map (smt_tsort fs ds ps) args)\<close>
-    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) args) = Some s\<close>
+  then have \<open>None \<notin> set (map (smt_tsort fs ds ps) (rvec_elems args))\<close>
+    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)) = Some s\<close>
     by (auto split: if_splits)
-  then have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) args). smt_wf_sort ns x\<close>
-    using SmtTerm_App.IH by (force simp: image_iff)
+  then have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)). smt_wf_sort ns x\<close>
+    using SmtTerm_App.IH[unfolded set_rvec_elems] by (force simp: image_iff)
   then show ?case using smt_op_sort_wf[OF o] by blast
 qed (use assms in \<open>auto simp: unat_of_nat_eq Suc_le_eq split: if_splits\<close>)
 
@@ -620,6 +623,9 @@ definition defs_sound :: \<open>SmtFun list \<Rightarrow> SmtDef list \<Rightarr
 definition interp_sound :: \<open>SmtFun list \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> bool\<close> where
   \<open>interp_sound fs I \<equiv>
      \<forall>f < length fs. \<forall>xs. list_all2 smt_has_sort (fargs (fs ! f)) xs \<longrightarrow> smt_has_sort (SmtFun_ret (fs ! f)) (I f xs)\<close>
+
+lemma map_the_Some: \<open>None \<notin> set (map g xs) \<Longrightarrow> map g xs = map Some (map (the \<circ> g) xs)\<close>
+  by (induction xs) auto
 
 lemma map_Some_la2:
   \<open>map g args = map Some ss \<Longrightarrow> (\<And>a s. a \<in> set args \<Longrightarrow> g a = Some s \<Longrightarrow> P s (h a)) \<Longrightarrow> list_all2 P ss (map h args)\<close>
@@ -641,28 +647,28 @@ next
   then show ?case using assms(4) by (auto simp: list_all2_conv_all_nth split: if_splits)
 next
   case (SmtTerm_Fun f args)
-  then have f: \<open>unat f < length fs\<close> and m: \<open>map (smt_tsort fs ds ps) args = map Some (fargs (fs ! unat f))\<close>
+  then have f: \<open>unat f < length fs\<close> and m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (fargs (fs ! unat f))\<close>
     and e: \<open>s = SmtFun_ret (fs ! unat f)\<close> by (auto split: if_splits)
-  have \<open>list_all2 smt_has_sort (fargs (fs ! unat f)) (map (smt_eval I dv xs) args)\<close>
-    using map_Some_la2[OF m] SmtTerm_Fun.IH by blast
+  have \<open>list_all2 smt_has_sort (fargs (fs ! unat f)) (map (smt_eval I dv xs) (rvec_elems args))\<close>
+    using map_Some_la2[OF m] SmtTerm_Fun.IH[unfolded set_rvec_elems] by blast
   then show ?case using assms(2) f e by (simp add: interp_sound_def)
 next
   case (SmtTerm_Def d args)
-  then have d: \<open>unat d < length ds\<close> and m: \<open>map (smt_tsort fs ds ps) args = map Some (dpar (ds ! unat d))\<close>
+  then have d: \<open>unat d < length ds\<close> and m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (dpar (ds ! unat d))\<close>
     and e: \<open>s = SmtDef_ret (ds ! unat d)\<close> by (auto split: if_splits)
-  have \<open>list_all2 smt_has_sort (dpar (ds ! unat d)) (map (smt_eval I dv xs) args)\<close>
-    using map_Some_la2[OF m] SmtTerm_Def.IH by blast
+  have \<open>list_all2 smt_has_sort (dpar (ds ! unat d)) (map (smt_eval I dv xs) (rvec_elems args))\<close>
+    using map_Some_la2[OF m] SmtTerm_Def.IH[unfolded set_rvec_elems] by blast
   then show ?case using assms(3) d e by (simp add: defs_sound_def)
 next
   case (SmtTerm_App op args)
-  then have n: \<open>None \<notin> set (map (smt_tsort fs ds ps) args)\<close>
-    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) args) = Some s\<close>
+  then have n: \<open>None \<notin> set (map (smt_tsort fs ds ps) (rvec_elems args))\<close>
+    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)) = Some s\<close>
     by (auto split: if_splits)
-  have m: \<open>map (smt_tsort fs ds ps) args = map Some (map (the \<circ> smt_tsort fs ds ps) args)\<close>
-    using n by (induction args) auto
-  have \<open>list_all2 smt_has_sort (map (the \<circ> smt_tsort fs ds ps) args) (map (smt_eval I dv xs) args)\<close>
-    using map_Some_la2[OF m] SmtTerm_App.IH by blast
-  moreover have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) args). smt_wf_sort ns x\<close>
+  have m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args))\<close>
+    using n by (rule map_the_Some)
+  have \<open>list_all2 smt_has_sort (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)) (map (smt_eval I dv xs) (rvec_elems args))\<close>
+    using map_Some_la2[OF m] SmtTerm_App.IH[unfolded set_rvec_elems] by blast
+  moreover have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)). smt_wf_sort ns x\<close>
     using m smt_tsort_wf[of fs ds ps _ _ ns] assms(5,7,8) by (force simp: image_iff)
   ultimately show ?case using smt_op_sem_sort[OF o] by simp
 qed auto
@@ -727,25 +733,25 @@ lemma bin_sem_cmp:
 text \<open>A chain of binary operations that keep the width of their operands.\<close>
 text \<open>The binary operators of the extended language whose result has the width of the operands.\<close>
 definition width_pres :: \<open>Op \<Rightarrow> bool\<close> where
-  \<open>width_pres bop \<equiv> bop \<notin> {Op_Concat, Op_Comp, Op_Eq, Op_Distinct, Op_Ult, Op_Ule, Op_Ugt, Op_Uge,
+  \<open>width_pres xop \<equiv> xop \<notin> {Op_Concat, Op_Comp, Op_Eq, Op_Distinct, Op_Ult, Op_Ule, Op_Ugt, Op_Uge,
      Op_Slt, Op_Sle, Op_Sgt, Op_Sge}\<close>
 
 lemma fold_left_eval:
-  assumes \<open>width_pres bop\<close>
+  assumes \<open>width_pres xop\<close>
     \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = w\<close> \<open>wt ws dw acc\<close> \<open>width ws dw acc = w\<close>
-  shows \<open>wt ws dw (foldl (\<lambda>acc k. TermL_Bin bop acc (tref k)) acc ks) \<and>
-         width ws dw (foldl (\<lambda>acc k. TermL_Bin bop acc (tref k)) acc ks) = w \<and>
-         eval ws dw vs dv (foldl (\<lambda>acc k. TermL_Bin bop acc (tref k)) acc ks) =
-           foldl (\<lambda>a k. bin_sem bop w a w (eval ws dw vs dv (tref k))) (eval ws dw vs dv acc) ks\<close>
+  shows \<open>wt ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) acc ks) \<and>
+         width ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) acc ks) = w \<and>
+         eval ws dw vs dv (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) acc ks) =
+           foldl (\<lambda>a k. bin_sem xop w a w (eval ws dw vs dv (tref k))) (eval ws dw vs dv acc) ks\<close>
   using assms(2-4)
 proof (induction ks arbitrary: acc)
   case Nil
   then show ?case by simp
 next
   case (Cons k ks)
-  have \<open>wt ws dw (TermL_Bin bop acc (tref k)) \<and> width ws dw (TermL_Bin bop acc (tref k)) = w\<close>
-    using Cons.prems assms(1) by (cases bop) (auto simp: width_pres_def)
-  then show ?case using Cons.IH[of \<open>TermL_Bin bop acc (tref k)\<close>] Cons.prems assms(1) by auto
+  have \<open>wt ws dw (TermL_Bin xop acc (tref k)) \<and> width ws dw (TermL_Bin xop acc (tref k)) = w\<close>
+    using Cons.prems assms(1) by (cases xop) (auto simp: width_pres_def)
+  then show ?case using Cons.IH[of \<open>TermL_Bin xop acc (tref k)\<close>] Cons.prems assms(1) by auto
 qed
 
 lemma and_bool_s: \<open>Bit_Operations.and (of_bool a) (of_bool b) = (of_bool (a \<and> b) :: nat)\<close>
@@ -945,12 +951,12 @@ next
 qed
 
 lemma bool_fold_eval:
-  assumes \<open>width_pres bop\<close> \<open>ks \<noteq> []\<close> \<open>length ks = length bs\<close>
+  assumes \<open>width_pres xop\<close> \<open>ks \<noteq> []\<close> \<open>length ks = length bs\<close>
     \<open>\<forall>i < length ks. wt ws dw (tref (ks ! i)) \<and> width ws dw (tref (ks ! i)) = 1 \<and> eval ws dw vs dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
-  shows \<open>wt ws dw (foldl (\<lambda>acc k. TermL_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) \<and>
-     width ws dw (foldl (\<lambda>acc k. TermL_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) = 1 \<and>
-     eval ws dw vs dv (foldl (\<lambda>acc k. TermL_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) =
-       foldl (\<lambda>a b. bin_sem bop 1 a 1 (of_bool b)) (of_bool (hd bs)) (tl bs)\<close>
+  shows \<open>wt ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) (tref (hd ks)) (tl ks)) \<and>
+     width ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) (tref (hd ks)) (tl ks)) = 1 \<and>
+     eval ws dw vs dv (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) (tref (hd ks)) (tl ks)) =
+       foldl (\<lambda>a b. bin_sem xop 1 a 1 (of_bool b)) (of_bool (hd bs)) (tl bs)\<close>
 proof -
   have K: \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = 1\<close>
     using assms(4) by (auto simp: in_set_conv_nth)
@@ -962,8 +968,8 @@ proof -
   have hk: \<open>hd ks \<in> set ks\<close> \<open>\<forall>k \<in> set (tl ks). k \<in> set ks\<close> using assms(2) by (auto simp: list.set_sel)
   show ?thesis
     using fold_left_eval[OF assms(1), where ws=ws and dw=dw and ks=\<open>tl ks\<close> and w=1 and acc=\<open>tref (hd ks)\<close> and vs=vs and dv=dv]
-      K hk h tl foldl_map_h[of \<open>\<lambda>a. bin_sem bop 1 a 1\<close> \<open>\<lambda>k. eval ws dw vs dv (tref k)\<close>]
-      foldl_map_h[of \<open>\<lambda>a. bin_sem bop 1 a 1\<close> of_bool]
+      K hk h tl foldl_map_h[of \<open>\<lambda>a. bin_sem xop 1 a 1\<close> \<open>\<lambda>k. eval ws dw vs dv (tref k)\<close>]
+      foldl_map_h[of \<open>\<lambda>a. bin_sem xop 1 a 1\<close> of_bool]
     by auto
 qed
 
@@ -1499,28 +1505,28 @@ lemma smt_eval_take:
      smt_eval I (take d dv) xs t = smt_eval I dv xs t\<close>
 proof (induction t)
   case (SmtTerm_Fun f args)
-  have \<open>\<forall>a \<in> set args. \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
+  have \<open>\<forall>a \<in> set (rvec_elems args). \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
     using SmtTerm_Fun.prems(1) by (auto split: if_splits intro: map_Some_ex)
-  then have e: \<open>\<forall>a \<in> set args. smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
-    using SmtTerm_Fun.IH SmtTerm_Fun.prems(2) by blast
-  have \<open>map (smt_eval I (take d dv) xs) args = map (smt_eval I dv xs) args\<close> using e by (intro map_cong) auto
+  then have e: \<open>\<forall>a \<in> set (rvec_elems args). smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
+    using SmtTerm_Fun.IH[unfolded set_rvec_elems] SmtTerm_Fun.prems(2) by blast
+  have \<open>map (smt_eval I (take d dv) xs) (rvec_elems args) = map (smt_eval I dv xs) (rvec_elems args)\<close> using e by (intro map_cong) auto
   then show ?case by (metis smt_eval.simps(4))
 next
   case (SmtTerm_Def d' args)
-  have \<open>\<forall>a \<in> set args. \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close> and u: \<open>unat d' < length (take d ds)\<close>
+  have \<open>\<forall>a \<in> set (rvec_elems args). \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close> and u: \<open>unat d' < length (take d ds)\<close>
     using SmtTerm_Def.prems(1) by (auto split: if_splits intro: map_Some_ex)
-  then have e: \<open>\<forall>a \<in> set args. smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
-    using SmtTerm_Def.IH SmtTerm_Def.prems(2) by blast
-  have \<open>map (smt_eval I (take d dv) xs) args = map (smt_eval I dv xs) args\<close> using e by (intro map_cong) auto
+  then have e: \<open>\<forall>a \<in> set (rvec_elems args). smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
+    using SmtTerm_Def.IH[unfolded set_rvec_elems] SmtTerm_Def.prems(2) by blast
+  have \<open>map (smt_eval I (take d dv) xs) (rvec_elems args) = map (smt_eval I dv xs) (rvec_elems args)\<close> using e by (intro map_cong) auto
   moreover have \<open>take d dv ! unat d' = dv ! unat d'\<close> using u SmtTerm_Def.prems(2) by simp
   ultimately show ?case by (metis smt_eval.simps(5))
 next
   case (SmtTerm_App op args)
-  have \<open>\<forall>a \<in> set args. \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
+  have \<open>\<forall>a \<in> set (rvec_elems args). \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
     using SmtTerm_App.prems(1) by (auto split: if_splits) (metis image_eqI option.exhaust)
-  then have e: \<open>\<forall>a \<in> set args. smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
-    using SmtTerm_App.IH SmtTerm_App.prems(2) by blast
-  have \<open>map (smt_eval I (take d dv) xs) args = map (smt_eval I dv xs) args\<close> using e by (intro map_cong) auto
+  then have e: \<open>\<forall>a \<in> set (rvec_elems args). smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
+    using SmtTerm_App.IH[unfolded set_rvec_elems] SmtTerm_App.prems(2) by blast
+  have \<open>map (smt_eval I (take d dv) xs) (rvec_elems args) = map (smt_eval I dv xs) (rvec_elems args)\<close> using e by (intro map_cong) auto
   then show ?case by (metis smt_eval.simps(6))
 qed auto
 
@@ -1664,18 +1670,18 @@ next
 next
   case (4 p dm env n S i args S' t' ps s xs)
   let ?fs = \<open>sfuns p\<close>
-  have i: \<open>unat i < length ?fs\<close> \<open>map (smt_tsort ?fs (take n (sdefs p)) ps) args = map Some (fargs (?fs ! unat i))\<close>
+  have i: \<open>unat i < length ?fs\<close> \<open>map (smt_tsort ?fs (take n (sdefs p)) ps) (rvec_elems args) = map Some (fargs (?fs ! unat i))\<close>
     \<open>s = SmtFun_ret (?fs ! unat i)\<close> using 4(3) by (auto split: if_splits)
   have fr: \<open>smt_fragment p\<close> \<open>ws = map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close> \<open>length vs = length ?fs\<close>
     \<open>vs ! unat i = enc (I (unat i) [])\<close> using 4(2) i(1) by (auto simp: ctx_ok_def Let_def)
   have na: \<open>fargs (?fs ! unat i) = []\<close> using fr(1) i(1) by (auto simp: smt_fragment_def)
-  then have a: \<open>args = []\<close> using i(2) by simp
+  then have a: \<open>(rvec_elems args) = []\<close> using i(2) by simp
   have \<open>frag_sort s\<close> using frag_of_wf[OF fr(1)] ctx_ok_wf_sorts(1)[OF 4(2)] i(1,3) by (metis nth_mem)
   then show ?case using 4(1,8) i fr a sort_width_frag[of s] by auto
 next
   case (5 p dm env n S d args S' t' ps s xs)
   let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close> and ?dv = \<open>smt_def_sems I (sdefs p)\<close>
-  have d: \<open>unat d < length (take n ?ds)\<close> \<open>map (smt_tsort ?fs (take n ?ds) ps) args = map Some (dpar (?ds ! unat d))\<close>
+  have d: \<open>unat d < length (take n ?ds)\<close> \<open>map (smt_tsort ?fs (take n ?ds) ps) (rvec_elems args) = map Some (dpar (?ds ! unat d))\<close>
     \<open>s = SmtDef_ret (?ds ! unat d)\<close> using 5(5) by (auto split: if_splits)
   have dn: \<open>unat d < n\<close> \<open>unat d < length ?ds\<close> using d(1) by auto
   have fr: \<open>smt_fragment p\<close> using 5(4) by (simp add: ctx_ok_def Let_def)
@@ -1684,24 +1690,24 @@ next
   show ?case
   proof (cases \<open>dpar (?ds ! unat d) = []\<close>)
     case True
-    then have a: \<open>args = []\<close> using d(2) by simp
+    then have a: \<open>(rvec_elems args) = []\<close> using d(2) by simp
     have res: \<open>S' = S\<close> \<open>t' = tref (dm ! unat d)\<close> using 5(3) True by auto
     have r: \<open>ref_ok ws vs S (dm ! unat d) (SmtDef_ret (?ds ! unat d)) ((?dv ! unat d) [])\<close>
       using 5(4) dn True unfolding ctx_ok_def Let_def by blast
     show ?thesis using tref_ok[OF r wfr(1)] res a d(3) 5(10) by simp
   next
     case False
-    obtain S1 ks1 where r: \<open>tr_args_m p dm env n S args = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S args\<close>)
+    obtain S1 ks1 where r: \<open>tr_args_m p dm env n S (rvec_elems args) = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S (rvec_elems args)\<close>)
     have res: \<open>tr_term_m p dm ks1 (unat d) S1 (SmtDef_body (?ds ! unat d)) = (S', t')\<close>
       using 5(3) False dn(1) r by (simp add: Let_def)
     obtain E2 where E2: \<open>S' = S1 @ E2\<close> using tr_prefix(1)[OF res] by blast
     have len1: \<open>length S1 < 2 ^ 64\<close> using 5(11) E2 by simp
-    let ?xs' = \<open>map (smt_eval I ?dv xs) args\<close>
-    have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length args \<and>
-        (\<forall>i < length args. ref_ok ws vs S1 (ks1 ! i) (dpar (?ds ! unat d) ! i) (smt_eval I ?dv xs (args ! i)))\<close>
+    let ?xs' = \<open>map (smt_eval I ?dv xs) (rvec_elems args)\<close>
+    have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length (rvec_elems args) \<and>
+        (\<forall>i < length (rvec_elems args). ref_ok ws vs S1 (ks1 ! i) (dpar (?ds ! unat d) ! i) (smt_eval I ?dv xs (rvec_elems args ! i)))\<close>
       using 5(1)[OF False dn(1) r 5(4) d(2) 5(6,7,8,9,10) len1] .
     obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
-    have la: \<open>length args = length (dpar (?ds ! unat d))\<close> using d(2) by (metis length_map)
+    have la: \<open>length (rvec_elems args) = length (dpar (?ds ! unat d))\<close> using d(2) by (metis length_map)
     have ctx1: \<open>ctx_ok p I ws vs (unat d) dm S1\<close> using ctx_ok_mono[OF ctx_ok_ext[OF 5(4), of E1]] E1 dn(1) by simp
     have tb: \<open>smt_tsort ?fs (take (unat d) ?ds) (dpar (?ds ! unat d)) (SmtDef_body (?ds ! unat d)) = Some (SmtDef_ret (?ds ! unat d))\<close>
       using ctx_ok_wf_sorts(3)[OF 5(4)] dn(2) by blast
@@ -1719,21 +1725,21 @@ next
 next
   case (6 p dm env n S op args S' t' ps s xs)
   let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close> and ?dv = \<open>smt_def_sems I (sdefs p)\<close>
-  let ?ss = \<open>map (the \<circ> smt_tsort ?fs (take n ?ds) ps) args\<close>
-  obtain S1 ks1 where r: \<open>tr_args_m p dm env n S args = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S args\<close>)
+  let ?ss = \<open>map (the \<circ> smt_tsort ?fs (take n ?ds) ps) (rvec_elems args)\<close>
+  obtain S1 ks1 where r: \<open>tr_args_m p dm env n S (rvec_elems args) = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S (rvec_elems args)\<close>)
   have res: \<open>S' = S1\<close> \<open>t' = tr_app_m op ks1\<close> using 6(2) r by (auto simp: Let_def)
-  have o: \<open>None \<notin> set (map (smt_tsort ?fs (take n ?ds) ps) args)\<close> \<open>smt_op_sort op ?ss = Some s\<close>
+  have o: \<open>None \<notin> set (map (smt_tsort ?fs (take n ?ds) ps) (rvec_elems args))\<close> \<open>smt_op_sort op ?ss = Some s\<close>
     using 6(4) by (auto split: if_splits)
-  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) args = map Some ?ss\<close> using o(1) by (induction args) auto
-  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length args \<and>
-      (\<forall>i < length args. ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (args ! i)))\<close>
+  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) (rvec_elems args) = map Some ?ss\<close> using o(1) by (rule map_the_Some)
+  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length (rvec_elems args) \<and>
+      (\<forall>i < length (rvec_elems args). ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (rvec_elems args ! i)))\<close>
     using 6(1)[OF r 6(3) m 6(5,6,7,8,9)] res 6(10) by simp
   have fr: \<open>smt_fragment p\<close> using 6(3) by (simp add: ctx_ok_def Let_def)
   note w = ctx_ok_wf_sorts[OF 6(3)]
   have frs: \<open>\<forall>x \<in> set ?ss. frag_sort x\<close>
   proof
     fix x assume \<open>x \<in> set ?ss\<close>
-    then obtain a where a: \<open>a \<in> set args\<close> \<open>x = the (smt_tsort ?fs (take n ?ds) ps a)\<close> by auto
+    then obtain a where a: \<open>a \<in> set (rvec_elems args)\<close> \<open>x = the (smt_tsort ?fs (take n ?ds) ps a)\<close> by auto
     then have \<open>smt_tsort ?fs (take n ?ds) ps a = Some x\<close> using o(1) by (metis image_eqI option.collapse set_map)
     then have \<open>smt_wf_sort (unat (SmtProblem_num_sorts p)) x\<close>
       using smt_tsort_wf[of ?fs \<open>take n ?ds\<close> ps a x] 6(5) wf_of_frag w(1,2) set_take_subset[of n ?ds] by blast
@@ -1741,8 +1747,8 @@ next
   qed
   have C: \<open>wt ws (def_widths ws [] S1) (tr_app_m op ks1) \<and> width ws (def_widths ws [] S1) (tr_app_m op ks1) = sort_width_m s \<and>
       eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) (tr_app_m op ks1) =
-        enc (smt_op_sem op (map (smt_eval I ?dv xs) args))\<close>
-    using tr_app_correct[OF o(2) frs, of ks1 \<open>map (smt_eval I ?dv xs) args\<close> ws vs S1] A by simp
+        enc (smt_op_sem op (map (smt_eval I ?dv xs) (rvec_elems args)))\<close>
+    using tr_app_correct[OF o(2) frs, of ks1 \<open>map (smt_eval I ?dv xs) (rvec_elems args)\<close> ws vs S1] A by simp
   show ?case using A C res by simp
 next
   case (7 p dm env n S S' ks ps ss xs)
@@ -2107,9 +2113,17 @@ proof -
   have S: \<open>smt_satisfies p ?I\<close>
     using tr_problem_sem[OF assms(1,2) isd _ vs assms(3)] assms(4) lm vw
     by (simp add: is_model_def satisfies_def Let_def helper_defs_eq)
+  have vo: \<open>smt_model_value_ok [] (SmtFun_ret (?fs ! f)) (SmtInterp_default (rvec_elems (SmtModel_funs M) ! f))\<close>
+    if f: \<open>f < length ?fs\<close> for f
+  proof -
+    have mv: \<open>mval_ok (SmtFun_ret (?fs ! f)) (m ! f) (SmtInterp_default (rvec_elems (SmtModel_funs M) ! f))\<close>
+      using assms(5) f by (simp add: tr_model_ok_def)
+    have fr: \<open>frag_sort (SmtFun_ret (?fs ! f))\<close> using frs f by simp
+    show ?thesis using mv lm f fr by (cases \<open>SmtFun_ret (?fs ! f)\<close>) (auto simp: mval_ok_def)
+  qed
   have W: \<open>smt_model_wf p M\<close>
     unfolding smt_model_wf_def Let_def
-    using ns lm frs[unfolded all_set_conv_all_nth] assms(5) by (auto simp: tr_model_ok_def mval_ok_def split: SmtSort.splits)
+    using ns vo assms(5) by (auto simp: tr_model_ok_def)
   show ?thesis using S W by (simp add: smt_is_model_def)
 qed
 

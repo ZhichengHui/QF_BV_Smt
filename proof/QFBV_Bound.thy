@@ -1006,7 +1006,7 @@ proof -
     using g ci by (simp add: grows_def init_st_def algebra_simps)
 qed
 
-text \<open>\<^const>\<open>fuel_bound\<close> is below \<open>2^57\<close> when the counts, the numbers of variables,
+text \<open>\<^const>\<open>fuel_bound\<close> is at most \<open>2^57\<close> when the counts, the numbers of variables,
   definitions and assertions, the widths of the variables and the terms are small.\<close>
 theorem fuel_bound_lt:
   assumes \<open>cproblem_wt p\<close>
@@ -1017,7 +1017,7 @@ theorem fuel_bound_lt:
     \<open>length (CoreProblemL_asserts p) < 2 ^ 56\<close>
     \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p).
        tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)) t < 2 ^ 56\<close>
-  shows \<open>fuel_bound p < 2 ^ 57\<close>
+  shows \<open>fuel_bound p \<le> 2 ^ 57\<close>
 proof -
   obtain s vs where e: \<open>encode_m p = (s, vs)\<close> by (cases \<open>encode_m p\<close>)
   note EC = encode_cnt[OF assms(1) e]
@@ -1042,7 +1042,7 @@ proof -
           set (map (\<lambda>c. length c + 2) (snd s)) \<union>
           set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
   have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
-  have all: \<open>\<forall>x \<in> X. x < 2 ^ 57\<close>
+  have all: \<open>\<forall>x \<in> X. x \<le> 2 ^ 57\<close>
   proof
     fix x assume \<open>x \<in> X\<close>
     then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
@@ -1051,7 +1051,7 @@ proof -
       | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
       | \<open>x \<in> set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
       unfolding X_def by blast
-    then show \<open>x < 2 ^ 57\<close>
+    then show \<open>x \<le> 2 ^ 57\<close>
     proof cases
       case 1 then show ?thesis using c by simp
     next
@@ -1069,10 +1069,10 @@ proof -
     next
       case 8 then show ?thesis using cl by auto
     next
-      case 9 then show ?thesis using tb by auto
+      case 9 then show ?thesis using tb by (auto intro: less_imp_le)
     qed
   qed
-  have M: \<open>Max X < 2 ^ 57\<close> using all by (simp add: Max_less_iff[OF fin ne])
+  have M: \<open>Max X \<le> 2 ^ 57\<close> using all by (simp add: Max_le_iff[OF fin ne])
   have F: \<open>fuel_bound p = Max X\<close>
     unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
   show ?thesis using M F by simp
@@ -1198,10 +1198,44 @@ proof -
       unfolding Y_def by (rule member_le_sum_list[OF mem]; simp)
     then show \<open>tbound ws ds t \<le> B\<close> using tbound_le[of ws ds t] Bexp by linarith
   qed
-  have \<open>fuel_bound p \<le> B\<close>
-    unfolding fuel_bound_def
-    apply (simp add: e Let_def ws_def[symmetric] ds_def[symmetric])
-    using h1 h2 h2' h3 h4 h5 h6 h7 h8 by auto
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), 2 * length ws + 2, 2 * length (CoreProblemL_defs p) + 2,
+           2 * length (CoreProblemL_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
+          set (map (\<lambda>c. length c + 2) (snd s)) \<union>
+          set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
+  have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
+  have F: \<open>fuel_bound p = Max X\<close>
+    unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
+  have all: \<open>\<forall>x \<in> X. x \<le> B\<close>
+  proof
+    fix x assume \<open>x \<in> X\<close>
+    then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
+      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = 2 * length ws + 2\<close>
+      | \<open>x = 2 * length (CoreProblemL_defs p) + 2\<close> | \<open>x = 2 * length (CoreProblemL_asserts p) + 2\<close>
+      | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
+      | \<open>x \<in> set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
+      unfolding X_def by blast
+    then show \<open>x \<le> B\<close>
+    proof cases
+      case 1 then show ?thesis using h1 by simp
+    next
+      case 2 then show ?thesis using h2 by simp
+    next
+      case 3 then show ?thesis using h2' by simp
+    next
+      case 4 then show ?thesis using h3 by simp
+    next
+      case 5 then show ?thesis using h4 by simp
+    next
+      case 6 then show ?thesis using h5 by simp
+    next
+      case 7 then show ?thesis using h6 by auto
+    next
+      case 8 then show ?thesis using h7 by auto
+    next
+      case 9 then show ?thesis using h8 by auto
+    qed
+  qed
+  have \<open>fuel_bound p \<le> B\<close> using all F by (simp add: Max_le_iff[OF fin ne])
   then show ?thesis by (simp add: B_def)
 qed
 

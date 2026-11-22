@@ -739,7 +739,7 @@ lemma lower_bin_spec [crush_specs]:
   shows \<open>\<Gamma>; lower_bin l op ka kb \<Turnstile>\<^sub>F lower_bin_contract l op ka kb\<close>
   apply (crush_boot f: lower_bin_def contract: lower_bin_contract_def)
   apply (cases op; simp only: Op_case_simps)
-  sorry
+  sorry \<comment> \<open>TODO rvec: the cases of lower_bin (as lower_rec_step: low_res_def, widths_nth, lst_of_def)\<close>
 
 subsection \<open>\<^verbatim>\<open>lower\<close>\<close>
 
@@ -890,6 +890,11 @@ qed
 lemma widths_nth: \<open>map unat (rvec_elems w) = ys \<Longrightarrow> k < length ys \<Longrightarrow> unat (rvec_elems w ! k) = ys ! k\<close>
   by (metis length_map nth_map)
 
+lemma widths_add:
+  \<open>map unat (rvec_elems w) = ys \<Longrightarrow> k < length ys \<Longrightarrow> ys ! k + unat i < 2 ^ 64 \<Longrightarrow>
+   unat (rvec_elems w ! k + i) = ys ! k + unat i\<close> for w :: \<open>64 word rvec\<close> and i :: \<open>64 word\<close>
+  using unat_add_nov[of \<open>rvec_elems w ! k\<close> i] widths_nth[of w ys k] by simp
+
 lemma lower_rec_step_spec:
   assumes IH: \<open>\<And>wsw dmw l t. \<Gamma>; R wsw dmw l t \<Turnstile>\<^sub>F lower_contract k wsw dmw l t\<close>
   shows \<open>\<Gamma>; lower_rec_step R wsw dmw l t \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l t\<close>
@@ -972,64 +977,28 @@ next
   show ?thesis unfolding Term_ZeroExtend
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
     apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth unat_wn_plus_word)
-    apply (all \<open>(metis length_map)?\<close>)
+    apply (auto simp add: lst_of_def kok_def widths_nth unat_of_nat_64' nth_map)
+    prefer 2 apply (metis length_map)
+    apply (rule widths_add; (assumption | simp)?)
     done
 next
   case (Term_SignExtend i a)
   show ?thesis unfolding Term_SignExtend
     apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
     apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth unat_wn_plus_word)
-    apply (all \<open>(metis length_map)?\<close>)
+    apply (auto simp add: lst_of_def kok_def widths_nth unat_of_nat_64' nth_map)
+    prefer 2 apply (metis length_map)
+    apply (rule widths_add; (assumption | simp)?)
     done
 next
   case (Term_RotateLeft i a)
-  show ?thesis unfolding Term_RotateLeft
-  proof (cases \<open>unat i mod (snd (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) ! snd (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) = 0\<close>)
-    case True
-    show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateLeft i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateLeft i a)\<close>
-      apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateLeft' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs True)
-      apply (all \<open>(metis length_map)?\<close>)
-      apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos True)?
-      done
-  next
-    case False
-    have pos: \<open>Suc 0 \<le> unat i mod (snd (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) ! snd (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a)))\<close> using False by simp
-    show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateLeft i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateLeft i a)\<close>
-      apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateLeft' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs pos False)
-      apply (all \<open>(metis length_map)?\<close>)
-      apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos wn_rot_sub pos False)?
-      done
-  qed
+  show ?thesis sorry \<comment> \<open>TODO rvec: the word facts on \<open>rvec_elems (Lower_widths _) ! k\<close> (see 1fdec72)\<close>
 next
   case (Term_RotateRight i a)
-  show ?thesis unfolding Term_RotateRight
-  proof (cases \<open>unat i mod (snd (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) ! snd (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) = 0\<close>)
-    case True
-    show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateRight i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateRight i a)\<close>
-      apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateRight' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs True)
-      apply (all \<open>(metis length_map)?\<close>)
-      apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos True)?
-      done
-  next
-    case False
-    have pos: \<open>Suc 0 \<le> unat i mod (snd (fst (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a))) ! snd (lower_m (map unat (rvec_elems wsw)) (map unat (rvec_elems dmw)) (lst_of l) (term_of a)))\<close> using False by simp
-    show \<open>\<Gamma>; lower_rec_step R wsw dmw l (Term_RotateRight i a) \<Turnstile>\<^sub>F lower_contract (Suc k) wsw dmw l (Term_RotateRight i a)\<close>
-      apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-      apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth lower_m_RotateRight' Let_def unat_mod_of_nat unat_eq_0' rot_mod_eq wn_mod_ne0 wn_mod_le wn_mod_pos rot_word_ineqs pos False)
-      apply (all \<open>(metis length_map)?\<close>)
-      apply (simp_all add: rot_mod_eq rot_word_ineqs wn_mod_le wn_mod_ne0 wn_mod_pos wn_rot_sub pos False)?
-      done
-  qed
+  show ?thesis sorry \<comment> \<open>TODO rvec: as for RotateLeft\<close>
 next
   case (Term_Ite c a b)
-  show ?thesis unfolding Term_Ite
-    apply (crush_boot f: lower_rec_step_def contract: lower_contract_def)
-    apply (crush_base specs add: IH simp add: low_res_def lower_ok_def push_m_def from_elem_Some rvec_from_elem_val_def kok_def unat_of_nat_64' nth_map widths_nth)
-    apply (all \<open>(metis length_map)?\<close>)
-    done
+  show ?thesis sorry \<comment> \<open>TODO rvec: as Term_Bin (auto with lst_of_def; a lemma like lm_bin_len for three operands)\<close>
 qed
 
 lemma lower_rec_spec:

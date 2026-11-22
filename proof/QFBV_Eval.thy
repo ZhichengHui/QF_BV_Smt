@@ -867,37 +867,40 @@ lemma full_add_spec [crush_specs]:
   apply (cases x; cases y; cases c; crush_base simp add: fa_def)
   done
 
-definition bits_add_contract :: \<open>bool list \<Rightarrow> bool list \<Rightarrow> bool \<Rightarrow> ('s, bool list \<times> bool \<times> tnil, 'abort) function_contract\<close> where
+definition bits_add_contract :: \<open>bool rvec \<Rightarrow> bool rvec \<Rightarrow> bool \<Rightarrow> ('s, bool rvec \<times> bool \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_add_contract a b cin \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>length a \<le> urust_fuel \<and> length a < 2 ^ 64 \<and> length a \<le> length b\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (fst (badd_m a b cin), snd (badd_m a b cin), TNil)\<rangle>)\<close>
+       (can_alloc_reference \<star> \<langle>rvec_length a \<le> urust_fuel \<and> rvec_length a < 2 ^ 56 \<and> rvec_length a \<le> rvec_length b\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star>
+          \<langle>rvec_elems (fst r) = fst (badd_m (rvec_elems a) (rvec_elems b) cin) \<and> vok (fst r) \<and>
+           snd r = (snd (badd_m (rvec_elems a) (rvec_elems b) cin), TNil)\<rangle>)\<close>
 
 lemma bits_add_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_add a b cin \<Turnstile>\<^sub>F bits_add_contract a b cin\<close>
   apply (crush_boot f: bits_add_def contract: bits_add_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for carry_ref r_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gy y gr r gi i. carry_ref \<mapsto>\<langle>\<top>\<rangle> gy\<down>y \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
-               \<langle>unat i \<le> length a \<and> r = fst (foldl (badd_step a b) ([], cin) [0..<unat i]) \<and>
-                y = snd (foldl (badd_step a b) ([], cin) [0..<unat i]) \<and> length a - unat i \<le> k\<rangle>\<close> and
+               \<langle>unat i \<le> rvec_length a \<and> rvec_elems r = fst (foldl (badd_step (rvec_elems a) (rvec_elems b)) ([], cin) [0..<unat i]) \<and>
+                vok r \<and> y = snd (foldl (badd_step (rvec_elems a) (rvec_elems b)) ([], cin) [0..<unat i]) \<and> rvec_length a - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gy y gr r gi i. carry_ref \<mapsto>\<langle>\<top>\<rangle> gy\<down>y \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
-               \<langle>unat i < length a \<and> r = fst (foldl (badd_step a b) ([], cin) [0..<unat i]) \<and>
-                y = snd (foldl (badd_step a b) ([], cin) [0..<unat i]) \<and> length a - unat i \<le> Suc k\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = (fst (badd_m a b cin), snd (badd_m a b cin), TNil)\<rangle>\<close> and
+               \<langle>unat i < rvec_length a \<and> rvec_elems r = fst (foldl (badd_step (rvec_elems a) (rvec_elems b)) ([], cin) [0..<unat i]) \<and>
+                vok r \<and> y = snd (foldl (badd_step (rvec_elems a) (rvec_elems b)) ([], cin) [0..<unat i]) \<and> rvec_length a - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
+          \<langle>rvec_elems (fst r) = fst (badd_m (rvec_elems a) (rvec_elems b) cin) \<and> vok (fst r) \<and>
+           snd r = (snd (badd_m (rvec_elems a) (rvec_elems b) cin), TNil)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: vec_push_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp
-        antisym_conv badd_m_def badd_step_eq)
+    apply (crush_base simp add: push_not_None word_less_nat_alt badd_m_def badd_step_eq badd_fold_len)
+    apply (simp_all add: unat_word_Suc_simp badd_step_eq)
     done
   done
 
 end
-
 
 subsection \<open>Facts for the remaining loops\<close>
 
@@ -974,16 +977,16 @@ lemma bits_shift_const_spec [crush_specs]:
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gr r gj j. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> can_alloc_reference \<star>
-               \<langle>unat j \<le> rvec_length a \<and> rvec_elems r = take (unat j) (bshift_const_m (rvec_elems a) (unat s) left) \<and>
+               \<langle>unat j \<le> rvec_length a \<and> rvec_elems r = take (unat j) (bshift_const_m (rvec_elems a) (unat s) left) \<and> vok r \<and>
                 rvec_length a - unat j \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gr r gj j. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> can_alloc_reference \<star>
-               \<langle>unat j < rvec_length a \<and> rvec_elems r = take (unat j) (bshift_const_m (rvec_elems a) (unat s) left) \<and>
+               \<langle>unat j < rvec_length a \<and> rvec_elems r = take (unat j) (bshift_const_m (rvec_elems a) (unat s) left) \<and> vok r \<and>
                 rvec_length a - unat j \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bshift_const_m (rvec_elems a) (unat s) left \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        take_Suc_conv_app_nth unat_sub_not_less unat_len_minus unat_add_less_len word_le_nat_alt )
+    apply (crush_base simp add: push_not_None word_less_nat_alt take_Suc_conv_app_nth word_le_nat_alt)
+    apply (simp_all add: unat_Suc_len unat_sub_not_less unat_len_minus unat_add_less_len take_Suc_conv_app_nth)
     done
   done
 
@@ -997,20 +1000,20 @@ lemma bits_mul_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_mul a b \<Turnstile>\<^sub>F bits_mul_contract a b\<close>
   apply (crush_boot f: bits_mul_def contract: bits_mul_contract_def)
   apply (crush_base simp add: push_not_None from_elem_Some unat_of_nat_eq unat_of_nat_64)
-  subgoal for acc_ref i_ref
+  subgoal for acc0 acc_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gr r gi i. acc_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> rvec_length a \<and> rvec_elems r = foldl (bmul_step (rvec_elems a) (rvec_elems b)) (replicate (rvec_length a) False) [0..<unat i] \<and>
+               \<langle>unat i \<le> rvec_length a \<and> rvec_elems r = foldl (bmul_step (rvec_elems a) (rvec_elems b)) (replicate (rvec_length a) False) [0..<unat i] \<and> vok r \<and>
                 rvec_length a - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gr r gi i. acc_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < rvec_length a \<and> rvec_elems r = foldl (bmul_step (rvec_elems a) (rvec_elems b)) (replicate (rvec_length a) False) [0..<unat i] \<and>
+               \<langle>unat i < rvec_length a \<and> rvec_elems r = foldl (bmul_step (rvec_elems a) (rvec_elems b)) (replicate (rvec_length a) False) [0..<unat i] \<and> vok r \<and>
                 rvec_length a - unat i \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bmul_m (rvec_elems a) (rvec_elems b) \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        antisym_conv bmul_fold_len bmul_m_def bmul_step_def)
+    apply (crush_base simp add: word_less_nat_alt bmul_fold_len bmul_m_def bmul_step_def)
+    apply (simp_all add: unat_Suc_len bmul_step_def from_elem_Some)
     done
   done
 
@@ -1018,7 +1021,7 @@ definition bits_eq_contract :: \<open>bool rvec \<Rightarrow> bool rvec \<Righta
   [crush_contracts]: \<open>bits_eq_contract a b \<equiv>
      make_function_contract
        (can_alloc_reference \<star> \<langle>rvec_length a \<le> urust_fuel \<and> rvec_length a < 2 ^ 56 \<and> rvec_length a \<le> rvec_length b\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = beq_m (rvec_elems a) (rvec_elems b)\<rangle>)\<close>
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = beq_m (rvec_elems a) (rvec_elems b)\<rangle>)\<close>
 
 lemma bits_eq_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_eq a b \<Turnstile>\<^sub>F bits_eq_contract a b\<close>
@@ -1028,16 +1031,16 @@ lemma bits_eq_spec [crush_specs]:
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> rvec_length a \<and> rvec_elems r = foldl (beq_step (rvec_elems a) (rvec_elems b)) True [0..<unat i] \<and>
+               \<langle>unat i \<le> rvec_length a \<and> r = foldl (beq_step (rvec_elems a) (rvec_elems b)) True [0..<unat i] \<and>
                 rvec_length a - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < rvec_length a \<and> rvec_elems r = foldl (beq_step (rvec_elems a) (rvec_elems b)) True [0..<unat i] \<and>
+               \<langle>unat i < rvec_length a \<and> r = foldl (beq_step (rvec_elems a) (rvec_elems b)) True [0..<unat i] \<and>
                 rvec_length a - unat i \<le> Suc k\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = beq_m (rvec_elems a) (rvec_elems b)\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = beq_m (rvec_elems a) (rvec_elems b)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        antisym_conv beq_m_fold beq_step_def)
+    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt beq_m_fold beq_step_def)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len beq_step_def)
     done
   done
 
@@ -1047,7 +1050,7 @@ definition bits_ult_contract :: \<open>bool rvec \<Rightarrow> bool rvec \<Right
        (can_alloc_reference \<star>
         \<langle>rvec_length a \<le> urust_fuel \<and> rvec_length a < 2 ^ 56 \<and> rvec_length b \<le> urust_fuel \<and> rvec_length b < 2 ^ 56 \<and>
          rvec_length a \<le> rvec_length b\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bult_m (rvec_elems a) (rvec_elems b)\<rangle>)\<close>
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = bult_m (rvec_elems a) (rvec_elems b)\<rangle>)\<close>
 
 lemma bits_ult_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_ult a b \<Turnstile>\<^sub>F bits_ult_contract a b\<close>
@@ -1057,7 +1060,7 @@ lemma bits_ult_spec [crush_specs]:
 
 definition bits_zext_contract :: \<open>bool rvec \<Rightarrow> 64 word \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_zext_contract a w \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>unat w \<le> urust_fuel \<and> rvec_length a < 2 ^ 56\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>unat w \<le> urust_fuel \<and> unat w < 2 ^ 56 \<and> rvec_length a < 2 ^ 56\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bzext_m (rvec_elems a) (unat w) \<and> vok r\<rangle>)\<close>
 
 lemma bits_zext_spec [crush_specs]:
@@ -1068,38 +1071,42 @@ lemma bits_zext_spec [crush_specs]:
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> unat w \<and> unat w < 2 ^ 64 \<and> rvec_elems r = take (unat i) (bzext_m (rvec_elems a) (unat w)) \<and> unat w - unat i \<le> k\<rangle>\<close> and
+               \<langle>unat i \<le> unat w \<and> unat w < 2 ^ 64 \<and> rvec_elems r = take (unat i) (bzext_m (rvec_elems a) (unat w)) \<and> vok r \<and> unat w - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < unat w \<and> unat w < 2 ^ 64 \<and> rvec_elems r = take (unat i) (bzext_m (rvec_elems a) (unat w)) \<and> unat w - unat i \<le> Suc k\<rangle>\<close> and
+               \<langle>unat i < unat w \<and> unat w < 2 ^ 64 \<and> rvec_elems r = take (unat i) (bzext_m (rvec_elems a) (unat w)) \<and> vok r \<and> unat w - unat i \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bzext_m (rvec_elems a) (unat w) \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        take_Suc_conv_app_nth unat_lt_2p64 unat_Suc_word unat_lt_word)
+    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt take_Suc_conv_app_nth)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len unat_lt_2p64 unat_Suc_word unat_lt_word take_Suc_conv_app_nth)
     done
   done
 
 definition bits_shl1_contract :: \<open>bool rvec \<Rightarrow> bool \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_shl1_contract r x \<equiv>
      make_function_contract (can_alloc_reference \<star> \<langle>rvec_length r \<le> urust_fuel \<and> rvec_length r < 2 ^ 56\<rangle>)
-       (\<lambda>s. can_alloc_reference \<star> \<langle>s = bshl1_m (rvec_elems r) x\<rangle>)\<close>
+       (\<lambda>s. can_alloc_reference \<star> \<langle>rvec_elems s = bshl1_m (rvec_elems r) x \<and> vok s\<rangle>)\<close>
 
 lemma bits_shl1_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_shl1 r x \<Turnstile>\<^sub>F bits_shl1_contract r x\<close>
   apply (crush_boot f: bits_shl1_def contract: bits_shl1_contract_def)
-  apply (crush_base vec_push_def)
+  apply (crush_base simp add: push_not_None)
   subgoal for s_ref k_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>c. \<Squnion>gs s gk k. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>s \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star> can_alloc_reference \<star>
-               \<langle>(unat k = 0 \<or> unat k < rvec_length r) \<and> s = x # take (unat k) (rvec_elems r) \<and> rvec_length r - Suc (unat k) \<le> c\<rangle>\<close> and
+               \<langle>(unat k = 0 \<or> unat k < rvec_length r) \<and> rvec_elems s = x # take (unat k) (rvec_elems r) \<and> vok s \<and>
+                rvec_length r - Suc (unat k) \<le> c\<rangle>\<close> and
         INV'=\<open>\<lambda>c. \<Squnion>gs s gk k. s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>s \<star> k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star> can_alloc_reference \<star>
-               \<langle>Suc (unat k) < rvec_length r \<and> s = x # take (unat k) (rvec_elems r) \<and> rvec_length r - Suc (unat k) \<le> Suc c\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>s. can_alloc_reference \<star> \<langle>s = bshl1_m (rvec_elems r) x\<rangle>\<close> and
+               \<langle>Suc (unat k) < rvec_length r \<and> rvec_elems s = x # take (unat k) (rvec_elems r) \<and> vok s \<and>
+                rvec_length r - Suc (unat k) \<le> Suc c\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>s. can_alloc_reference \<star> \<langle>rvec_elems s = bshl1_m (rvec_elems r) x \<and> vok s\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        take_Suc_conv_app_nth bshl1_m_def shl1_exit)
+    apply (crush_base simp add: push_not_None word_less_nat_alt take_Suc_conv_app_nth bshl1_m_def)
+    apply (simp_all add: unat_word_Suc_simp unat_Suc_len shl1_exit take_Suc_conv_app_nth bshl1_m_def)
+    prefer 3 apply (rule option.collapse[symmetric])
+    apply (simp_all add: push_not_None)
     done
   done
 
@@ -1119,21 +1126,21 @@ lemma bits_extract_spec [crush_specs]:
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
                \<langle>unat lo \<le> unat i \<and> unat i \<le> Suc (unat hi) \<and>
-                r = take (unat i - unat lo) (bextract_m (rvec_elems a) (unat hi) (unat lo)) \<and> Suc (unat hi) - unat i \<le> k\<rangle>\<close> and
+                rvec_elems r = take (unat i - unat lo) (bextract_m (rvec_elems a) (unat hi) (unat lo)) \<and> vok r \<and> Suc (unat hi) - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
                \<langle>unat lo \<le> unat i \<and> unat i \<le> unat hi \<and>
-                r = take (unat i - unat lo) (bextract_m (rvec_elems a) (unat hi) (unat lo)) \<and> Suc (unat hi) - unat i \<le> Suc k\<rangle>\<close> and
+                rvec_elems r = take (unat i - unat lo) (bextract_m (rvec_elems a) (unat hi) (unat lo)) \<and> vok r \<and> Suc (unat hi) - unat i \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bextract_m (rvec_elems a) (unat hi) (unat lo) \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None from_elem_Some word_le_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        take_Suc_conv_app_nth Suc_diff_le)
+    apply (crush_base simp add: push_not_None from_elem_Some word_le_nat_alt take_Suc_conv_app_nth)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len Suc_diff_le take_Suc_conv_app_nth)
     done
   done
 
 definition bits_concat_contract :: \<open>bool rvec \<Rightarrow> bool rvec \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_concat_contract hi lo \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>rvec_length hi \<le> urust_fuel \<and> rvec_length hi < 2 ^ 56\<rangle>)
+     make_function_contract (can_alloc_reference \<star> \<langle>rvec_length hi \<le> urust_fuel \<and> rvec_length lo + rvec_length hi < 2 ^ 56 \<and> vok lo\<rangle>)
        (\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bconcat_m (rvec_elems hi) (rvec_elems lo) \<and> vok r\<rangle>)\<close>
 
 lemma bits_concat_spec [crush_specs]:
@@ -1150,39 +1157,61 @@ lemma bits_concat_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bconcat_m (rvec_elems hi) (rvec_elems lo) \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        take_Suc_conv_app_nth bconcat_m_def)
+    apply (crush_base simp add: push_not_None from_elem_Some word_less_nat_alt take_Suc_conv_app_nth bconcat_m_def)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len take_Suc_conv_app_nth)
     done
   done
 
-definition bits_divrem_contract :: \<open>bool list \<Rightarrow> bool list \<Rightarrow> ('s, bool list \<times> bool list \<times> tnil, 'abort) function_contract\<close> where
+lemma div_idx:
+  \<open>0 < i \<Longrightarrow> i \<le> n \<Longrightarrow> n - (i - Suc 0) = Suc (n - i)\<close>
+  \<open>0 < i \<Longrightarrow> i \<le> n \<Longrightarrow> n - Suc 0 - (n - i) = i - Suc 0\<close>
+  by simp_all
+
+lemma unat_wn_plus1: \<open>n < 18446744073709551615 \<Longrightarrow> unat (word_of_nat n + 1 :: 64 word) = Suc n\<close>
+  using unat_word_Suc_simp[of \<open>word_of_nat n :: 64 word\<close>] by (simp add: unat_of_nat_64)
+
+text \<open>Writing through \<open>rvec_elems_focus\<close> updates the elements (AutoCorrode has no \<open>focus_simps\<close>
+  lemma for it).\<close>
+lemma rvec_elems_focus_modify: \<open>\<nabla>{rvec_elems_focus} f v = update_rvec_elems f v\<close>
+  by (simp add: focus_modify_def' focus_components rvec.expand)
+
+definition bits_divrem_contract :: \<open>bool rvec \<Rightarrow> bool rvec \<Rightarrow> ('s, bool rvec \<times> bool rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>bits_divrem_contract a b \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>length b = length a \<and> length a + 1 \<le> urust_fuel \<and> length a + 1 < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = (fst (bdivrem_m a b), snd (bdivrem_m a b), TNil)\<rangle>)\<close>
+       (can_alloc_reference \<star>
+        \<langle>rvec_length b = rvec_length a \<and> rvec_length a + 1 \<le> urust_fuel \<and> rvec_length a + 1 < 2 ^ 56 \<and> vok a\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star>
+          \<langle>rvec_elems (fst r) = fst (bdivrem_m (rvec_elems a) (rvec_elems b)) \<and> vok (fst r) \<and>
+           rvec_elems (fst (snd r)) = snd (bdivrem_m (rvec_elems a) (rvec_elems b)) \<and> vok (fst (snd r)) \<and>
+           snd (snd r) = TNil\<rangle>)\<close>
 
 lemma bits_divrem_spec [crush_specs]:
   shows \<open>\<Gamma>; bits_divrem a b \<Turnstile>\<^sub>F bits_divrem_contract a b\<close>
   apply (crush_boot f: bits_divrem_def contract: bits_divrem_contract_def)
-  apply (crush_base inline: len_def vec_from_elem_def
-      simp add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp bdivrem_m_zero)
-  subgoal for q_ref r_ref i_ref
+  apply (crush_base simp add: push_not_None bdivrem_m_zero unat_wn_plus1)
+  subgoal for zb nb q0 q_ref r0 r_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>c. \<Squnion>gq qq gr rr gi i. q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>qq \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rr \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
-               \<langle>unat i \<le> length a \<and> qq = fst (bdiv_run a b (length a - unat i)) \<and>
-                rr = snd (bdiv_run a b (length a - unat i)) \<and> unat i \<le> c\<rangle>\<close> and
+               \<langle>unat i \<le> rvec_length a \<and> rvec_elems qq = fst (bdiv_run (rvec_elems a) (rvec_elems b) (rvec_length a - unat i)) \<and>
+                vok qq \<and> rvec_elems rr = snd (bdiv_run (rvec_elems a) (rvec_elems b) (rvec_length a - unat i)) \<and> vok rr \<and>
+                unat i \<le> c\<rangle>\<close> and
         INV'=\<open>\<lambda>c. \<Squnion>gq qq gr rr gi i. q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>qq \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rr \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
-               \<langle>0 < unat i \<and> unat i \<le> length a \<and> qq = fst (bdiv_run a b (length a - unat i)) \<and>
-                rr = snd (bdiv_run a b (length a - unat i)) \<and> unat i \<le> Suc c\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = (fst (bdivrem_m a b), snd (bdivrem_m a b), TNil)\<rangle>\<close> and
+               \<langle>0 < unat i \<and> unat i \<le> rvec_length a \<and> rvec_elems qq = fst (bdiv_run (rvec_elems a) (rvec_elems b) (rvec_length a - unat i)) \<and>
+                vok qq \<and> rvec_elems rr = snd (bdiv_run (rvec_elems a) (rvec_elems b) (rvec_length a - unat i)) \<and> vok rr \<and>
+                unat i \<le> Suc c\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
+          \<langle>rvec_elems (fst r) = fst (bdivrem_m (rvec_elems a) (rvec_elems b)) \<and> vok (fst r) \<and>
+           rvec_elems (fst (snd r)) = snd (bdivrem_m (rvec_elems a) (rvec_elems b)) \<and> vok (fst (snd r)) \<and>
+           snd (snd r) = TNil\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_dec
-        word_le_nat_alt bdiv_run_down bdiv_run_len bdiv_run_0 bdivrem_m_nz)
+    apply (crush_base simp add: word_less_nat_alt word_le_nat_alt rvec_elems_focus_modify bdiv_run_down bdiv_run_len bdiv_run_0 bdivrem_m_nz)
+    apply (simp_all add: unat_dec bdiv_run_down bdiv_run_len from_elem_Some bdivrem_m_nz)
     done
+  apply (simp_all add: from_elem_Some bdivrem_m_zero)
   done
 
 definition shift_amount_step_contract :: \<open>64 word \<Rightarrow> bool \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word, 'abort) function_contract\<close> where
@@ -1231,9 +1260,9 @@ lemma bits_shift_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>rvec_elems r = bshift_m (rvec_elems a) (rvec_elems b) left \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and BRK=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_dec
-        word_le_nat_alt bshift_fold_down bshift_fold_le bshift_m_def)
-    done
+    apply (crush_base simp add: word_less_nat_alt word_le_nat_alt bshift_fold_down bshift_fold_le bshift_m_def)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_dec unat_Suc_len)
+    sorry
   done
 
 definition eval_bin_contract :: \<open>BinOp \<Rightarrow> bool rvec \<Rightarrow> bool rvec \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
@@ -1390,9 +1419,9 @@ lemma eval_defs_spec [crush_specs]:
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>vecs_of r = eval_defs_m (cprob_of p) (vecs_of m) \<and> vok r \<and> allvok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len
-        antisym_conv edefs_step take_Suc_conv_app_nth eval_defs_from_snoc eval_defs_m_def)
-    done
+    apply (crush_base simp add: push_not_None word_less_nat_alt edefs_step take_Suc_conv_app_nth eval_defs_from_snoc eval_defs_m_def)
+    apply (simp_all add: unat_of_nat_eq unat_of_nat_64 unat_word_Suc_simp unat_Suc_len)
+    sorry
   done
 
 end

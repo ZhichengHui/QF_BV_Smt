@@ -52,7 +52,8 @@ definition dpll_wpropagate_contract ::
      make_function_contract
        (can_alloc_reference \<star>
           \<langle>dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> rvec_length a + 2 \<le> urust_fuel \<and> tr_ok (rvec_length a) (rvec_elems a) (rvec_elems t) \<and>
-           unat q \<le> rvec_length t \<and> wl_ok (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> rvec_length rs = rvec_length t \<and> lends (rvec_elems nx) (rvec_elems h)\<rangle>)
+           unat q \<le> rvec_length t \<and> wl_ok (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> rvec_length rs = rvec_length t \<and> lends (rvec_elems nx) (rvec_elems h) \<and>
+           vok t \<and> vok rs \<and> rvec_length a < 2 ^ 56\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of (p1, nx1, h1, a1, t1, rs1, q1, b, cf, _) \<Rightarrow>
              dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) \<and> rvec_length a1 = rvec_length a \<and> wprop_post (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a1) (rvec_elems t1) b \<and>
@@ -333,8 +334,8 @@ lemma dpll_cs_ok_wcs:
 definition dpll_cut_contract :: \<open>64 word rvec \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_cut_contract v p \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>unat p \<le> rvec_length v \<and> rvec_length v + 2 \<le> urust_fuel \<and> rvec_length v < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>(rvec_elems r) = take (unat p) (rvec_elems v)\<rangle>)\<close>
+       (can_alloc_reference \<star> \<langle>unat p \<le> rvec_length v \<and> rvec_length v + 2 \<le> urust_fuel \<and> rvec_length v < 2 ^ 64 \<and> vok v\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>(rvec_elems r) = take (unat p) (rvec_elems v) \<and> vok r\<rangle>)\<close>
 
 lemma cut_step:
   assumes \<open>(rvec_elems r) = take (rvec_length r) (rvec_elems v)\<close>
@@ -364,9 +365,9 @@ lemma dpll_cut_spec [crush_specs]:
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gv v'. v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v' \<star> can_alloc_reference \<star>
-               \<langle>(rvec_elems v') = take (rvec_length v') (rvec_elems v) \<and> unat p \<le> rvec_length v' \<and> rvec_length v' - unat p \<le> k\<rangle>\<close> and
+               \<langle>(rvec_elems v') = take (rvec_length v') (rvec_elems v) \<and> unat p \<le> rvec_length v' \<and> rvec_length v' - unat p \<le> k \<and> vok v'\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gv v'. v_ref \<mapsto>\<langle>\<top>\<rangle> gv\<down>v' \<star> can_alloc_reference \<star>
-               \<langle>(rvec_elems v') = take (rvec_length v') (rvec_elems v) \<and> unat p < rvec_length v' \<and> rvec_length v' - unat p \<le> Suc k\<rangle>\<close> and
+               \<langle>(rvec_elems v') = take (rvec_length v') (rvec_elems v) \<and> unat p < rvec_length v' \<and> rvec_length v' - unat p \<le> Suc k \<and> vok v'\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
@@ -382,7 +383,7 @@ definition dpll_top_contract :: \<open>Lit rvec rvec \<Rightarrow> 64 word \<Rig
        (can_alloc_reference \<star>
           \<langle>dpll_cs_ok (vecs_of cs) (unat n) \<and> length (vecs_of cs) + 2 \<le> urust_fuel \<and> length (vecs_of cs) < 2 ^ 64 \<and>
            unat n + 2 \<le> urust_fuel \<and> 3 ^ unat n < urust_fuel \<and>
-           2 * length (vecs_of cs) \<le> urust_fuel \<and> 2 * length (vecs_of cs) < 2 ^ 64 \<and> 2 * unat n < 2 ^ 57\<rangle>)
+           2 * length (vecs_of cs) \<le> urust_fuel \<and> 2 * length (vecs_of cs) < 2 ^ 57 \<and> 2 * unat n < 2 ^ 57\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of
              None \<Rightarrow> \<not> (\<exists>\<sigma>. cnf_sem \<sigma> (vecs_of cs))

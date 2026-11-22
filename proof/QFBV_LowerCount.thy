@@ -97,12 +97,13 @@ lemma lower_bin_count:
   assumes EA: \<open>env_ok ws L ka wa\<close> and EB: \<open>env_ok ws L kb wb\<close>
     and eqw: \<open>op \<noteq> Op_Concat \<longrightarrow> wb = wa\<close>
     and R: \<open>lower_bin_m L op ka kb = (L', k)\<close>
-    and B: \<open>length (fst L') < 2 ^ 64\<close>
+    and B: \<open>length (fst L') < 2 ^ 56\<close>
   shows \<open>lcnt ws L' \<le> lcnt ws L + ebin op wa \<and> (\<forall>M. lsmall ws M L \<longrightarrow> wa + wb \<le> M \<longrightarrow> lsmall ws M L')\<close>
 proof -
   let ?M = \<open>wa + wb\<close>
   have L: \<open>lok ws L\<close> and wa: \<open>snd L ! ka = wa\<close> and wb: \<open>snd L ! kb = wb\<close> and wa1: \<open>1 \<le> wa\<close> and wb1: \<open>1 \<le> wb\<close>
     and wa64: \<open>wa < 2 ^ 64\<close> and wb64: \<open>wb < 2 ^ 64\<close> and ka64: \<open>ka < 2 ^ 64\<close> and kb64: \<open>kb < 2 ^ 64\<close>
+    and wa56: \<open>wa < 2 ^ 56\<close>
     using EA EB by (simp_all add: env_ok_def)
   have EBa: \<open>op \<noteq> Op_Concat \<Longrightarrow> env_ok ws L kb wa\<close> using EB eqw by simp
   note A = cr_env[OF EA] neg_t_env[OF EA] msb_t_env[OF EA] abs_t_env[OF EA]
@@ -227,7 +228,7 @@ proof -
     note C1 = pstep[OF L t1 p1 k1 n1]
     have L1: \<open>lok ws L1\<close> using lext_push[OF L t1 p1] lext_lok by blast
     have EQ: \<open>env_ok ws L1 q wa\<close>
-      using env_push[OF L t1 p1 wa1 wa64] B pfx_length[OF pfx_push[OF p2]] by simp
+      using env_push[OF L t1 p1 wa1 wa56] B pfx_length[OF pfx_push[OF p2]] by simp
     have EA1: \<open>env_ok ws L1 ka wa\<close> and EB1: \<open>env_ok ws L1 kb wa\<close>
       using env_lext[OF EA lext_push[OF L t1 p1]] env_lext[OF EB' lext_push[OF L t1 p1]] by simp_all
     have t2: \<open>cwt ws (snd L1) ?t2\<close> \<open>cwidth ws (snd L1) ?t2 = wa\<close>
@@ -261,7 +262,7 @@ proof -
     note C1 = pstep[OF L t1 p1 k1 n1]
     have L1: \<open>lok ws L1\<close> using lext_push[OF L t1 p1] lext_lok by blast
     have ER: \<open>env_ok ws L1 r wa\<close>
-      using env_push[OF L t1 p1 wa1 wa64] B pfx_length[OF pfx_push[OF p2]] by simp
+      using env_push[OF L t1 p1 wa1 wa56] B pfx_length[OF pfx_push[OF p2]] by simp
     have EA1: \<open>env_ok ws L1 ka wa\<close> using env_lext[OF EA lext_push[OF L t1 p1]] by simp
     have t2: \<open>cwt ws (snd L1) ?t2\<close> \<open>cwidth ws (snd L1) ?t2 = wa\<close>
       using msb_t_env[OF EA1] neg_t_env[OF ER] cr_env[OF ER] by simp_all
@@ -299,7 +300,7 @@ proof -
     have X1: \<open>lext ws L L1\<close> using lext_push[OF L t1 p1] .
     have L1: \<open>lok ws L1\<close> using X1 lext_lok by blast
     have EU: \<open>env_ok ws L1 u wa\<close>
-      using env_push[OF L t1 p1 wa1 wa64] B pfx_length[OF pfx_push[OF p2]] pfx_length[OF pfx_push[OF p3]] by simp
+      using env_push[OF L t1 p1 wa1 wa56] B pfx_length[OF pfx_push[OF p2]] pfx_length[OF pfx_push[OF p3]] by simp
     have t2: \<open>cwt ws (snd L1) (neg_t u wa)\<close> \<open>cwidth ws (snd L1) (neg_t u wa) = wa\<close> using neg_t_env[OF EU] by simp_all
     have u64: \<open>u < 2 ^ 64\<close> and wu: \<open>snd L1 ! u = wa\<close> using EU by (simp_all add: env_ok_def)
     have c2: \<open>cws_le ws (snd L1) (neg_t u wa) ?M\<close> by (intro W neg_t_le) (simp_all add: wu u64[simplified] M wa1)
@@ -309,7 +310,7 @@ proof -
     have X2: \<open>lext ws L1 L2\<close> using lext_push[OF L1 t2 p2] .
     have L2: \<open>lok ws L2\<close> using X2 lext_lok by blast
     have ENU: \<open>env_ok ws L2 nu wa\<close>
-      using env_push[OF L1 t2 p2 wa1 wa64] B pfx_length[OF pfx_push[OF p3]] by simp
+      using env_push[OF L1 t2 p2 wa1 wa56] B pfx_length[OF pfx_push[OF p3]] by simp
     have EU2: \<open>env_ok ws L2 u wa\<close> using env_lext[OF EU X2] .
     have EA2: \<open>env_ok ws L2 ka wa\<close> and EB2: \<open>env_ok ws L2 kb wa\<close>
       using env_lext[OF env_lext[OF EA X1] X2] env_lext[OF env_lext[OF EB' X1] X2] by simp_all

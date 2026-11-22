@@ -2468,10 +2468,10 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
 // `ovf_bound` (proof/core_spec/QFBV_CoreSpec.thy) is below 2^56, so that every vector it grows
 // stays below 2^56 elements (a `push` then never exceeds the largest capacity), and the
 // translation indexes its definitions by `usize`. `check_sat` answers `Unknown` when the problem has
-// 2^56 definitions or more (`tr_size` pushes one count per definition), when the translation would
-// add 2^56 definitions or more, or when the translated problem is too large for `solve`. The
-// computations below saturate at 2^56: each returns the exact value if it is below 2^56, and 2^56
-// otherwise.
+// 2^56 declared symbols, definitions or assertions or more (`tr_size` and `tr_problem` push one
+// element for each), when the translation would add 2^56 definitions or more, or when the
+// translated problem is too large for `solve`. The computations below saturate at 2^56: each
+// returns the exact value if it is below 2^56, and 2^56 otherwise.
 
 /// The bound at which the size computations saturate: 2^56.
 fn cap() -> usize {
@@ -2670,7 +2670,7 @@ pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
     if !in_fragment(p) {
         return SmtAnswer::Unknown;
     }
-    if p.defs.len() >= cap() {
+    if p.funs.len() >= cap() || p.defs.len() >= cap() || p.asserts.len() >= cap() {
         return SmtAnswer::Unknown;
     }
     if tr_size(p) >= cap() {

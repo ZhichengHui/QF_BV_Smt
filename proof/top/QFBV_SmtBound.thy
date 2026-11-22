@@ -44,8 +44,9 @@ proof -
   have ww: \<open>w \<le> w * w\<close> using assms(1) by simp
   show \<open>op \<notin> {Op_Mul, Op_Udiv, Op_Urem, Op_Sdiv, Op_Srem, Op_Smod} \<Longrightarrow> ebin op w \<le> 210 * w\<close>
     using s assms(1) by (auto simp: ebin_def)
+  have w2: \<open>1 \<le> w * w\<close> using assms(1) by simp
   show \<open>ebin op w \<le> 396 * (w * w)\<close>
-    using s assms(1) ww by (auto simp: ebin_def)
+    unfolding ebin_def using s assms(1) ww w2 by (auto split: if_splits; linarith)
 qed
 
 subsection \<open>Costs of the shapes of translated terms\<close>
@@ -260,7 +261,8 @@ proof -
   have b: \<open>fw (D ! k0) \<le> 8 * w\<close> \<open>fw (D ! k1) \<le> 8 * w\<close> using assms(4,5,6) fw_le by simp_all
   have \<open>ow ws D (TermL_Bin bo (tref k0) (tref k1)) = fw 1 + (ebin bo (D ! k0) + (fw (D ! k0) + fw (D ! k1)))\<close>
     using assms(2,3) o by (simp only: ow_eqs ow_tref width_tref)
-  then show \<open>ow ws D (TermL_Bin bo (tref k0) (tref k1)) \<le> 234 * w\<close> using e b assms(6) by (simp add: fw_def)
+  then show \<open>ow ws D (TermL_Bin bo (tref k0) (tref k1)) \<le> 234 * w\<close>
+    using e b assms(6) unfolding fw_def by (simp only: add_mult_distrib2)
   show \<open>width ws D (TermL_Bin bo (tref k0) (tref k1)) = 1\<close> using o by (simp only: width_Bin_opw)
 qed
 
@@ -285,7 +287,8 @@ proof -
   have 1: \<open>(a + 1) * W \<le> cK * W\<close> using assms(3) by (rule mult_le_mono1)
   have 2: \<open>k * (b * W) \<le> k * (cK * W)\<close> using assms(4) by (intro mult_le_mono2 mult_le_mono1)
   have 3: \<open>cK * ((1 + k) * W) = cK * W + k * (cK * W)\<close> by (simp add: algebra_simps)
-  show ?thesis using assms(1,2) 1 2 3 by (simp add: algebra_simps)
+  have 4: \<open>(a + 1) * W = a * W + W\<close> by simp
+  show ?thesis using assms(1,2) 1 2 3 4 by linarith
 qed
 
 text \<open>The cost of the translation of an application with the arguments \<open>ks\<close>, whose definitions
@@ -327,7 +330,7 @@ proof -
           kk[of 1, THEN conjunct2] a(2) w1] a(1) nel by auto
     then have \<open>ow ws D (TermL_Bin bo (tref (ks ! 0)) (tref (ks ! 1))) \<le> 420 * W + ?k * (0 * W)\<close> using a(4,5) by simp
     then show \<open>ow ws D (TermL_Bin bo (tref (ks ! 0)) (tref (ks ! 1))) + 1 \<le> cK * ((1 + ?k) * W)\<close>
-      using lin_bound[OF a(3)] by (simp add: cK)
+      using lin_bound[OF a(3), of _ 420 ?k 0] by (simp add: cK)
   qed
   have nm: \<open>\<And>bo. bo \<notin> {Op_Mul, Op_Udiv, Op_Urem, Op_Sdiv, Op_Srem, Op_Smod} \<Longrightarrow> ebin bo w \<le> 396 * w\<close>
     using ebin_le(1)[OF w1 wW] by fastforce
@@ -471,7 +474,8 @@ proof -
     have F: \<open>ow ws D (foldl (\<lambda>acc k. TermL_Bin Op_Mul acc (tref k)) (tref (hd ks)) (tl ks)) \<le>
         ow ws D (tref (hd ks)) + length (tl ks) * (2 * fw w + ebin Op_Mul w)\<close>
       using ow_fold[OF t, of ws \<open>tref (hd ks)\<close> Op_Mul] h by (simp add: width_tref)
-    have r: \<open>ow ws D (tref (hd ks)) \<le> 8 * (w * w)\<close> using h fw_le[of \<open>D ! hd ks\<close> w] w1 ww by (simp add: ow_tref)
+    have r0: \<open>ow ws D (tref (hd ks)) \<le> 8 * w\<close> using h fw_le w1 by (simp add: ow_tref)
+    have r: \<open>ow ws D (tref (hd ks)) \<le> 8 * (w * w)\<close> using r0 ww(1) by linarith
     have e: \<open>2 * fw w + ebin Op_Mul w \<le> 412 * (w * w)\<close> using md[of Op_Mul] fw_le[OF le_refl w1] ww by linarith
     have l: \<open>length (tl ks) * (2 * fw w + ebin Op_Mul w) \<le> ?k * (412 * (w * w))\<close> using e by (intro mult_le_mono) simp_all
     show ?thesis using lin_bound[OF ww(2), of _ 8 ?k 412] F r l unfolding SmtOp_Bvmul
@@ -499,7 +503,7 @@ proof -
       using w' by (simp only: ow_eqs ow_tref width_tref)
     then have \<open>ow ws D (TermL_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2))) \<le> 37 * w + ?k * (0 * w)\<close>
       using b w'(2) by simp
-    then show ?thesis using lin_bound[OF w1] unfolding SmtOp_Ite by (simp add: ucost_def cK)
+    then show ?thesis using lin_bound[OF w1, of _ 37 ?k 0] unfolding SmtOp_Ite by (simp add: ucost_def cK)
   next
     case SmtOp_Eq
     have k2: \<open>2 \<le> ?k\<close> using assms(1) unfolding SmtOp_Eq by simp
@@ -629,7 +633,7 @@ proof (induction p n t and p n ts rule: cnt_cnt_args.induct)
   next
     case False
     then have nd: \<open>unat d < n\<close> \<open>dpar (?ds ! unat d) \<noteq> []\<close> by auto
-    have a: \<open>cnt_args p n args \<le> sum_list (map (smt_nodes (take n ?ds)) args)\<close> using 1(1) nd 1(3) by simp
+    have a: \<open>cnt_args p n (rvec_elems args) \<le> sum_list (map (smt_nodes (take n ?ds)) (rvec_elems args))\<close> using 1(1) nd 1(3) by simp
     have b: \<open>Suc (cnt p (unat d) (SmtDef_body (?ds ! unat d))) \<le> smt_nodes (take (unat d) ?ds) (SmtDef_body (?ds ! unat d))\<close>
       using 1(2) nd 1(3) by simp
     have tk: \<open>take (unat d) (take n ?ds) = take (unat d) ?ds\<close> \<open>take n ?ds ! unat d = ?ds ! unat d\<close>
@@ -667,9 +671,9 @@ lemma df_width: \<open>\<exists>e. Df = def_widths ws [] S @ e \<Longrightarrow>
 lemma df_nth: \<open>\<exists>e. Df = def_widths ws [] S @ e \<Longrightarrow> k < length S \<Longrightarrow> Df ! k = def_widths ws [] S ! k\<close>
   by (auto simp: nth_append def_widths_length')
 
-lemma ow_ref: \<open>ref_ok ws vs S k s v \<Longrightarrow> \<exists>e. Df = def_widths ws [] S @ e \<Longrightarrow>
+lemma ow_ref: \<open>QFBV_SmtModel.ref_ok ws vs S k s v \<Longrightarrow> \<exists>e. Df = def_widths ws [] S @ e \<Longrightarrow>
   ow ws Df (tref k) = fw (sort_width_m s)\<close>
-  by (auto simp: ref_ok_def tref_def ow_eqs unat_of_nat_eq nth_append def_widths_length')
+  by (auto simp: QFBV_SmtModel.ref_ok_def tref_def ow_eqs unat_of_nat_eq nth_append def_widths_length')
 
 lemma rng_self: \<open>rng fs ds ps t \<Longrightarrow> nr fs ds ps t\<close>
   by (cases t) (auto simp: rng_def)
@@ -710,7 +714,7 @@ lemma tr_cost:
   shows \<open>tr_term_m p dm env n S t = (S', t') \<Longrightarrow> ctx_ok p I ws vs n dm S \<Longrightarrow>
      smt_tsort (sfuns p) (take n (sdefs p)) ps t = Some s \<Longrightarrow>
      \<forall>x \<in> set ps. frag_sort x \<Longrightarrow> length env = length ps \<Longrightarrow> length xs = length ps \<Longrightarrow>
-     (\<forall>i < length ps. ref_ok ws vs S (env ! i) (ps ! i) (xs ! i)) \<Longrightarrow>
+     (\<forall>i < length ps. QFBV_SmtModel.ref_ok ws vs S (env ! i) (ps ! i) (xs ! i)) \<Longrightarrow>
      defs_wt ws [] S \<Longrightarrow> length S' < 2 ^ 64 \<Longrightarrow> \<exists>e. Df = def_widths ws [] S' @ e \<Longrightarrow>
      (\<forall>d < length (sdefs p). rng (sfuns p) (take d (sdefs p))
         (dpar (sdefs p ! d)) (SmtDef_body (sdefs p ! d))) \<Longrightarrow>
@@ -720,7 +724,7 @@ lemma tr_cost:
     and \<open>tr_args_m p dm env n S ts = (S', ks) \<Longrightarrow> ctx_ok p I ws vs n dm S \<Longrightarrow>
      map (smt_tsort (sfuns p) (take n (sdefs p)) ps) ts = map Some ss \<Longrightarrow>
      \<forall>x \<in> set ps. frag_sort x \<Longrightarrow> length env = length ps \<Longrightarrow> length xs = length ps \<Longrightarrow>
-     (\<forall>i < length ps. ref_ok ws vs S (env ! i) (ps ! i) (xs ! i)) \<Longrightarrow>
+     (\<forall>i < length ps. QFBV_SmtModel.ref_ok ws vs S (env ! i) (ps ! i) (xs ! i)) \<Longrightarrow>
      defs_wt ws [] S \<Longrightarrow> length S' < 2 ^ 64 \<Longrightarrow> \<exists>e. Df = def_widths ws [] S' @ e \<Longrightarrow>
      (\<forall>d < length (sdefs p). rng (sfuns p) (take d (sdefs p))
         (dpar (sdefs p ! d)) (SmtDef_body (sdefs p ! d))) \<Longrightarrow>
@@ -747,8 +751,8 @@ next
 next
   case (3 p dm env n S k S' t' ps s xs)
   let ?u = \<open>SmtTerm_Param k\<close>
-  then have k: \<open>unat k < length ps\<close> \<open>s = ps ! unat k\<close> by (auto split: if_splits)
-  have r: \<open>ref_ok ws vs S (env ! unat k) s (xs ! unat k)\<close> using 3(7) k by simp
+  from 3 have k: \<open>unat k < length ps\<close> \<open>s = ps ! unat k\<close> by (auto split: if_splits)
+  have r: \<open>QFBV_SmtModel.ref_ok ws vs S (env ! unat k) s (xs ! unat k)\<close> using 3(7) k by simp
   have res: \<open>S' = S\<close> \<open>t' = tref (env ! unat k)\<close> using 3(1) by auto
   have Df3: \<open>\<exists>e. Df = def_widths ws [] S @ e\<close> using 3(10) res by simp
   have \<open>ow ws Df t' + 1 \<le> cK * nw (sfuns p) (take n (sdefs p)) ps ?u\<close>
@@ -783,7 +787,7 @@ next
   proof (cases \<open>dpar (?ds ! unat d) = []\<close>)
     case True
     have res: \<open>S' = S\<close> \<open>t' = tref (dm ! unat d)\<close> using 5(3) True by auto
-    have r: \<open>ref_ok ws vs S (dm ! unat d) (SmtDef_ret (?ds ! unat d)) ((?dv ! unat d) [])\<close>
+    have r: \<open>QFBV_SmtModel.ref_ok ws vs S (dm ! unat d) (SmtDef_ret (?ds ! unat d)) ((?dv ! unat d) [])\<close>
       using 5(4) dn True unfolding ctx_ok_def Let_def by blast
     have Df5: \<open>\<exists>e. Df = def_widths ws [] S @ e\<close> using 5(12) res by simp
     have \<open>ow ws Df t' + 1 \<le> cK * nw ?fs (take n ?ds) ps ?u\<close>
@@ -801,7 +805,7 @@ next
     have len1: \<open>length S1 < 2 ^ 64\<close> using 5(11) E2 by simp
     let ?xs' = \<open>map (smt_eval I ?dv xs) (rvec_elems args)\<close>
     have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length (rvec_elems args) \<and>
-        (\<forall>i < length (rvec_elems args). ref_ok ws vs S1 (ks1 ! i) (dpar (?ds ! unat d) ! i) (smt_eval I ?dv xs (rvec_elems args ! i)))\<close>
+        (\<forall>i < length (rvec_elems args). QFBV_SmtModel.ref_ok ws vs S1 (ks1 ! i) (dpar (?ds ! unat d) ! i) (smt_eval I ?dv xs (rvec_elems args ! i)))\<close>
       using tr_term_args_correct(2)[OF r 5(4) d(2) 5(6,7,8,9,10) len1] .
     obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
     have la: \<open>length (rvec_elems args) = length (dpar (?ds ! unat d))\<close> using d(2) by (metis length_map)
@@ -831,9 +835,9 @@ next
   have res: \<open>S' = S1\<close> \<open>t' = tr_app_m op ks1\<close> using 6(2) r by (auto simp: Let_def)
   have o: \<open>None \<notin> set (map (smt_tsort ?fs (take n ?ds) ps) ?as)\<close> \<open>smt_op_sort op ?ss = Some s\<close>
     using 6(4) by (auto split: if_splits)
-  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) ?as = map Some ?ss\<close> using o(1) by (induction ?as) auto
+  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) ?as = map Some ?ss\<close> using o(1) by (rule map_the_Some)
   have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length ?as \<and>
-      (\<forall>i < length ?as. ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (?as ! i)))\<close>
+      (\<forall>i < length ?as. QFBV_SmtModel.ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (?as ! i)))\<close>
     using tr_term_args_correct(2)[OF r 6(3) m 6(5,6,7,8,9)] res 6(10) by simp
   have C: \<open>(\<exists>E. S' = S @ E) \<and> defs_wt ws [] S' \<and> wt ws (def_widths ws [] S') t' \<and>
      width ws (def_widths ws [] S') t' = sort_width_m s \<and>
@@ -848,11 +852,11 @@ next
       cK * sum_list (map (smt_tcost ?fs (take n ?ds) ps) ?as)\<close>
     using 6(1)[OF r 6(3) m 6(5,6,7,8,9) len6 Df6 6(12) ra] .
   have lk: \<open>length ks1 = length ?ss\<close> using A by simp
-  have kw: \<open>\<forall>k \<in> set ks1. k < 2 ^ 64\<close> using A by (auto simp: in_set_conv_nth ref_ok_def)
+  have kw: \<open>\<forall>k \<in> set ks1. k < 2 ^ 64\<close> using A by (auto simp: in_set_conv_nth QFBV_SmtModel.ref_ok_def)
   have Dk: \<open>Df ! (ks1 ! i) = sort_width_m (?ss ! i)\<close> if \<open>i < length ?as\<close> for i
   proof -
-    have \<open>ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (?as ! i))\<close> using A that by blast
-    then show ?thesis using df_nth[OF 6(11)] res by (simp add: ref_ok_def)
+    have \<open>QFBV_SmtModel.ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (?as ! i))\<close> using A that by blast
+    then show ?thesis using df_nth[OF 6(11)] res by (simp add: QFBV_SmtModel.ref_ok_def)
   qed
   have ts: \<open>smt_tsort ?fs (take n ?ds) ps (?as ! i) = Some (?ss ! i)\<close> if \<open>i < length ?as\<close> for i
     using m that by (metis length_map nth_map)
@@ -896,13 +900,13 @@ next
     using tr_term_args_correct(1)[OF r1 8(4) ss(2) 8(6,7,8,9,10) len1] .
   have hs: \<open>smt_has_sort s0 (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
     using val_sort[OF 8(4) ss(2)] 8(6) la2_of_refs[OF 8(8,9)] wf_of_frag by blast
-  have refa: \<open>ref_ok ws vs (S1 @ [t1]) (length S1) s0 (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
-    using A hs len1 by (simp add: ref_ok_def def_snoc)
+  have refa: \<open>QFBV_SmtModel.ref_ok ws vs (S1 @ [t1]) (length S1) s0 (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
+    using A hs len1 by (simp add: QFBV_SmtModel.ref_ok_def def_snoc)
   have dw1: \<open>defs_wt ws [] (S1 @ [t1])\<close> using A by (simp add: def_snoc)
   obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
   have ctx1: \<open>ctx_ok p I ws vs n dm (S1 @ [t1])\<close> using ctx_ok_ext[OF 8(4), of \<open>E1 @ [t1]\<close>] E1 by simp
-  have env1: \<open>\<forall>i < length ps. ref_ok ws vs (S1 @ [t1]) (env ! i) (ps ! i) (xs ! i)\<close>
-    using 8(9) ref_ok_ext[of ws vs S _ _ _ \<open>E1 @ [t1]\<close>] E1 by simp
+  have env1: \<open>\<forall>i < length ps. QFBV_SmtModel.ref_ok ws vs (S1 @ [t1]) (env ! i) (ps ! i) (xs ! i)\<close>
+    using 8(9) QFBV_SmtModel.ref_ok_ext[of ws vs S _ _ _ \<open>E1 @ [t1]\<close>] E1 by simp
   have Df1: \<open>\<exists>e. Df = def_widths ws [] S1 @ e\<close> using df_prefix[OF 8(12)] res E2 by simp
   have ra: \<open>rng (sfuns p) (take n (sdefs p)) ps a\<close>
     \<open>\<forall>a \<in> set rest. rng (sfuns p) (take n (sdefs p)) ps a\<close> using 8(14) by simp_all

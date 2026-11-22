@@ -831,4 +831,51 @@ definition smt_max_distinct :: \<open>SmtProblem \<Rightarrow> nat\<close> where
        Set.filter smt_distinct
          (\<Union>t \<in> set (map SmtDef_body (rvec_elems (SmtProblem_defs p)) @ rvec_elems (SmtProblem_asserts p)). set (smt_subterms t))))\<close>
 
+text \<open>The arguments of a term (none for a constant or a parameter).\<close>
+fun smt_args :: \<open>SmtTerm \<Rightarrow> SmtTerm list\<close> where
+  \<open>smt_args (SmtTerm_Fun f args) = rvec_elems args\<close>
+| \<open>smt_args (SmtTerm_Def d args) = rvec_elems args\<close>
+| \<open>smt_args (SmtTerm_App op args) = rvec_elems args\<close>
+| \<open>smt_args _ = []\<close>
+
+text \<open>The cost of a node, a measure of the size of its usual encoding by bits: with \<open>w\<close> the
+  largest width of the node and of its arguments (at least 1) and \<open>k\<close> its number of arguments,
+  \<open>(1 + k) * w\<close>; \<open>(1 + k) * w * w\<close> for a multiplication, division or remainder, whose usual
+  circuits grow with the square of the width; \<open>(1 + k) * k * w\<close> for a \<open>distinct\<close>, which
+  compares every pair of arguments.\<close>
+definition smt_ncost :: \<open>SmtFun list \<Rightarrow> SmtDef list \<Rightarrow> SmtSort list \<Rightarrow> SmtTerm \<Rightarrow> nat\<close> where
+  \<open>smt_ncost fs ds ps u \<equiv>
+     let w = Max (insert 1 (smt_twidth fs ds ps ` set (u # smt_args u))) in
+     let k = length (smt_args u) in
+     (1 + k) * (if smt_mul_div u then w * w else if smt_distinct u then k * w else w)\<close>
+
+text \<open>The cost of a term: the costs of its nodes, counted as in \<^const>\<open>smt_nodes\<close> (an
+  application of a definition with parameters with the nodes of the body of the definition).\<close>
+function smt_tcost :: \<open>SmtFun list \<Rightarrow> SmtDef list \<Rightarrow> SmtSort list \<Rightarrow> SmtTerm \<Rightarrow> nat\<close> where
+  \<open>smt_tcost fs ds ps (SmtTerm_BoolConst b) = smt_ncost fs ds ps (SmtTerm_BoolConst b)\<close>
+| \<open>smt_tcost fs ds ps (SmtTerm_BvConst bs) = smt_ncost fs ds ps (SmtTerm_BvConst bs)\<close>
+| \<open>smt_tcost fs ds ps (SmtTerm_Param k) = smt_ncost fs ds ps (SmtTerm_Param k)\<close>
+| \<open>smt_tcost fs ds ps (SmtTerm_Fun f args) =
+     smt_ncost fs ds ps (SmtTerm_Fun f args) + sum_list (map (smt_tcost fs ds ps) (rvec_elems args))\<close>
+| \<open>smt_tcost fs ds ps (SmtTerm_Def d args) =
+     smt_ncost fs ds ps (SmtTerm_Def d args) + sum_list (map (smt_tcost fs ds ps) (rvec_elems args)) +
+     (if unat d < length ds \<and> rvec_elems (SmtDef_params (ds ! unat d)) \<noteq> []
+      then smt_tcost fs (take (unat d) ds) (rvec_elems (SmtDef_params (ds ! unat d))) (SmtDef_body (ds ! unat d))
+      else 0)\<close>
+| \<open>smt_tcost fs ds ps (SmtTerm_App op args) =
+     smt_ncost fs ds ps (SmtTerm_App op args) + sum_list (map (smt_tcost fs ds ps) (rvec_elems args))\<close>
+  by pat_completeness auto
+termination
+  by (relation \<open>measures [\<lambda>(_, ds, _, _). length ds, \<lambda>(_, _, _, t). size t]\<close>)
+     (auto intro: size_list_estimation' simp: less_Suc_eq_le size_rvec_elems_le)
+
+text \<open>The cost of a problem: the costs of the assertions and of the bodies of the definitions
+  without parameters.\<close>
+definition smt_cost :: \<open>SmtProblem \<Rightarrow> nat\<close> where
+  \<open>smt_cost p \<equiv>
+     let fs = rvec_elems (SmtProblem_funs p) in let ds = rvec_elems (SmtProblem_defs p) in
+     sum_list (map (\<lambda>d. if rvec_elems (SmtDef_params (ds ! d)) = [] then smt_tcost fs (take d ds) [] (SmtDef_body (ds ! d)) else 0)
+                [0..<length ds]) +
+     sum_list (map (smt_tcost fs ds []) (rvec_elems (SmtProblem_asserts p)))\<close>
+
 end

@@ -52,7 +52,7 @@ text \<open>The problems on which this solver promises an answer other than \<^v
 definition smt_in_range :: \<open>SmtProblem \<Rightarrow> bool\<close> where
   \<open>smt_in_range p \<equiv>
      smt_size p \<le> 2 ^ 30 \<and> smt_max_width p \<le> 2 ^ 18 \<and> smt_max_mul_width p \<le> 2 ^ 12 \<and>
-     smt_max_distinct p \<le> 2 ^ 8\<close>
+     smt_max_distinct p \<le> 2 ^ 8 \<and> smt_cost p \<le> 2 ^ 43\<close>
 
 subsection \<open>The contract\<close>
 

@@ -7,6 +7,7 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
   options [document = false]
   theories
     QFBV_Proof
+    QFBV_Heap
 
 session "QFBV_Smt" in "smt" = "QFBV_CoreSpec" +
   options [document = false]

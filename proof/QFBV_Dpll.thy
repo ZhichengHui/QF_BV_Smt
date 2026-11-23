@@ -402,6 +402,29 @@ lemma dpll_init_v:
   shows \<open>(b \<longrightarrow> dstate cs N a0 t0 [] \<and> length a0 = N \<and> tr_ok N a0 t0) \<and> (\<not> b \<longrightarrow> \<not> (\<exists>\<sigma>. cnf_sem \<sigma> cs))\<close>
   using dpll_init'[OF assms(1)] assms(2,3) by simp
 
+text \<open>The reasons \<open>rs\<close> of the trail \<open>t\<close> in the invariant of the search. Kept folded in the
+  invariant: unfolded, \<open>crush_base\<close> proves \<open>vok rs\<close> of the next state from a fact
+  \<open>vok\<close> of another vector and so picks a wrong vector.\<close>
+definition dpll_rs_ok :: \<open>64 word rvec \<Rightarrow> Lit rvec \<Rightarrow> bool\<close> where
+  \<open>dpll_rs_ok rs t \<equiv> vok rs \<and> rvec_length rs = rvec_length t\<close>
+
+lemma dpll_rs_push:
+  \<open>vok x \<Longrightarrow> vok y \<Longrightarrow> rvec_length x = rvec_length y \<Longrightarrow> rvec_length y < 2 ^ 56 \<Longrightarrow>
+   dpll_rs_ok (the (rvec_append_val x [u])) (the (rvec_append_val y [v]))\<close>
+  by (simp add: dpll_rs_ok_def)
+
+lemma dpll_rs_init: \<open>vok r0 \<Longrightarrow> rext cs [] [] (rvec_elems t0) (rvec_elems r0) \<Longrightarrow> dpll_rs_ok r0 t0\<close>
+  by (simp add: dpll_rs_ok_def rext_def)
+
+lemma dpll_rs_okD: \<open>dpll_rs_ok rs t \<Longrightarrow> vok rs \<and> rvec_length rs = rvec_length t\<close>
+  by (simp add: dpll_rs_ok_def)
+
+lemma dstate_lim_lt: \<open>dstate cs n a (t @ [l]) (L @ [p]) \<Longrightarrow> Suc (length L) \<le> n\<close>
+  using dstate_lens by fastforce
+
+lemma dpll_eq_fst: \<open>rvec_elems x = rvec_elems (fst (x :: bool option rvec, y :: Lit rvec \<times> tnil))\<close>
+  by simp
+
 definition dpll_top_contract :: \<open>Lit rvec rvec \<Rightarrow> 64 word \<Rightarrow> ('s, bool option rvec option, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_top_contract cs n \<equiv>
      make_function_contract
@@ -428,16 +451,16 @@ lemma dpll_top_spec [crush_specs]:
                q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q \<star> can_alloc_reference \<star>
                \<langle>dstate (vecs_of cs) (unat n) (rvec_elems a) (rvec_elems t) (map unat (rvec_elems lim)) \<and> 3 ^ unat n - meas (unat n) (rvec_length t) (map unat (rvec_elems lim)) < k \<and>
                 dpll_wpre (vecs_of cs) (unat n) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> rvec_length a = unat n \<and> tr_ok (unat n) (rvec_elems a) (rvec_elems t) \<and> unat q \<le> rvec_length t \<and>
-                wstate (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) (rvec_elems t) (unat q) (map unat (rvec_elems lim)) \<and> rvec_length rs = rvec_length t \<and> lends (rvec_elems nx) (rvec_elems h) \<and>
-                vok t \<and> vok rs \<and> vok lim \<and> rvec_length lim \<le> unat n\<rangle>\<close> and
+                wstate (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) (rvec_elems t) (unat q) (map unat (rvec_elems lim)) \<and> dpll_rs_ok rs t \<and> lends (rvec_elems nx) (rvec_elems h) \<and>
+                vok t \<and> vok lim \<and> rvec_length lim \<le> unat n\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h ga a gt t gr rs gl lim gq q.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h \<star>
                a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs \<star> l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>lim \<star>
                q_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>q \<star> can_alloc_reference \<star>
                \<langle>dstate (vecs_of cs) (unat n) (rvec_elems a) (rvec_elems t) (map unat (rvec_elems lim)) \<and> 3 ^ unat n - meas (unat n) (rvec_length t) (map unat (rvec_elems lim)) < Suc k \<and>
                 dpll_wpre (vecs_of cs) (unat n) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> rvec_length a = unat n \<and> tr_ok (unat n) (rvec_elems a) (rvec_elems t) \<and> unat q \<le> rvec_length t \<and>
-                wstate (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) (rvec_elems t) (unat q) (map unat (rvec_elems lim)) \<and> rvec_length rs = rvec_length t \<and> lends (rvec_elems nx) (rvec_elems h) \<and>
-                vok t \<and> vok rs \<and> vok lim \<and> rvec_length lim \<le> unat n\<rangle>\<close> and
+                wstate (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) (rvec_elems t) (unat q) (map unat (rvec_elems lim)) \<and> dpll_rs_ok rs t \<and> lends (rvec_elems nx) (rvec_elems h) \<and>
+                vok t \<and> vok lim \<and> rvec_length lim \<le> unat n\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of
              None \<Rightarrow> \<not> (\<exists>\<sigma>. cnf_sem \<sigma> (vecs_of cs))
@@ -449,6 +472,10 @@ lemma dpll_top_spec [crush_specs]:
         inline: lit_neg_def simp add: dpll_cs_ok_def push_not_None dw_focus_modify)
     apply (all \<open>(match conclusion in \<open>the (rvec_append_val _ _) = _\<close> \<Rightarrow> \<open>rule refl\<close>)?\<close>)
     apply (all \<open>(unfold GUARD_def, rule refl)?\<close>)
+    apply (all \<open>(unfold GUARD_def, rule dpll_eq_fst)?\<close>)
+    apply (all \<open>(rule dpll_rs_push)?\<close>)
+    apply (all \<open>(rule dpll_rs_init, assumption, assumption)?\<close>)
+    apply (all \<open>(drule dpll_rs_okD)?\<close>)
     apply (all \<open>(drule from_elem11)?\<close>)
     apply (all \<open>(frule unat_lt63[of \<open>unat n\<close>])?\<close>)
     apply (all \<open>(rule fst_conv)?\<close>)
@@ -465,9 +492,11 @@ lemma dpll_top_spec [crush_specs]:
     apply (all \<open>(frule dstate_lens)?\<close>)
     apply (auto simp add: dpll_wpre_def push_not_None intro: dpll_cs_ok_wcs[unfolded dpll_cs_ok_def] dstate_tr[THEN conjunct1]
         less_imp_diff_less tr_ok_lenA dpll_wst_init wstate_wl tr_ok_init dest: dpll_wunsat1)
-    using [[goals_limit = 80]]
-    sorry
-  using dpll_init' tr_ok_init by blast+
+    apply (drule dstate_lim_lt, simp)
+    done
+  apply (all \<open>drule from_elem11\<close>)
+  apply (auto simp add: tr_ok_init dest: dpll_init')
+  done
 
 
 end

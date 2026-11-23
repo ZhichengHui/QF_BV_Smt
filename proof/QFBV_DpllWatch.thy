@@ -6,7 +6,6 @@ section \<open>DPLL: contracts up to the visit of a watch list\<close>
 
 context QFBV_ctx
 begin
-declare [[goals_limit = 1]] (*TMP*)
 
 text \<open>The clauses mention only variables below \<open>n\<close> and are short enough for the fuel.\<close>
 definition dpll_cs_ok :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> bool\<close> where
@@ -346,7 +345,7 @@ lemma read_model_spec [crush_specs]:
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq dpll_unat_Suc
         take_Suc_conv_app_nth read_model_m_def)
-    apply (all \<open>(subgoal_tac \<open>rvec_length m < 2 ^ 56\<close>)?\<close>)
+    apply (all \<open>(match premises in \<open>vecs_of m = _\<close> for m \<Rightarrow> \<open>subgoal_tac \<open>rvec_length m < 2 ^ 56\<close>\<close> \<bar> \<open>map rvec_elems (rvec_elems m) = _\<close> for m \<Rightarrow> \<open>subgoal_tac \<open>rvec_length m < 2 ^ 56\<close>\<close>)?\<close>)
     apply (auto simp add: vecs_of_def take_Suc_conv_app_nth push_not_None allvok_def)
     apply (all \<open>(drule (1) map_take_len, simp)\<close>)
     done

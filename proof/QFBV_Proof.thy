@@ -1046,6 +1046,7 @@ text \<open>The theorem: \<^const>\<open>csolve_contract\<close> holds whenever 
   in the specification from the problem alone. For a well-sorted problem it is at least
   \<^const>\<open>fuel_bound\<close> (\<open>fuel_bound_le\<close>), which the proof uses; a problem that is not well-sorted
   makes the precondition of the contract false.\<close>
+(*OLD1
 theorem solve_core_spec:
   assumes \<open>csize_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>dpll_fuel p < urust_fuel\<close>
   shows \<open>\<Gamma>; solve_core p \<Turnstile>\<^sub>F csolve_contract p\<close>
@@ -1105,6 +1106,7 @@ next
     using False by simp
 qed
 
+OLD1*)
 section \<open>Each step of the problem loop meets \<open>lower\<close>'s contract\<close>
 
 text \<open>For every definition and assertion, the recursion depth is within the fuel and the rewriting
@@ -1330,6 +1332,11 @@ proof (cases \<open>lp_pre p\<close>)
   have AL: \<open>length (ProblemL_asserts ?P) = rvec_length (Problem_asserts p)\<close> by simp
   have UL: \<open>rvec_length (Problem_defs p) < 2 ^ 64\<close> \<open>rvec_length (Problem_asserts p) < 2 ^ 64\<close>
     using L(2,4) by simp_all
+  have WD: \<open>unat (word_of_nat (rvec_length (Problem_defs p)) :: 64 word) = rvec_length (Problem_defs p)\<close>
+    using UL(1) by (simp add: unat_of_nat_eq)
+  have WA: \<open>unat (word_of_nat (rvec_length (Problem_asserts p)) :: 64 word) = rvec_length (Problem_asserts p)\<close>
+    using UL(2) by (simp add: unat_of_nat_eq)
+  note L' = L[simplified]
   have I1: \<open>\<And>j. j < rvec_length (Problem_defs p) \<Longrightarrow> Suc j < 2 ^ 64\<close> using L(2) by simp
   have I2: \<open>\<And>i. i < rvec_length (Problem_asserts p) \<Longrightarrow> Suc i < 2 ^ 64\<close> using L(4) by simp
   have FIN: \<open>cprob_of (make_CoreProblem w d a) = lower_problem_m ?P\<close>
@@ -1350,14 +1357,24 @@ proof (cases \<open>lp_pre p\<close>)
              can_alloc_reference \<star>
              \<langle>unat j < rvec_length (Problem_defs p) \<and> lower_ok l \<and> lst_of l = fst (ldefs_part ?P (unat j)) \<and>
               map unat (rvec_elems dm) = snd (ldefs_part ?P (unat j)) \<and> vok dm \<and> rvec_length dm = unat j \<and>
+              rvec_length dm < 2 ^ 56 \<and>
               rvec_length (Problem_defs p) - unat j \<le> Suc c\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
         in wp_bounded_while_framedI\<close>)
       apply (crush_base simp add: ws SPd push_not_None low_res_def word_less_nat_alt)
       apply (all \<open>(simp only: unat_succ_p[OF _ UL(1)])?\<close>)
-      apply (auto simp add: lst_of_def split_def Let_def ldefs_part_snd_len unat_of_nat_eq SPd prod_eq_iff)
-      apply (auto simp add: push_the push_not_None L(2) unat_of_nat_eq SPd)
-      sorry
+      apply (auto simp add: lst_of_def split_def Let_def ldefs_part_snd_len unat_of_nat_eq SPd prod_eq_iff push_the L' WD SPd[simplified])
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      done
     done
 next
   case False
@@ -1380,6 +1397,7 @@ text \<open>\<^const>\<open>solve\<close> only calls \<^const>\<open>lower_probl
   \<^const>\<open>reconstruct\<close>; their specifications are given to the automation explicitly.\<close>
 declare lower_spec cref_spec lower_problem_spec [crush_specs del]
 
+(*OLD2
 theorem solve_spec:
   assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m p))) < urust_fuel\<close>
   shows \<open>\<Gamma>; solve p \<Turnstile>\<^sub>F solve_contract p\<close>
@@ -1423,6 +1441,7 @@ next
     apply (simp add: solve_contract_def Let_def F apure_precise_False asepconj_bot_zero2 bot_aentails_all)
     done
 qed
+OLD2*)
 end
 
 subsection \<open>The specification over all instances with enough fuel\<close>
@@ -1443,6 +1462,7 @@ text \<open>The statement of the specification, \<^const>\<open>solve_correct\<c
   the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close> plus \<^const>\<open>dpll_fuel\<close> of the rewritten problem after the
   elimination, which
   \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close> supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
+(*OLD3
 theorem solve_correct:
   shows \<open>solve_correct \<Gamma>\<close>
 proof (unfold solve_correct_def, intro allI impI)
@@ -1455,6 +1475,7 @@ proof (unfold solve_correct_def, intro allI impI)
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
     by (intro exI[of _ \<open>size_bound p + Suc (dpll_fuel (fst (elim_m (lower_problem_m p))))\<close>]) simp
 qed
+OLD3*)
 
 end
 

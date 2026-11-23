@@ -1277,10 +1277,11 @@ fn lower_problem(p: &Problem) -> CoreProblem {
     CoreProblem { widths: p.widths.clone(), defs: l.defs, asserts }
 }
 
-/// The solver: rewrites the problem into the core language, eliminates its unconstrained
-/// definitions, solves the result and reconstructs a model of the problem from a model of it.
+/// The solver: rewrites the problem into the core language, normalizes it, eliminates its
+/// unconstrained definitions, solves the result and reconstructs a model of the problem from a
+/// model of it.
 pub fn solve(p: &Problem) -> Answer {
-    let q = lower_problem(p);
+    let q = normalize(&lower_problem(p));
     let (q2, kind, mark) = elim(&q);
     match solve_core(&q2) {
         Answer::Sat(m2) => Answer::Sat(reconstruct(&q, &kind, &mark, &q2, &m2)),
@@ -2051,6 +2052,464 @@ pub fn reconstruct(q: &CoreProblem, kind: &Vec<usize>, mark: &Vec<usize>, q2: &C
         k += 1;
     }
     m
+}
+
+// ---------------------------------------------------------------------------------------------
+// Word-level normalization. The definitions are rebuilt in order with sharing (a definition equal
+// to an earlier one, up to the order of the operands of a commutative operator, is replaced by
+// it) and a few rewrites: `x = x` is 1, `x + ~x` is all ones, `x * ones` is `-x`, products of
+// definitions are flattened and their factors sorted, the operands of a commutative operator are
+// sorted. A variable `v` with an assertion `v = t` is replaced by `t` in the definitions after `t`
+// other than the one of that assertion; the assertion itself is kept. The variables and their
+// widths stay the same, and the new problem has the same models as the old one.
+//
+// The earlier definitions are found by a hash of the term into a fixed number of buckets, each a
+// list of definitions through `next` (ending in `usize::MAX`), as the watch lists; a definition
+// is shared only if it is equal (`norm_eq`) to the new one, so the hash does not matter for the
+// result being correct.
+
+fn op_code(op: &BinOp) -> usize {
+    match op {
+        BinOp::And => 0,
+        BinOp::Or => 1,
+        BinOp::Xor => 2,
+        BinOp::Add => 3,
+        BinOp::Mul => 4,
+        BinOp::Udiv => 5,
+        BinOp::Urem => 6,
+        BinOp::Shl => 7,
+        BinOp::Lshr => 8,
+        BinOp::Concat => 9,
+        BinOp::Eq => 10,
+        BinOp::Ult => 11,
+    }
+}
+
+fn commutative(op: &BinOp) -> bool {
+    op_code(op) <= 4 || op_code(op) == 10
+}
+
+/// Whether the bit lists `a` and `b` are equal.
+fn same_bits(a: &Vec<bool>, b: &Vec<bool>) -> bool {
+    let mut r = a.len() == b.len();
+    let mut i: usize = 0;
+    while r && i < a.len() {
+        if a[i] != b[i] {
+            r = false;
+        }
+        i += 1;
+    }
+    r
+}
+
+/// Whether `a` and `b` are the same term.
+fn term_eq(a: &CoreTerm, b: &CoreTerm) -> bool {
+    match a {
+        CoreTerm::Const(x) => match b {
+            CoreTerm::Const(y) => same_bits(x, y),
+            _ => false,
+        },
+        CoreTerm::Var(i) => match b {
+            CoreTerm::Var(j) => *i == *j,
+            _ => false,
+        },
+        CoreTerm::Ref(i) => match b {
+            CoreTerm::Ref(j) => *i == *j,
+            _ => false,
+        },
+        CoreTerm::Not(x) => match b {
+            CoreTerm::Not(y) => term_eq(x, y),
+            _ => false,
+        },
+        CoreTerm::Bin(o, x1, x2) => match b {
+            CoreTerm::Bin(p, y1, y2) => op_code(o) == op_code(p) && term_eq(x1, y1) && term_eq(x2, y2),
+            _ => false,
+        },
+        CoreTerm::Extract(h, l, x) => match b {
+            CoreTerm::Extract(g, m, y) => *h == *g && *l == *m && term_eq(x, y),
+            _ => false,
+        },
+        CoreTerm::Ite(c, x1, x2) => match b {
+            CoreTerm::Ite(d, y1, y2) => term_eq(c, d) && term_eq(x1, y1) && term_eq(x2, y2),
+            _ => false,
+        },
+    }
+}
+
+/// Whether `a` and `b` are the same term up to the order of the operands of the commutative
+/// operator at the top.
+fn norm_eq(a: &CoreTerm, b: &CoreTerm) -> bool {
+    match a {
+        CoreTerm::Bin(o, x1, x2) => match b {
+            CoreTerm::Bin(p, y1, y2) => {
+                op_code(o) == op_code(p)
+                    && ((term_eq(x1, y1) && term_eq(x2, y2)) || (commutative(o) && term_eq(x1, y2) && term_eq(x2, y1)))
+            }
+            _ => false,
+        },
+        _ => term_eq(a, b),
+    }
+}
+
+/// The prime modulus of the hash.
+fn hash_mod() -> usize {
+    2147483647
+}
+
+/// `h` (below the modulus) combined with `x`.
+fn mix(h: usize, x: usize) -> usize {
+    (h * 31 + x % hash_mod()) % hash_mod()
+}
+
+/// The hash of `t`, below the modulus; it does not depend on the order of the operands of a
+/// commutative operator at the top.
+fn term_hash(t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Const(bits) => {
+            let mut h: usize = 1;
+            let mut i: usize = 0;
+            while i < bits.len() {
+                h = mix(h, if bits[i] { 1 } else { 0 });
+                i += 1;
+            }
+            mix(h, 2)
+        }
+        CoreTerm::Var(i) => mix(3, *i),
+        CoreTerm::Ref(i) => mix(4, *i),
+        CoreTerm::Not(a) => mix(5, term_hash(a)),
+        CoreTerm::Bin(op, a, b) => {
+            let ha = term_hash(a);
+            let hb = term_hash(b);
+            if commutative(op) {
+                mix(mix(6, op_code(op)), (ha + hb) % hash_mod())
+            } else {
+                mix(mix(mix(7, op_code(op)), ha), hb)
+            }
+        }
+        CoreTerm::Extract(hi, lo, a) => mix(mix(mix(8, *hi), *lo), term_hash(a)),
+        CoreTerm::Ite(c, a, b) => mix(mix(mix(9, term_hash(c)), term_hash(a)), term_hash(b)),
+    }
+}
+
+/// `t` with every reference `Ref(i)` replaced by `Ref(map[i])`.
+fn remap(t: &CoreTerm, map: &Vec<usize>) -> CoreTerm {
+    match t {
+        CoreTerm::Const(bits) => CoreTerm::Const(bits.clone()),
+        CoreTerm::Var(i) => CoreTerm::Var(*i),
+        CoreTerm::Ref(i) => CoreTerm::Ref(map[*i]),
+        CoreTerm::Not(a) => cnot(remap(a, map)),
+        CoreTerm::Bin(op, a, b) => cbin(copy_op(op), remap(a, map), remap(b, map)),
+        CoreTerm::Extract(hi, lo, a) => cextract(*hi, *lo, remap(a, map)),
+        CoreTerm::Ite(c, a, b) => cite(remap(c, map), remap(a, map), remap(b, map)),
+    }
+}
+
+/// The index of the variable of `Var(i)`; `usize::MAX` for any other term.
+fn var_of(t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Var(i) => *i,
+        _ => usize::MAX,
+    }
+}
+
+/// Whether every bit is 1.
+fn all_ones(bits: &Vec<bool>) -> bool {
+    let mut r = true;
+    let mut i: usize = 0;
+    while i < bits.len() {
+        if !bits[i] {
+            r = false;
+        }
+        i += 1;
+    }
+    r
+}
+
+/// Whether `t` is a constant of ones, or refers to a definition that is one.
+fn is_ones(defs: &Vec<CoreTerm>, t: &CoreTerm) -> bool {
+    match t {
+        CoreTerm::Const(bits) => all_ones(bits),
+        CoreTerm::Ref(k) => match &defs[*k] {
+            CoreTerm::Const(bits) => all_ones(bits),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// `x` if `t` refers to a definition `Not(Ref(x))`; `usize::MAX` otherwise.
+fn not_of(defs: &Vec<CoreTerm>, t: &CoreTerm) -> usize {
+    match t {
+        CoreTerm::Ref(k) => match &defs[*k] {
+            CoreTerm::Not(a) => ref_index(a, usize::MAX),
+            _ => usize::MAX,
+        },
+        _ => usize::MAX,
+    }
+}
+
+/// `out` with the factors of the product that the definition `k` stands for (definitions that
+/// are not a product of two definitions), and whether there are at most `cap` of them in all.
+fn factors(defs: &Vec<CoreTerm>, k: usize, out: Vec<usize>, cap: usize) -> (Vec<usize>, bool) {
+    let mut out = out;
+    if out.len() > cap {
+        return (out, false);
+    }
+    let mut x = usize::MAX;
+    let mut y = usize::MAX;
+    match &defs[k] {
+        CoreTerm::Bin(op, a, b) => {
+            if op_code(op) == 4 {
+                x = ref_index(a, usize::MAX);
+                y = ref_index(b, usize::MAX);
+            }
+        }
+        _ => {}
+    }
+    if x != usize::MAX && y != usize::MAX {
+        let (o1, ok) = factors(defs, x, out, cap);
+        if ok {
+            factors(defs, y, o1, cap)
+        } else {
+            (o1, false)
+        }
+    } else {
+        out.push(k);
+        let ok = out.len() <= cap;
+        (out, ok)
+    }
+}
+
+/// The factors of the product `t` if it is one of two definitions, and whether there are at
+/// most 16 of them.
+fn product_factors(defs: &Vec<CoreTerm>, t: &CoreTerm) -> (Vec<usize>, bool) {
+    match t {
+        CoreTerm::Bin(op, a, b) => {
+            let ka = ref_index(a, usize::MAX);
+            let kb = ref_index(b, usize::MAX);
+            if op_code(op) == 4 && ka != usize::MAX && kb != usize::MAX {
+                let (f1, ok) = factors(defs, ka, Vec::new(), 16);
+                if ok {
+                    factors(defs, kb, f1, 16)
+                } else {
+                    (f1, false)
+                }
+            } else {
+                (Vec::new(), false)
+            }
+        }
+        _ => (Vec::new(), false),
+    }
+}
+
+/// `v` sorted (insertion sort).
+fn sort_usize(v: Vec<usize>) -> Vec<usize> {
+    let mut v = v;
+    let mut i: usize = 1;
+    while i < v.len() {
+        let x = v[i];
+        let mut j = i;
+        while j > 0 && v[j - 1] > x {
+            v[j] = v[j - 1];
+            j -= 1;
+        }
+        v[j] = x;
+        i += 1;
+    }
+    v
+}
+
+/// `t` of width `w` (over the new definitions `defs`) with the rewrites that need no new
+/// definition.
+fn rewrite(defs: &Vec<CoreTerm>, t: &CoreTerm, w: usize) -> CoreTerm {
+    match t {
+        CoreTerm::Bin(op, a, b) => {
+            let ka = ref_index(a, usize::MAX);
+            let kb = ref_index(b, usize::MAX);
+            let c = op_code(op);
+            if c == 10 && term_eq(a, b) {
+                CoreTerm::Const(vec![true; 1])
+            } else if c == 3 && ((ka != usize::MAX && not_of(defs, b) == ka) || (kb != usize::MAX && not_of(defs, a) == kb)) {
+                CoreTerm::Const(vec![true; w])
+            } else if c == 4 && w > 0 && ka != usize::MAX && is_ones(defs, b) {
+                cneg(ka, w)
+            } else if c == 4 && w > 0 && kb != usize::MAX && is_ones(defs, a) {
+                cneg(kb, w)
+            } else if commutative(op) && kb < ka {
+                cbin(copy_op(op), copy_term(b), copy_term(a))
+            } else {
+                copy_term(t)
+            }
+        }
+        _ => copy_term(t),
+    }
+}
+
+/// The first definition in the list from `k` on (through `next`) of width `w` equal to `t`;
+/// `usize::MAX` if there is none.
+fn find_def(defs: &Vec<CoreTerm>, widths: &Vec<usize>, next: &Vec<usize>, k: usize, t: &CoreTerm, w: usize) -> usize {
+    let mut k = k;
+    let mut r = usize::MAX;
+    while k != usize::MAX && r == usize::MAX {
+        if widths[k] == w && norm_eq(&defs[k], t) {
+            r = k;
+        } else {
+            k = next[k];
+        }
+    }
+    r
+}
+
+/// The definition of `t` of width `w`: `k` if `t` is `Ref(k)`, an earlier equal one, or a new
+/// one, added to its bucket.
+fn mk_raw(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<usize>, t: CoreTerm, w: usize) -> (Vec<CoreTerm>, Vec<usize>, Vec<usize>, Vec<usize>, usize) {
+    let r = ref_index(&t, usize::MAX);
+    if r != usize::MAX {
+        return (defs, widths, head, next, r);
+    }
+    let h = term_hash(&t) % head.len();
+    let f = find_def(&defs, &widths, &next, head[h], &t, w);
+    if f != usize::MAX {
+        return (defs, widths, head, next, f);
+    }
+    let mut defs = defs;
+    let mut widths = widths;
+    let mut head = head;
+    let mut next = next;
+    let k = defs.len();
+    next.push(head[h]);
+    head[h] = k;
+    defs.push(t);
+    widths.push(w);
+    (defs, widths, head, next, k)
+}
+
+/// The definition of the term `t` of width `w` (over the new definitions), rewritten; a product
+/// of more than two factors becomes the product of its sorted factors, from the left.
+fn mk(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<usize>, t: &CoreTerm, w: usize) -> (Vec<CoreTerm>, Vec<usize>, Vec<usize>, Vec<usize>, usize) {
+    let r = rewrite(&defs, t, w);
+    let (fs, ok) = product_factors(&defs, &r);
+    if ok && fs.len() > 2 {
+        let fs = sort_usize(fs);
+        let mut defs = defs;
+        let mut widths = widths;
+        let mut head = head;
+        let mut next = next;
+        let mut acc = fs[0];
+        let mut i: usize = 1;
+        while i < fs.len() {
+            let (d1, w1, h1, n1, k) = mk_raw(defs, widths, head, next, cbin(BinOp::Mul, cref(acc), cref(fs[i])), w);
+            defs = d1;
+            widths = w1;
+            head = h1;
+            next = n1;
+            acc = k;
+            i += 1;
+        }
+        (defs, widths, head, next, acc)
+    } else {
+        mk_raw(defs, widths, head, next, r, w)
+    }
+}
+
+/// The widths of the definitions of `q`.
+fn def_widths(q: &CoreProblem) -> Vec<usize> {
+    let mut dw: Vec<usize> = Vec::new();
+    let mut j: usize = 0;
+    while j < q.defs.len() {
+        let w = term_width(&q.widths, &dw, &q.defs[j]);
+        dw.push(w);
+        j += 1;
+    }
+    dw
+}
+
+/// The substitution of `sb`, `ss` with `v := o` (by the definition `s`, `Var(v)`) if `s` is a
+/// variable `v` without one yet and `o` is not `Var(v)`; and whether it was added.
+fn add_sub(defs: &Vec<CoreTerm>, sb: Vec<usize>, ss: Vec<usize>, s: usize, o: usize) -> (Vec<usize>, Vec<usize>, bool) {
+    let mut sb = sb;
+    let mut ss = ss;
+    let v = var_of(&defs[s]);
+    if v != usize::MAX && sb[v] == usize::MAX && var_of(&defs[o]) != v {
+        sb[v] = o;
+        ss[v] = s;
+        (sb, ss, true)
+    } else {
+        (sb, ss, false)
+    }
+}
+
+/// The substitution of the assertions `v = t` of `q`: for a variable `v`, `sb[v]` is the
+/// definition `t` and `ss[v]` the definition `Var(v)` of the first such assertion; `usize::MAX`
+/// if there is none.
+fn substitution(q: &CoreProblem) -> (Vec<usize>, Vec<usize>) {
+    let mut sb: Vec<usize> = vec![usize::MAX; q.widths.len()];
+    let mut ss: Vec<usize> = vec![usize::MAX; q.widths.len()];
+    let mut i: usize = 0;
+    while i < q.asserts.len() {
+        let k = ref_index(&q.asserts[i], usize::MAX);
+        let mut x = usize::MAX;
+        let mut y = usize::MAX;
+        if k != usize::MAX {
+            match &q.defs[k] {
+                CoreTerm::Bin(op, a, b) => {
+                    if op_code(op) == 10 {
+                        x = ref_index(a, usize::MAX);
+                        y = ref_index(b, usize::MAX);
+                    }
+                }
+                _ => {}
+            }
+        }
+        if x != usize::MAX && y != usize::MAX {
+            let (s1, t1, done) = add_sub(&q.defs, sb, ss, x, y);
+            if done {
+                sb = s1;
+                ss = t1;
+            } else {
+                let (s2, t2, _) = add_sub(&q.defs, s1, t1, y, x);
+                sb = s2;
+                ss = t2;
+            }
+        }
+        i += 1;
+    }
+    (sb, ss)
+}
+
+/// The normalization of `q`.
+pub fn normalize(q: &CoreProblem) -> CoreProblem {
+    let dw = def_widths(q);
+    let (sb, ss) = substitution(q);
+    let mut defs: Vec<CoreTerm> = Vec::new();
+    let mut widths: Vec<usize> = Vec::new();
+    let mut head: Vec<usize> = vec![usize::MAX; 2 * q.defs.len() + 1];
+    let mut next: Vec<usize> = Vec::new();
+    let mut map: Vec<usize> = Vec::new();
+    let mut j: usize = 0;
+    while j < q.defs.len() {
+        let v = var_of(&q.defs[j]);
+        if v != usize::MAX && sb[v] < j && ss[v] != j {
+            let m = map[sb[v]];
+            map.push(m);
+        } else {
+            let t = remap(&q.defs[j], &map);
+            let (d1, w1, h1, n1, k) = mk(defs, widths, head, next, &t, dw[j]);
+            defs = d1;
+            widths = w1;
+            head = h1;
+            next = n1;
+            map.push(k);
+        }
+        j += 1;
+    }
+    let mut asserts: Vec<CoreTerm> = Vec::new();
+    let mut i: usize = 0;
+    while i < q.asserts.len() {
+        asserts.push(remap(&q.asserts[i], &map));
+        i += 1;
+    }
+    CoreProblem { widths: q.widths.clone(), defs, asserts }
 }
 
 // ---------------------------------------------------------------------------------------------

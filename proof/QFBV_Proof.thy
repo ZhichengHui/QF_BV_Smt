@@ -984,6 +984,60 @@ proof -
   qed
 qed
 
+text \<open>Within \<^const>\<open>sizes_ok\<close>, the numbers of variables, definitions and assertions of the core
+  problem are below \<open>2 ^ 55\<close> and its widths below \<open>2 ^ 56\<close>.\<close>
+theorem lower_lens55:
+  assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
+  shows \<open>length (cvar_widths (lower_problem_m p)) < 2 ^ 55\<close> \<open>length (CoreProblemL_defs (lower_problem_m p)) < 2 ^ 55\<close>
+    \<open>length (CoreProblemL_asserts (lower_problem_m p)) < 2 ^ 55\<close>
+    \<open>\<forall>w \<in> set (cvar_widths (lower_problem_m p)). w < 2 ^ 56\<close>
+proof -
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>ProblemL_defs p\<close> and ?A = \<open>ProblemL_asserts p\<close>
+  let ?ds = \<open>def_widths ?ws [] ?D\<close>
+  let ?SUM = \<open>sum_list (map (lweight ?ws ?ds) (?D @ ?A))\<close>
+  let ?EC = \<open>sum_list (map (ecount ?ws ?ds) (?D @ ?A))\<close>
+  obtain L2 cs where a: \<open>lasserts_res p = (L2, cs)\<close> by (cases \<open>lasserts_res p\<close>)
+  let ?q = \<open>lower_problem_m p\<close>
+  have q: \<open>?q = make_CoreProblemL (ProblemL_widths p) (fst L2) cs\<close> using lower_problem_m_eq[of p] a by simp
+  have qw: \<open>cvar_widths ?q = ?ws\<close> \<open>CoreProblemL_defs ?q = fst L2\<close> \<open>CoreProblemL_asserts ?q = cs\<close>
+    using q by (simp_all add: cvar_widths_def var_widths_def)
+  have B2: \<open>bnd L2\<close> using prob_bnd[OF assms] a by simp
+  have B0: \<open>bnd (fst (ldefs_res p))\<close> using ldefs_bnd[OF assms, of \<open>length ?D\<close>] by (simp add: ldefs_res_def)
+  have dwt: \<open>defs_wt ?ws [] ?D\<close> using assms(1) by (simp add: problem_wt_def Let_def)
+  have feq: \<open>foldl (ldefs_step p) (([], []), []) [0..<length ?D] = (fst (ldefs_res p), snd (ldefs_res p))\<close>
+    by (simp add: ldefs_res_def)
+  have I1: \<open>ldefs_inv p (length ?D) (fst (ldefs_res p), snd (ldefs_res p))\<close>
+    using ldefs_loop[OF dwt order_refl feq B0] .
+  have fa: \<open>foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<length ?A] = (L2, cs)\<close>
+    using a by (simp add: lasserts_res_def)
+  have I2: \<open>lasserts_inv p (snd (ldefs_res p)) (fst (ldefs_res p)) (length ?A) (L2, cs)\<close>
+    using lasserts_loop[OF assms(1) order_refl I1 fa B2] .
+  have len: \<open>length cs = length ?A\<close> using I2 by (simp add: lasserts_inv_def Let_def)
+  have ob: \<open>4 * (1 + sum_list ?ws + length ?ws + length ?D + length ?A + (4 * ?SUM + ?EC)) < 2 ^ 56\<close>
+  proof -
+    have \<open>sum_list (map (\<lambda>t. 4 * lweight ?ws ?ds t + ecount ?ws ?ds t) (?D @ ?A)) = 4 * ?SUM + ?EC\<close>
+      by (simp add: sum_list_addf sum_list_const_mult)
+    then show ?thesis using assms(2) by (simp add: sizes_ok_def ovf_bound_def Let_def)
+  qed
+  have l2: \<open>length (fst L2) \<le> 2 * ?SUM\<close>
+  proof -
+    have \<open>length (fst (fst (ldefs_res p))) \<le> 2 * sum_list (map (lweight ?ws ?ds) ?D)\<close>
+      using ldefs_len[OF assms(1) order_refl] by (simp add: ldefs_res_def)
+    moreover have \<open>length (fst L2) \<le> length (fst (fst (ldefs_res p))) + 2 * sum_list (map (lweight ?ws ?ds) ?A)\<close>
+      using lasserts_len[OF assms(1) order_refl] fa by simp
+    ultimately show ?thesis by simp
+  qed
+  show \<open>length (cvar_widths ?q) < 2 ^ 55\<close> using ob unfolding qw by simp
+  show \<open>length (CoreProblemL_defs ?q) < 2 ^ 55\<close> using ob l2 unfolding qw by simp
+  show \<open>length (CoreProblemL_asserts ?q) < 2 ^ 55\<close> using ob len unfolding qw by simp
+  show \<open>\<forall>w \<in> set (cvar_widths ?q). w < 2 ^ 56\<close>
+  proof
+    fix w assume \<open>w \<in> set (cvar_widths ?q)\<close>
+    then have \<open>w \<le> sum_list ?ws\<close> unfolding qw by (rule member_le_sum_list; simp)
+    then show \<open>w < 2 ^ 56\<close> using ob by simp
+  qed
+qed
+
 theorem lower_fuel_lt:
   assumes \<open>problem_wt p\<close> \<open>sizes_ok p\<close>
   shows \<open>fuel_bound (lower_problem_m p) < 2 ^ 64\<close>
@@ -1036,77 +1090,219 @@ text \<open>The fuel of the search loop of \<^verbatim>\<open>dpll\<close> on th
 definition dpll_fuel :: \<open>CoreProblemL \<Rightarrow> nat\<close> where
   \<open>dpll_fuel p \<equiv> 3 ^ fst (fst (encode_m p))\<close>
 
+subsection \<open>A strict bound on the fuel of the core solver\<close>
+
+text \<open>\<^verbatim>\<open>encode\<close> needs \<^const>\<open>fuel_bound\<close> below \<open>2 ^ 57\<close>; \<open>fuel_bound_lt\<close> gives only \<open>\<le> 2 ^ 57\<close>,
+  which is strict once the numbers of variables, definitions and assertions are below \<open>2 ^ 55\<close>.\<close>
+lemma fuel_bound_lt57:
+  assumes \<open>cproblem_wt p\<close>
+    \<open>2 + sum_list (cvar_widths p) + length (CoreProblemL_asserts p) +
+     sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)))
+                   (CoreProblemL_defs p @ CoreProblemL_asserts p)) < 2 ^ 56\<close>
+    \<open>length (cvar_widths p) < 2 ^ 55\<close> \<open>length (CoreProblemL_defs p) < 2 ^ 55\<close>
+    \<open>length (CoreProblemL_asserts p) < 2 ^ 55\<close>
+    \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p).
+       tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)) t < 2 ^ 56\<close>
+  shows \<open>fuel_bound p < 2 ^ 57\<close>
+proof -
+  obtain s vs where e: \<open>encode_m p = (s, vs)\<close> by (cases \<open>encode_m p\<close>)
+  note EC = encode_cnt[OF assms(1) e]
+  define ws where \<open>ws = cvar_widths p\<close>
+  define ds where \<open>ds = cdef_widths ws [] (CoreProblemL_defs p)\<close>
+  have c: \<open>fst s + length (snd s) < 2 ^ 56\<close> using EC assms(2) by (simp add: ws_def ds_def)
+  have w: \<open>\<forall>w \<in> set ws. w + 2 < 2 ^ 57\<close>
+  proof
+    fix w assume \<open>w \<in> set ws\<close>
+    then have \<open>w \<le> sum_list ws\<close> by (rule member_le_sum_list; simp)
+    then show \<open>w + 2 < 2 ^ 57\<close> using assms(2) by (simp add: ws_def)
+  qed
+  have cl: \<open>\<forall>c \<in> set (snd s). length c + 2 < 2 ^ 57\<close> using EC by (auto simp: cl4_def)
+  have tb: \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p). tbound ws ds t < 2 ^ 57\<close>
+  proof
+    fix t assume \<open>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p)\<close>
+    then have \<open>tbound ws ds t < 2 ^ 56\<close> using assms(6) by (simp add: ws_def ds_def)
+    then show \<open>tbound ws ds t < 2 ^ 57\<close> by simp
+  qed
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), 2 * length ws + 2, 2 * length (CoreProblemL_defs p) + 2,
+           2 * length (CoreProblemL_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
+          set (map (\<lambda>c. length c + 2) (snd s)) \<union>
+          set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
+  have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
+  have all: \<open>\<forall>x \<in> X. x < 2 ^ 57\<close>
+  proof
+    fix x assume \<open>x \<in> X\<close>
+    then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
+      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = 2 * length ws + 2\<close>
+      | \<open>x = 2 * length (CoreProblemL_defs p) + 2\<close> | \<open>x = 2 * length (CoreProblemL_asserts p) + 2\<close>
+      | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
+      | \<open>x \<in> set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
+      unfolding X_def by blast
+    then show \<open>x < 2 ^ 57\<close>
+    proof cases
+      case 1 then show ?thesis using c by simp
+    next
+      case 2 then show ?thesis using c by simp
+    next
+      case 3 then show ?thesis using c by simp
+    next
+      case 4 then show ?thesis using assms(3) by (simp add: ws_def)
+    next
+      case 5 then show ?thesis using assms(4) by simp
+    next
+      case 6 then show ?thesis using assms(5) by simp
+    next
+      case 7 then show ?thesis using w by auto
+    next
+      case 8 then show ?thesis using cl by auto
+    next
+      case 9 then show ?thesis using tb by auto
+    qed
+  qed
+  have M: \<open>Max X < 2 ^ 57\<close> using all by (simp add: Max_less_iff[OF fin ne])
+  have F: \<open>fuel_bound p = Max X\<close>
+    unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
+  show ?thesis using M F by simp
+qed
+
+text \<open>The elimination keeps the strict bound (as \<open>elim_fuel_lt\<close> keeps the other one).\<close>
+lemma elim_fuel_lt57:
+  assumes wt: \<open>cproblem_wt q\<close> and H: \<open>fb_hyps q\<close>
+    and L: \<open>length (cvar_widths q) < 2 ^ 55\<close> \<open>length (CoreProblemL_defs q) < 2 ^ 55\<close>
+      \<open>length (CoreProblemL_asserts q) < 2 ^ 55\<close>
+  shows \<open>fuel_bound (fst (elim_m q)) < 2 ^ 57\<close>
+proof -
+  interpret E: elim_prob q by unfold_locales (use wt H in \<open>simp_all add: fb_hyps_def\<close>)
+  note h = H[unfolded fb_hyps_def]
+  have cc: \<open>sum_list (map (ccount E.ews E.eds) E.D2) \<le> sum_list (map (ccount E.ews E.eds) E.eD)\<close>
+    by (rule sum_list_map_nth_le) (simp_all add: E.D2(1) E.en_def E.D2_size)
+  have \<open>fuel_bound E.q2 < 2 ^ 57\<close>
+  proof (rule fuel_bound_lt57)
+    show \<open>cproblem_wt E.q2\<close> by (rule E.q2_wt)
+    show \<open>2 + sum_list (cvar_widths E.q2) + length (CoreProblemL_asserts E.q2) +
+       sum_list (map (ccount (cvar_widths E.q2) (cdef_widths (cvar_widths E.q2) [] (CoreProblemL_defs E.q2)))
+                     (CoreProblemL_defs E.q2 @ CoreProblemL_asserts E.q2)) < 2 ^ 56\<close>
+      using h cc E.D2_defs by (simp add: E.q2_ws E.q2_parts E.ews_def E.eds_def E.eD_def E.eA_def)
+    show \<open>length (cvar_widths E.q2) < 2 ^ 55\<close> using L(1) by (simp add: E.q2_ws E.ews_def)
+    show \<open>length (CoreProblemL_defs E.q2) < 2 ^ 55\<close> using L(2) E.D2(1) by (simp add: E.q2_parts E.en_def E.eD_def)
+    show \<open>length (CoreProblemL_asserts E.q2) < 2 ^ 55\<close> using L(3) by (simp add: E.q2_parts E.eA_def)
+    show \<open>\<forall>t \<in> set (CoreProblemL_defs E.q2 @ CoreProblemL_asserts E.q2).
+         tbound (cvar_widths E.q2) (cdef_widths (cvar_widths E.q2) [] (CoreProblemL_defs E.q2)) t < 2 ^ 56\<close>
+    proof
+      fix t assume t: \<open>t \<in> set (CoreProblemL_defs E.q2 @ CoreProblemL_asserts E.q2)\<close>
+      have T: \<open>\<forall>t \<in> set (E.eD @ E.eA). tbound E.ews E.eds t < 2 ^ 56\<close>
+        using h by (simp add: E.ews_def E.eds_def E.eD_def E.eA_def)
+      show \<open>tbound (cvar_widths E.q2) (cdef_widths (cvar_widths E.q2) [] (CoreProblemL_defs E.q2)) t < 2 ^ 56\<close>
+      proof (cases \<open>t \<in> set E.eA\<close>)
+        case True
+        then show ?thesis using T E.D2_defs by (simp add: E.q2_ws E.q2_parts)
+      next
+        case False
+        then obtain j where j: \<open>j < E.en\<close> \<open>t = E.D2 ! j\<close> using t E.D2(1) by (auto simp: E.q2_parts in_set_conv_nth)
+        have \<open>tbound E.ews E.eds (E.eD ! j) < 2 ^ 56\<close> using T j(1) by (simp add: E.en_def)
+        then show ?thesis using E.D2_size[OF j(1)] E.D2_defs j by (simp add: E.q2_ws E.q2_parts)
+      qed
+    qed
+  qed
+  then show ?thesis by (simp add: E.q2_def)
+qed
+
+text \<open>The elimination keeps the variables.\<close>
+lemma elim_widths:
+  assumes \<open>cproblem_wt q\<close> \<open>length (CoreProblemL_defs q) < 2 ^ 64\<close>
+  shows \<open>cvar_widths (fst (elim_m q)) = cvar_widths q\<close>
+proof -
+  interpret E: elim_prob q by unfold_locales (use assms in simp_all)
+  show ?thesis using E.q2_ws by (simp add: E.q2_def E.ews_def)
+qed
+
 context QFBV_ctx
 begin
 
 subsection \<open>The solver meets its contract\<close>
 
-text \<open>The theorem: \<^const>\<open>csolve_contract\<close> holds whenever the translation's fuel covers
-  \<^const>\<open>csize_bound\<close> and \<^const>\<open>csize_bound\<close> is small enough for \<^verbatim>\<open>usize\<close>. \<^const>\<open>csize_bound\<close> is defined
-  in the specification from the problem alone. For a well-sorted problem it is at least
+text \<open>\<^verbatim>\<open>solve\<close> passes the model of \<^verbatim>\<open>solve_core\<close> to \<^verbatim>\<open>reconstruct\<close>, which needs its
+  vectors to be able to grow (\<^const>\<open>allvok\<close>): the contract of \<^verbatim>\<open>solve_core\<close> used by \<^verbatim>\<open>solve\<close>
+  is \<^const>\<open>csolve_contract\<close> with that fact added to a model.\<close>
+definition core_ok :: \<open>CoreProblemL \<Rightarrow> bool\<close> where
+  \<open>core_ok q \<equiv> csize_bound q \<le> urust_fuel \<and> fuel_bound q < 2 ^ 57 \<and> (\<forall>w \<in> set (cvar_widths q). w < 2 ^ 56) \<and>
+     dpll_fuel q < urust_fuel\<close>
+
+definition csolve_contract_v :: \<open>CoreProblem \<Rightarrow> ('s, Answer, 'abort) function_contract\<close> where
+  \<open>csolve_contract_v p \<equiv>
+     make_function_contract (can_alloc_reference \<star> \<langle>cproblem_wt (cprob_of p) \<and> core_ok (cprob_of p)\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star>
+          \<langle>case r of
+             Answer_Sat m \<Rightarrow> cis_model (cprob_of p) (vecs_of m) \<and> allvok m
+           | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> cis_model (cprob_of p) m)\<rangle>)\<close>
+
+text \<open>The theorem: \<^const>\<open>csolve_contract_v\<close> holds whenever the translation's fuel covers
+  \<^const>\<open>csize_bound\<close> and the search loop of \<^verbatim>\<open>dpll\<close> (\<^const>\<open>dpll_fuel\<close>), \<^const>\<open>fuel_bound\<close> is below
+  \<open>2 ^ 57\<close> and the widths below \<open>2 ^ 56\<close>. For a well-sorted problem \<^const>\<open>csize_bound\<close> is at least
   \<^const>\<open>fuel_bound\<close> (\<open>fuel_bound_le\<close>), which the proof uses; a problem that is not well-sorted
   makes the precondition of the contract false.\<close>
-(*OLD1
-theorem solve_core_spec:
-  assumes \<open>csize_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close> \<open>dpll_fuel p < urust_fuel\<close>
-  shows \<open>\<Gamma>; solve_core p \<Turnstile>\<^sub>F csolve_contract p\<close>
-proof (cases \<open>cproblem_wt p\<close>)
-  case True
-  have assms2: \<open>fuel_bound p \<le> urust_fuel\<close> \<open>fuel_bound p < 2 ^ 64\<close>
+theorem solve_core_spec_v:
+  shows \<open>\<Gamma>; solve_core p \<Turnstile>\<^sub>F csolve_contract_v p\<close>
+proof (cases \<open>cproblem_wt (cprob_of p) \<and> core_ok (cprob_of p)\<close>)
+  case TT: True
+  let ?P = \<open>cprob_of p\<close>
+  have True: \<open>cproblem_wt ?P\<close> using TT by simp
+  have assms: \<open>csize_bound ?P \<le> urust_fuel\<close> \<open>fuel_bound ?P < 2 ^ 57\<close>
+    \<open>\<forall>w \<in> set (cvar_widths ?P). w < 2 ^ 56\<close> \<open>dpll_fuel ?P < urust_fuel\<close>
+    using TT by (simp_all add: core_ok_def)
+  have assms2: \<open>fuel_bound ?P \<le> urust_fuel\<close> \<open>fuel_bound ?P < 2 ^ 57\<close>
     using fuel_bound_le[OF True] assms by (simp_all add: le_trans)
-  obtain s vs where e: \<open>encode_m p = (s, vs)\<close>
-    by (cases \<open>encode_m p\<close>)
+  obtain s vs where e: \<open>encode_m ?P = (s, vs)\<close>
+    by (cases \<open>encode_m ?P\<close>)
   note fb = fuel_bound_ge[OF e]
   have s64: \<open>fst s < 2 ^ 64\<close>
     using fb(1) assms2(2) by simp
-  have nv: \<open>unat (word_of_nat (fst s) :: 64 word) = fst s\<close>
-    using s64 by (simp add: unat_of_nat_eq)
-  have dpll_pre: \<open>cproblem_wt p \<Longrightarrow>
-      dpll_cs_ok (snd s) (fst s) \<and>
+  have dpll_pre:
+      \<open>dpll_cs_ok (snd s) (fst s) \<and>
       length (snd s) + 2 \<le> urust_fuel \<and> length (snd s) < 2 ^ 64 \<and>
       fst s + 2 \<le> urust_fuel \<and> 3 ^ fst s < urust_fuel \<and>
-      2 * length (snd s) \<le> urust_fuel \<and> 2 * length (snd s) < 2 ^ 64 \<and> 2 * fst s < 2 ^ 64\<close>
+      2 * length (snd s) \<le> urust_fuel \<and> 2 * length (snd s) < 2 ^ 57 \<and> 2 * fst s < 2 ^ 57\<close>
   proof -
-    have \<open>2 * fst s + 2 * length (snd s) \<le> fuel_bound p\<close> using fb(6) by simp
-    then have dbl: \<open>2 * length (snd s) \<le> urust_fuel \<and> 2 * length (snd s) < 2 ^ 64 \<and> 2 * fst s < 2 ^ 64\<close>
+    have \<open>2 * fst s + 2 * length (snd s) \<le> fuel_bound ?P\<close> using fb(6) by simp
+    then have dbl: \<open>2 * length (snd s) \<le> urust_fuel \<and> 2 * length (snd s) < 2 ^ 57 \<and> 2 * fst s < 2 ^ 57\<close>
       using assms2 by linarith
-    assume \<open>cproblem_wt p\<close>
-    then show ?thesis
-      using encode_wf[OF _ e s64] fb assms2 assms(3) e dbl
+    show ?thesis
+      using encode_wf[OF True e s64] fb assms2 assms(4) e dbl
       by (fastforce simp: dpll_cs_ok_def dpll_fuel_def)
   qed
-  have unsat': \<open>\<not> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)) \<Longrightarrow> \<forall>m. cis_assignment p m \<longrightarrow> \<not> csatisfies p m\<close>
-    if \<open>cproblem_wt p\<close>
-    using unsat_answer[OF that e s64] by blast
-  have rm_pre: \<open>cproblem_wt p \<Longrightarrow>
-      (\<forall>ls \<in> set vs. lits_lt (fst s) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 64) \<and>
-      length vs + 2 \<le> urust_fuel \<and> length vs < 2 ^ 64\<close>
+  have unsat': \<open>\<not> (\<exists>\<sigma>. cnf_sem \<sigma> (snd s)) \<Longrightarrow> \<forall>m. \<not> cis_model ?P m\<close>
+    using unsat_answer[OF True e s64] by (auto simp: cis_model_def)
+  have rm_pre:
+      \<open>(\<forall>ls \<in> set vs. lits_lt (fst s) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 56) \<and>
+      length vs + 2 \<le> urust_fuel \<and> length vs < 2 ^ 56\<close>
   proof -
-    assume cwt: \<open>cproblem_wt p\<close>
-    note w = encode_wf[OF cwt e s64]
-    have \<open>\<forall>ls \<in> set vs. length ls + 2 \<le> fuel_bound p\<close>
-      using w fb(4) by (auto simp add: in_set_conv_nth cvar_widths_def) (blast intro: nth_mem)
-    moreover have \<open>length vs + 2 \<le> fuel_bound p\<close>
-      using w fb(5) by (simp add: cvar_widths_def)
+    note w = encode_wf[OF True e s64]
+    have lw: \<open>\<forall>ls \<in> set vs. length ls + 2 \<le> fuel_bound ?P \<and> length ls < 2 ^ 56\<close>
+      using w fb(4) assms(3) by (auto simp add: in_set_conv_nth cvar_widths_def; meson nth_mem)
+    moreover have \<open>2 * length vs + 2 \<le> fuel_bound ?P\<close>
+      using w fb_facts(3)[of ?P] by simp
     ultimately show ?thesis
       using w assms2 by fastforce
   qed
+  have sat': \<open>length a = fst s \<Longrightarrow> \<forall>v < length a. a ! v \<noteq> None \<Longrightarrow> cnf_sem (sigma_of a) (snd s) \<Longrightarrow>
+      cis_model ?P (read_model_m a vs)\<close> for a
+    using sat_answer[OF True e s64, of a] by (simp add: cis_model_def)
   show ?thesis
-    apply (crush_boot f: solve_core_def contract: csolve_contract_def)
-    apply (crush_base specs add: encode_spec dpll_top_spec read_model_spec
-        contracts add: encode_contract_def dpll_top_contract_def read_model_contract_def
+    apply (crush_boot f: solve_core_def contract: csolve_contract_v_def)
+    apply (crush_base contracts add: encode_contract_def dpll_top_contract_def read_model_contract_def
         split: option.splits
-        simp add: e assms2 nv Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
-    using assms2 dpll_pre rm_pre unsat' sat_answer[OF _ e s64]
-    by (auto simp: cis_model_def split: option.splits)
+        simp add: e assms2 TT st_of_def Cnf_Cnf_clauses_lens_view_update_modify Cnf_Cnf_num_vars_lens_view_update_modify)
+    apply (all \<open>(use dpll_pre rm_pre unsat' sat' in \<open>auto simp: dpll_cs_ok_def\<close>)?\<close>)
+    using assms(2) by simp
 next
   case False
+  then have F: \<open>(cproblem_wt (cprob_of p) \<and> core_ok (cprob_of p)) = False\<close> by simp
   show ?thesis
-    apply (crush_boot f: solve_core_def contract: csolve_contract_def)
-    using False by simp
+    apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
+    apply (subst wp_sstriple_iff)
+    apply (simp add: csolve_contract_v_def F apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    done
 qed
 
-OLD1*)
 section \<open>Each step of the problem loop meets \<open>lower\<close>'s contract\<close>
 
 text \<open>For every definition and assertion, the recursion depth is within the fuel and the rewriting
@@ -1337,6 +1533,10 @@ proof (cases \<open>lp_pre p\<close>)
   have WA: \<open>unat (word_of_nat (rvec_length (Problem_asserts p)) :: 64 word) = rvec_length (Problem_asserts p)\<close>
     using UL(2) by (simp add: unat_of_nat_eq)
   note L' = L[simplified]
+  have PR: \<open>ldefs_part ?P (rvec_length (Problem_defs p)) = ldefs_res ?P\<close>
+    using ldefs_part_res[of ?P] by simp
+  have AR: \<open>lasserts_part ?P (rvec_length (Problem_asserts p)) = lasserts_res ?P\<close>
+    using lasserts_part_res[of ?P] by simp
   have I1: \<open>\<And>j. j < rvec_length (Problem_defs p) \<Longrightarrow> Suc j < 2 ^ 64\<close> using L(2) by simp
   have I2: \<open>\<And>i. i < rvec_length (Problem_asserts p) \<Longrightarrow> Suc i < 2 ^ 64\<close> using L(4) by simp
   have FIN: \<open>cprob_of (make_CoreProblem w d a) = lower_problem_m ?P\<close>
@@ -1364,16 +1564,30 @@ proof (cases \<open>lp_pre p\<close>)
       apply (crush_base simp add: ws SPd push_not_None low_res_def word_less_nat_alt)
       apply (all \<open>(simp only: unat_succ_p[OF _ UL(1)])?\<close>)
       apply (auto simp add: lst_of_def split_def Let_def ldefs_part_snd_len unat_of_nat_eq SPd prod_eq_iff push_the L' WD SPd[simplified])
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
+      subgoal using L(2) by simp
+      subgoal for gl l gd dm gj j asserts_ref i_ref
+        apply (ucincl_discharge\<open>rule_tac
+          INV=\<open>\<lambda>c. \<Squnion>gl l gd dm ga asl gi i. l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>l \<star> dm_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dm \<star>
+               asserts_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>asl \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> can_alloc_reference \<star>
+               \<langle>unat i \<le> rvec_length (Problem_asserts p) \<and> lower_ok l \<and> lst_of l = fst (lasserts_part ?P (unat i)) \<and>
+                map unat (rvec_elems dm) = snd (ldefs_res ?P) \<and>
+                map ct_of (rvec_elems asl) = snd (lasserts_part ?P (unat i)) \<and> vok asl \<and> rvec_length asl = unat i \<and>
+                rvec_length (Problem_asserts p) - unat i \<le> c\<rangle>\<close> and
+          INV'=\<open>\<lambda>c. \<Squnion>gl l gd dm ga asl gi i. l_ref \<mapsto>\<langle>\<top>\<rangle> gl\<down>l \<star> dm_ref \<mapsto>\<langle>\<top>\<rangle> gd\<down>dm \<star>
+               asserts_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>asl \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> j_ref \<mapsto>\<langle>\<top>\<rangle> gj\<down>j \<star> can_alloc_reference \<star>
+               \<langle>unat i < rvec_length (Problem_asserts p) \<and> lower_ok l \<and> lst_of l = fst (lasserts_part ?P (unat i)) \<and>
+                map unat (rvec_elems dm) = snd (ldefs_res ?P) \<and>
+                map ct_of (rvec_elems asl) = snd (lasserts_part ?P (unat i)) \<and> vok asl \<and> rvec_length asl = unat i \<and>
+                rvec_length asl < 2 ^ 56 \<and>
+                rvec_length (Problem_asserts p) - unat i \<le> Suc c\<rangle>\<close> and
+          \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
+          in wp_bounded_while_framedI\<close>)
+        apply (crush_base simp add: ws APd push_not_None low_res_def word_less_nat_alt Lower_Lower_defs_focus_view_update_modify Lower_Lower_defs_lens_view_update_modify)
+        apply (all \<open>(simp only: unat_succ_p[OF _ UL(2)])?\<close>)
+        apply (auto simp add: lst_of_def split_def Let_def lasserts_part_snd_len unat_of_nat_eq APd prod_eq_iff push_the L' WA PR AR APd[simplified])
+        subgoal using L(4) by simp
+        subgoal by (simp add: lower_problem_m_eq)
+        done
       done
     done
 next
@@ -1397,51 +1611,52 @@ text \<open>\<^const>\<open>solve\<close> only calls \<^const>\<open>lower_probl
   \<^const>\<open>reconstruct\<close>; their specifications are given to the automation explicitly.\<close>
 declare lower_spec cref_spec lower_problem_spec [crush_specs del]
 
-(*OLD2
 theorem solve_spec:
-  assumes \<open>size_bound p \<le> urust_fuel\<close> \<open>sizes_ok p\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m p))) < urust_fuel\<close>
+  assumes \<open>size_bound (prob_of p) \<le> urust_fuel\<close> \<open>sizes_ok (prob_of p)\<close>
+    \<open>dpll_fuel (fst (elim_m (lower_problem_m (prob_of p)))) < urust_fuel\<close>
   shows \<open>\<Gamma>; solve p \<Turnstile>\<^sub>F solve_contract p\<close>
-proof (cases \<open>problem_wt p\<close>)
+proof (cases \<open>problem_wt (prob_of p)\<close>)
   case True
-  have bnd: \<open>bnd (fst (lasserts_res p))\<close> using prob_bnd[OF True assms(2)] .
+  let ?P = \<open>prob_of p\<close>
+  have bnd: \<open>bnd (fst (lasserts_res ?P))\<close> using prob_bnd[OF True assms(2)] .
   \<comment> \<open>Abstract the rewritten problem and its elimination to variables, so the automation works on
-      a small goal instead of the (very large) unfolded \<^term>\<open>lower_problem_m p\<close>.\<close>
-  obtain q where q: \<open>lower_problem_m p = q\<close> by blast
+      a small goal instead of the (very large) unfolded \<^term>\<open>lower_problem_m ?P\<close>.\<close>
+  obtain q where q: \<open>lower_problem_m ?P = q\<close> by blast
   obtain q2 kd mk where e: \<open>elim_m q = (q2, kd, mk)\<close> by (cases \<open>elim_m q\<close>) auto
   have sz: \<open>csize_bound q \<le> urust_fuel\<close> using lower_size_bound[OF True bnd] assms(1) q by simp
   have cwt: \<open>cproblem_wt q\<close> using lower_problem_correct(1)[OF True bnd] q by simp
   have H: \<open>fb_hyps q\<close> using lower_fb_hyps[OF True assms(2)] q by simp
+  note LL = lower_lens55[OF True assms(2), unfolded q]
   have fq: \<open>fuel_bound q \<le> urust_fuel\<close> using fuel_bound_le[OF cwt] sz by simp
   note EF = elim_facts[OF cwt H fq e]
-  have sz2: \<open>csize_bound q2 \<le> urust_fuel\<close> using EF(3) sz by simp
-  have df: \<open>dpll_fuel q2 < urust_fuel\<close> using assms(3) q e by simp
-  have cm: \<open>cis_model q m = is_model p m\<close> for m using lower_problem_correct(2)[OF True bnd] q by simp
-  have unsat: \<open>\<forall>m. \<not> cis_model q2 m \<Longrightarrow> \<forall>m. \<not> is_model p m\<close> using EF(5) cm by blast
-  have sat: \<open>cis_model q2 m2 \<Longrightarrow> recon_pre urust_fuel q kd mk q2 m2 \<and> is_model p (reconstruct_m q kd mk q2 m2)\<close> for m2
-    using EF(6) cm by blast
+  have f57: \<open>fuel_bound q2 < 2 ^ 57\<close> using elim_fuel_lt57[OF cwt H LL(1-3)] e by simp
+  have ws2: \<open>cvar_widths q2 = cvar_widths q\<close> using elim_widths[OF cwt] LL(2) e by simp
+  have ok2: \<open>core_ok q2\<close>
+    using EF(3) sz f57 ws2 LL(4) assms(3) q e by (simp add: core_ok_def)
+  have cm: \<open>cis_model q m = is_model ?P m\<close> for m using lower_problem_correct(2)[OF True bnd] q by simp
+  have unsat: \<open>\<forall>m. \<not> cis_model q2 m \<Longrightarrow> \<forall>m. \<not> is_model ?P m\<close> using EF(5) cm by blast
   have SP: \<open>map unat kind = kd \<Longrightarrow> map unat mark = mk \<Longrightarrow> cis_model q2 m2 \<Longrightarrow>
       recon_pre urust_fuel q (map unat kind) (map unat mark) q2 m2\<close>
     \<open>map unat kind = kd \<Longrightarrow> map unat mark = mk \<Longrightarrow> cis_model q2 m2 \<Longrightarrow>
-      is_model p (reconstruct_m q (map unat kind) (map unat mark) q2 m2)\<close> for kind mark :: \<open>64 word list\<close> and m2
-    using sat[of m2] by simp_all
-  have F64: \<open>fuel_bound q < 18446744073709551616\<close> using EF(1) by simp
+      is_model ?P (reconstruct_m q (map unat kind) (map unat mark) q2 m2)\<close> for kind mark :: \<open>64 word list\<close> and m2
+    using EF(6)[of m2] cm by simp_all
   show ?thesis
     apply (crush_boot f: solve_def contract: solve_contract_def)
-    apply (crush_base specs add: lower_problem_spec elim_spec solve_core_spec[OF sz2 EF(4) df] reconstruct_spec
-        contracts add: lower_problem_contract_def elim_contract_def csolve_contract_def reconstruct_contract_def
-        simp add: lp_pre_def True assms q cwt fq F64 EF(2) e SP unsat split: Answer.splits)
-    apply (all \<open>use unsat sat in \<open>auto split: Answer.splits\<close>\<close>)
+    apply (crush_base specs add: lower_problem_spec elim_spec solve_core_spec_v reconstruct_spec
+        contracts add: lower_problem_contract_def elim_contract_def csolve_contract_v_def reconstruct_contract_def
+        simp add: lp_pre_def True assms q cwt fq H EF(2) ok2 e split: Answer.splits)
+    apply (all \<open>use unsat SP in \<open>auto split: Answer.splits\<close>\<close>)
     done
 next
   case False
-  then have F: \<open>problem_wt p = False\<close> by simp
+  then have F: \<open>problem_wt (prob_of p) = False\<close> by simp
   show ?thesis
     apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
     apply (subst wp_sstriple_iff)
     apply (simp add: solve_contract_def Let_def F apure_precise_False asepconj_bot_zero2 bot_aentails_all)
     done
 qed
-OLD2*)
+
 end
 
 subsection \<open>The specification over all instances with enough fuel\<close>
@@ -1461,21 +1676,19 @@ lemma QFBV_ctxI:
 text \<open>The statement of the specification, \<^const>\<open>solve_correct\<close> in \<^verbatim>\<open>QFBV_Spec\<close>. The bound on
   the fuel is \<^const>\<open>size_bound\<close> \<open>p\<close> plus \<^const>\<open>dpll_fuel\<close> of the rewritten problem after the
   elimination, which
-  \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> \<open>p\<close> supplies its \<open>< 2 ^ 64\<close> hypothesis.\<close>
-(*OLD3
+  \<open>QFBV_ctx.solve_spec\<close> needs; \<^const>\<open>sizes_ok\<close> supplies its bounds.\<close>
 theorem solve_correct:
   shows \<open>solve_correct \<Gamma>\<close>
 proof (unfold solve_correct_def, intro allI impI)
   fix p :: Problem
-  assume \<open>problem_wt p \<and> sizes_ok p\<close>
-  then have ov: \<open>sizes_ok p\<close> by simp
+  assume \<open>problem_wt (prob_of p) \<and> sizes_ok (prob_of p)\<close>
+  then have ov: \<open>sizes_ok (prob_of p)\<close> by simp
   have \<open>\<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
-    if \<open>size_bound p + Suc (dpll_fuel (fst (elim_m (lower_problem_m p)))) \<le> fuel\<close> for fuel
+    if \<open>size_bound (prob_of p) + Suc (dpll_fuel (fst (elim_m (lower_problem_m (prob_of p))))) \<le> fuel\<close> for fuel
     by (rule QFBV_ctx.solve_spec[OF QFBV_ctxI _ ov]) (use that in simp_all)
   then show \<open>\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p\<close>
-    by (intro exI[of _ \<open>size_bound p + Suc (dpll_fuel (fst (elim_m (lower_problem_m p))))\<close>]) simp
+    by (intro exI[of _ \<open>size_bound (prob_of p) + Suc (dpll_fuel (fst (elim_m (lower_problem_m (prob_of p)))))\<close>]) simp
 qed
-OLD3*)
 
 end
 

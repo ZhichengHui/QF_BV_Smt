@@ -2335,8 +2335,6 @@ fn rewrite(defs: &Vec<CoreTerm>, t: &CoreTerm, w: usize) -> CoreTerm {
                 cneg(ka, w)
             } else if c == 4 && w > 0 && kb != usize::MAX && is_ones(defs, a) {
                 cneg(kb, w)
-            } else if commutative(op) && kb < ka {
-                cbin(copy_op(op), copy_term(b), copy_term(a))
             } else {
                 copy_term(t)
             }

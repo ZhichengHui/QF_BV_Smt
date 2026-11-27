@@ -8,74 +8,75 @@ text \<open>Functional models of the decision heap of \<^verbatim>\<open>dpll\<c
   \<^verbatim>\<open>heap_rebuild\<close>, \<^verbatim>\<open>heap_insert\<close>, \<^verbatim>\<open>heap_pop\<close>, \<^verbatim>\<open>heap_pick\<close>, \<^verbatim>\<open>heap_back\<close>,
   \<^verbatim>\<open>heap_bumped\<close>), statement by statement, on \<open>nat list\<close>s: \<open>heap\<close> lists variables,
   \<open>hp ! v\<close> is the position of \<open>v\<close> in \<open>heap\<close> or \<open>NONE_POS\<close> (\<^verbatim>\<open>usize::MAX\<close>), \<open>act\<close> are
-  the activities. A trail is modelled by the list of its variables (\<open>map (\<lambda>l. unat (Lit_var l)) t\<close>).
+  the activities and \<open>rv\<close> (\<^verbatim>\<open>rev\<close>) the tie-break direction (ties of activity go to the lower index, to
+  the higher one if \<open>rv\<close>). A trail is modelled by the list of its variables (\<open>map (\<lambda>l. unat (Lit_var l)) t\<close>).
   The facts are the ones the contracts need: the position invariant \<open>hinv\<close>, the set of elements,
   the bounds of every index; the heap order is not needed for correctness and is not proved.\<close>
 
 definition NONE_POS :: nat where
   \<open>NONE_POS = 2 ^ 64 - 1\<close>
 
-definition before_m :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool\<close> where
-  \<open>before_m act u v \<longleftrightarrow> act ! u > act ! v \<or> (act ! u = act ! v \<and> u < v)\<close>
+definition before_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool\<close> where
+  \<open>before_m act rv u v \<longleftrightarrow> act ! u > act ! v \<or> (act ! u = act ! v \<and> (if rv then v < u else u < v))\<close>
 
 subsection \<open>Models\<close>
 
 text \<open>The loop of \<^verbatim>\<open>heap_up\<close>: moves the hole at \<open>i\<close> up while \<open>v\<close> comes before its parent.\<close>
-function up_loop :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat\<close> where
-  \<open>up_loop act v heap hp i =
-    (if 0 < i \<and> before_m act v (heap ! ((i - 1) div 2)) then
+function up_loop :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat\<close> where
+  \<open>up_loop act rv v heap hp i =
+    (if 0 < i \<and> before_m act rv v (heap ! ((i - 1) div 2)) then
        (let u = heap ! ((i - 1) div 2) in
-        up_loop act v (heap[i := u]) (hp[u := i]) ((i - 1) div 2))
+        up_loop act rv v (heap[i := u]) (hp[u := i]) ((i - 1) div 2))
      else (heap, hp, i))\<close>
   by pat_completeness auto
 termination
-  by (relation \<open>measure (\<lambda>(_, _, _, _, i). i)\<close>) auto
+  by (relation \<open>measure (\<lambda>(_, _, _, _, _, i). i)\<close>) auto
 
 declare up_loop.simps [simp del]
 
-definition heap_up_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>heap_up_m act heap hp i =
+definition heap_up_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>heap_up_m act rv heap hp i =
     (let v = heap ! i in
-     case up_loop act v heap hp i of (heap, hp, i) \<Rightarrow> (heap[i := v], hp[v := i]))\<close>
+     case up_loop act rv v heap hp i of (heap, hp, i) \<Rightarrow> (heap[i := v], hp[v := i]))\<close>
 
 text \<open>The loop of \<^verbatim>\<open>heap_down\<close>: moves the hole at \<open>i\<close> down while a child comes before \<open>v\<close>.\<close>
-function down_loop :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat\<close> where
-  \<open>down_loop act v heap hp i =
+function down_loop :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat\<close> where
+  \<open>down_loop act rv v heap hp i =
     (let l = 2 * i + 1 in
      if length heap \<le> l then (heap, hp, i)
      else
-       (let c = (if l + 1 < length heap \<and> before_m act (heap ! (l + 1)) (heap ! l) then l + 1 else l) in
-        if \<not> before_m act (heap ! c) v then (heap, hp, i)
+       (let c = (if l + 1 < length heap \<and> before_m act rv (heap ! (l + 1)) (heap ! l) then l + 1 else l) in
+        if \<not> before_m act rv (heap ! c) v then (heap, hp, i)
         else
           (let u = heap ! c in
-           down_loop act v (heap[i := u]) (hp[u := i]) c)))\<close>
+           down_loop act rv v (heap[i := u]) (hp[u := i]) c)))\<close>
   by pat_completeness auto
 termination
-  by (relation \<open>measure (\<lambda>(_, _, heap, _, i). length heap - i)\<close>) (auto simp: Let_def)
+  by (relation \<open>measure (\<lambda>(_, _, _, heap, _, i). length heap - i)\<close>) (auto simp: Let_def)
 
 declare down_loop.simps [simp del]
 
-definition heap_down_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>heap_down_m act heap hp i =
+definition heap_down_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>heap_down_m act rv heap hp i =
     (let v = heap ! i in
-     case down_loop act v heap hp i of (heap, hp, i) \<Rightarrow> (heap[i := v], hp[v := i]))\<close>
+     case down_loop act rv v heap hp i of (heap, hp, i) \<Rightarrow> (heap[i := v], hp[v := i]))\<close>
 
 text \<open>The loop of \<^verbatim>\<open>heap_rebuild\<close>, from \<open>i\<close> down: \<open>i -= 1\<close>, then \<^verbatim>\<open>heap_down\<close> at \<open>i\<close>.\<close>
-fun rebuild_loop :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>rebuild_loop act heap hp 0 = (heap, hp)\<close>
-| \<open>rebuild_loop act heap hp (Suc i) =
-    (case heap_down_m act heap hp i of (h2, p2) \<Rightarrow> rebuild_loop act h2 p2 i)\<close>
+fun rebuild_loop :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>rebuild_loop act rv heap hp 0 = (heap, hp)\<close>
+| \<open>rebuild_loop act rv heap hp (Suc i) =
+    (case heap_down_m act rv heap hp i of (h2, p2) \<Rightarrow> rebuild_loop act rv h2 p2 i)\<close>
 
-definition heap_rebuild_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>heap_rebuild_m act heap hp = rebuild_loop act heap hp (length heap div 2)\<close>
+definition heap_rebuild_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>heap_rebuild_m act rv heap hp = rebuild_loop act rv heap hp (length heap div 2)\<close>
 
-definition heap_insert_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>heap_insert_m act heap hp v =
+definition heap_insert_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>heap_insert_m act rv heap hp v =
     (if hp ! v \<noteq> NONE_POS then (heap, hp)
-     else (let i = length heap in heap_up_m act (heap @ [v]) hp i))\<close>
+     else (let i = length heap in heap_up_m act rv (heap @ [v]) hp i))\<close>
 
-definition heap_pop_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list \<times> nat option\<close> where
-  \<open>heap_pop_m act heap hp =
+definition heap_pop_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list \<times> nat option\<close> where
+  \<open>heap_pop_m act rv heap hp =
     (if heap = [] then (heap, hp, None)
      else
        (let last = last heap in
@@ -86,46 +87,46 @@ definition heap_pop_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> na
            let hp = hp[top := NONE_POS] in
            let heap = heap[0 := last] in
            let hp = hp[last := 0] in
-           case heap_down_m act heap hp 0 of (h2, p2) \<Rightarrow> (h2, p2, Some top))))\<close>
+           case heap_down_m act rv heap hp 0 of (h2, p2) \<Rightarrow> (h2, p2, Some top))))\<close>
 
-lemma up_loop_length: \<open>up_loop act v heap hp i = (h, p, j) \<Longrightarrow> length h = length heap\<close>
-proof (induction act v heap hp i arbitrary: h p j rule: up_loop.induct)
-  case (1 act v heap hp i)
-  then show ?case by (cases \<open>0 < i \<and> before_m act v (heap ! ((i - 1) div 2))\<close>)
-      (auto simp: up_loop.simps[of act v heap hp i] Let_def)
+lemma up_loop_length: \<open>up_loop act rv v heap hp i = (h, p, j) \<Longrightarrow> length h = length heap\<close>
+proof (induction act rv v heap hp i arbitrary: h p j rule: up_loop.induct)
+  case (1 act rv v heap hp i)
+  then show ?case by (cases \<open>0 < i \<and> before_m act rv v (heap ! ((i - 1) div 2))\<close>)
+      (auto simp: up_loop.simps[of act rv v heap hp i] Let_def)
 qed
 
 text \<open>One step of the loop of \<^verbatim>\<open>heap_down\<close>, with the child \<open>c\<close> it compares.\<close>
 lemma down_loop_eq:
-  assumes \<open>c = (if 2 * i + 1 + 1 < length heap \<and> before_m act (heap ! (2 * i + 1 + 1)) (heap ! (2 * i + 1))
+  assumes \<open>c = (if 2 * i + 1 + 1 < length heap \<and> before_m act rv (heap ! (2 * i + 1 + 1)) (heap ! (2 * i + 1))
     then 2 * i + 1 + 1 else 2 * i + 1)\<close>
-  shows \<open>down_loop act v heap hp i =
-    (if length heap \<le> 2 * i + 1 \<or> \<not> before_m act (heap ! c) v then (heap, hp, i)
-     else down_loop act v (heap[i := heap ! c]) (hp[heap ! c := i]) c)\<close>
+  shows \<open>down_loop act rv v heap hp i =
+    (if length heap \<le> 2 * i + 1 \<or> \<not> before_m act rv (heap ! c) v then (heap, hp, i)
+     else down_loop act rv v (heap[i := heap ! c]) (hp[heap ! c := i]) c)\<close>
   using assms by (subst down_loop.simps) (simp add: Let_def)
 
-lemma down_loop_length: \<open>down_loop act v heap hp i = (h, p, j) \<Longrightarrow> length h = length heap\<close>
-proof (induction act v heap hp i arbitrary: h p j rule: down_loop.induct)
-  case (1 act v heap hp i)
-  define c where \<open>c = (if 2 * i + 1 + 1 < length heap \<and> before_m act (heap ! (2 * i + 1 + 1)) (heap ! (2 * i + 1))
+lemma down_loop_length: \<open>down_loop act rv v heap hp i = (h, p, j) \<Longrightarrow> length h = length heap\<close>
+proof (induction act rv v heap hp i arbitrary: h p j rule: down_loop.induct)
+  case (1 act rv v heap hp i)
+  define c where \<open>c = (if 2 * i + 1 + 1 < length heap \<and> before_m act rv (heap ! (2 * i + 1 + 1)) (heap ! (2 * i + 1))
     then 2 * i + 1 + 1 else 2 * i + 1)\<close>
   show ?case
-  proof (cases \<open>length heap \<le> 2 * i + 1 \<or> \<not> before_m act (heap ! c) v\<close>)
+  proof (cases \<open>length heap \<le> 2 * i + 1 \<or> \<not> before_m act rv (heap ! c) v\<close>)
     case True
     then show ?thesis using 1(2) down_loop_eq[OF c_def] by simp
   next
     case False
-    then have \<open>down_loop act v (heap[i := heap ! c]) (hp[heap ! c := i]) c = (h, p, j)\<close>
+    then have \<open>down_loop act rv v (heap[i := heap ! c]) (hp[heap ! c := i]) c = (h, p, j)\<close>
       using 1(2) down_loop_eq[OF c_def] by simp
     then show ?thesis using 1(1)[OF refl _ c_def _ refl] False by simp
   qed
 qed
 
-lemma heap_down_m_length: \<open>heap_down_m act heap hp i = (h, p) \<Longrightarrow> length h = length heap\<close>
+lemma heap_down_m_length: \<open>heap_down_m act rv heap hp i = (h, p) \<Longrightarrow> length h = length heap\<close>
   by (auto simp: heap_down_m_def Let_def split: prod.splits dest: down_loop_length)
 
 lemma heap_pop_m_length:
-  assumes \<open>heap_pop_m act heap hp = (h, p, Some x)\<close>
+  assumes \<open>heap_pop_m act rv heap hp = (h, p, Some x)\<close>
   shows \<open>length h < length heap\<close>
 proof -
   have ne: \<open>heap \<noteq> []\<close> using assms by (auto simp: heap_pop_m_def)
@@ -135,7 +136,7 @@ proof -
     then show ?thesis using assms ne by (auto simp: heap_pop_m_def Let_def)
   next
     case False
-    obtain h2 p2 where D: \<open>heap_down_m act ((butlast heap)[0 := last heap])
+    obtain h2 p2 where D: \<open>heap_down_m act rv ((butlast heap)[0 := last heap])
         ((hp[butlast heap ! 0 := NONE_POS])[last heap := 0]) 0 = (h2, p2)\<close>
       by (metis surj_pair)
     then have \<open>h = h2\<close> using assms ne False by (simp add: heap_pop_m_def Let_def)
@@ -145,53 +146,53 @@ qed
 
 text \<open>The loop of \<^verbatim>\<open>heap_pick\<close>: pops until the heap is empty or the popped variable is
   unassigned.\<close>
-function heap_pick_m :: \<open>nat list \<Rightarrow> bool option list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list \<times> nat option\<close> where
-  \<open>heap_pick_m act a heap hp =
-    (case heap_pop_m act heap hp of
+function heap_pick_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> bool option list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<times> nat list \<times> nat option\<close> where
+  \<open>heap_pick_m act rv a heap hp =
+    (case heap_pop_m act rv heap hp of
        (h2, p2, None) \<Rightarrow> (h2, p2, None)
-     | (h2, p2, Some x) \<Rightarrow> (if a ! x = None then (h2, p2, Some x) else heap_pick_m act a h2 p2))\<close>
+     | (h2, p2, Some x) \<Rightarrow> (if a ! x = None then (h2, p2, Some x) else heap_pick_m act rv a h2 p2))\<close>
   by pat_completeness auto
 termination
-  by (relation \<open>measure (\<lambda>(_, _, heap, _). length heap)\<close>) (auto dest: heap_pop_m_length[OF sym])
+  by (relation \<open>measure (\<lambda>(_, _, _, heap, _). length heap)\<close>) (auto dest: heap_pop_m_length[OF sym])
 
 declare heap_pick_m.simps [simp del]
 
 text \<open>The loop of \<^verbatim>\<open>heap_back\<close>: inserts the variables of the trail from position \<open>k\<close> on.\<close>
-function back_loop :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>back_loop act ts heap hp k =
+function back_loop :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>back_loop act rv ts heap hp k =
     (if k < length ts then
-       (case heap_insert_m act heap hp (ts ! k) of (h2, p2) \<Rightarrow> back_loop act ts h2 p2 (Suc k))
+       (case heap_insert_m act rv heap hp (ts ! k) of (h2, p2) \<Rightarrow> back_loop act rv ts h2 p2 (Suc k))
      else (heap, hp))\<close>
   by pat_completeness auto
 termination
-  by (relation \<open>measure (\<lambda>(_, ts, _, _, k). length ts - k)\<close>) auto
+  by (relation \<open>measure (\<lambda>(_, _, ts, _, _, k). length ts - k)\<close>) auto
 
 declare back_loop.simps [simp del]
 
-definition heap_back_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>heap_back_m act heap hp ts p = back_loop act ts heap hp p\<close>
+definition heap_back_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>heap_back_m act rv heap hp ts p = back_loop act rv ts heap hp p\<close>
 
 text \<open>A loop of \<^verbatim>\<open>heap_bumped\<close> (both have this body): from position \<open>k\<close> of the variables \<open>vs\<close>
   on, moves each variable in the heap up.\<close>
-function bump_loop :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>bump_loop act vs heap hp k =
+function bump_loop :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>bump_loop act rv vs heap hp k =
     (if k < length vs then
        (let v = vs ! k in
         let i = hp ! v in
         if i \<noteq> NONE_POS then
-          (case heap_up_m act heap hp i of (h2, p2) \<Rightarrow> bump_loop act vs h2 p2 (Suc k))
-        else bump_loop act vs heap hp (Suc k))
+          (case heap_up_m act rv heap hp i of (h2, p2) \<Rightarrow> bump_loop act rv vs h2 p2 (Suc k))
+        else bump_loop act rv vs heap hp (Suc k))
      else (heap, hp))\<close>
   by pat_completeness auto
 termination
-  by (relation \<open>measure (\<lambda>(_, vs, _, _, k). length vs - k)\<close>) auto
+  by (relation \<open>measure (\<lambda>(_, _, vs, _, _, k). length vs - k)\<close>) auto
 
 declare bump_loop.simps [simp del]
 
 text \<open>\<open>cv\<close>: the variables of the learned clause; \<open>ts\<close>: the variables of the trail.\<close>
-definition heap_bumped_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>heap_bumped_m act heap hp cv ts start =
-    (case bump_loop act cv heap hp 0 of (h2, p2) \<Rightarrow> bump_loop act ts h2 p2 start)\<close>
+definition heap_bumped_m :: \<open>nat list \<Rightarrow> bool \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>heap_bumped_m act rv heap hp cv ts start =
+    (case bump_loop act rv cv heap hp 0 of (h2, p2) \<Rightarrow> bump_loop act rv ts h2 p2 start)\<close>
 
 subsection \<open>The position invariant\<close>
 
@@ -297,17 +298,17 @@ qed
 subsection \<open>The models keep the invariant\<close>
 
 lemma up_loop_inv:
-  \<open>hole_inv n heap hp v i \<Longrightarrow> up_loop act v heap hp i = (h, p, j) \<Longrightarrow>
+  \<open>hole_inv n heap hp v i \<Longrightarrow> up_loop act rv v heap hp i = (h, p, j) \<Longrightarrow>
     hole_inv n h p v j \<and> set (h[j := v]) = set (heap[i := v])\<close>
-proof (induction act v heap hp i arbitrary: h p j rule: up_loop.induct)
-  case (1 act v heap hp i)
+proof (induction act rv v heap hp i arbitrary: h p j rule: up_loop.induct)
+  case (1 act rv v heap hp i)
   show ?case
-  proof (cases \<open>0 < i \<and> before_m act v (heap ! ((i - 1) div 2))\<close>)
+  proof (cases \<open>0 < i \<and> before_m act rv v (heap ! ((i - 1) div 2))\<close>)
     case True
     let ?q = \<open>(i - 1) div 2\<close>
     have q: \<open>?q < length heap\<close> \<open>?q \<noteq> i\<close> using True 1(2) by (auto simp: hole_inv_def)
     note M = hole_inv_move[OF 1(2) q]
-    have \<open>up_loop act v (heap[i := heap ! ?q]) (hp[heap ! ?q := i]) ?q = (h, p, j)\<close>
+    have \<open>up_loop act rv v (heap[i := heap ! ?q]) (hp[heap ! ?q := i]) ?q = (h, p, j)\<close>
       using 1(3) True by (subst (asm) up_loop.simps) (simp add: Let_def)
     then show ?thesis using 1(1)[OF True refl] M by simp
   next
@@ -317,68 +318,68 @@ proof (induction act v heap hp i arbitrary: h p j rule: up_loop.induct)
 qed
 
 lemma heap_up_m_inv:
-  assumes \<open>hole_inv n heap hp (heap ! i) i\<close> \<open>heap_up_m act heap hp i = (h, p)\<close>
+  assumes \<open>hole_inv n heap hp (heap ! i) i\<close> \<open>heap_up_m act rv heap hp i = (h, p)\<close>
   shows \<open>hinv n h p \<and> set h = set heap\<close>
 proof -
-  obtain h1 p1 j where U: \<open>up_loop act (heap ! i) heap hp i = (h1, p1, j)\<close> by (cases \<open>up_loop act (heap ! i) heap hp i\<close>) auto
+  obtain h1 p1 j where U: \<open>up_loop act rv (heap ! i) heap hp i = (h1, p1, j)\<close> by (cases \<open>up_loop act rv (heap ! i) heap hp i\<close>) auto
   then have \<open>h = h1[j := heap ! i]\<close> \<open>p = p1[heap ! i := j]\<close> using assms(2) by (auto simp: heap_up_m_def Let_def)
   then show ?thesis using up_loop_inv[OF assms(1) U] by (simp add: hole_inv_def)
 qed
 
 lemma heap_up_m_hinv:
-  \<open>hinv n heap hp \<Longrightarrow> i < length heap \<Longrightarrow> heap_up_m act heap hp i = (h, p) \<Longrightarrow> hinv n h p \<and> set h = set heap\<close>
+  \<open>hinv n heap hp \<Longrightarrow> i < length heap \<Longrightarrow> heap_up_m act rv heap hp i = (h, p) \<Longrightarrow> hinv n h p \<and> set h = set heap\<close>
   using heap_up_m_inv hole_inv_hinv by blast
 
 lemma down_loop_inv:
-  \<open>hole_inv n heap hp v i \<Longrightarrow> down_loop act v heap hp i = (h, p, j) \<Longrightarrow>
+  \<open>hole_inv n heap hp v i \<Longrightarrow> down_loop act rv v heap hp i = (h, p, j) \<Longrightarrow>
     hole_inv n h p v j \<and> set (h[j := v]) = set (heap[i := v])\<close>
-proof (induction act v heap hp i arbitrary: h p j rule: down_loop.induct)
-  case (1 act v heap hp i)
-  define c where \<open>c = (if 2 * i + 1 + 1 < length heap \<and> before_m act (heap ! (2 * i + 1 + 1)) (heap ! (2 * i + 1))
+proof (induction act rv v heap hp i arbitrary: h p j rule: down_loop.induct)
+  case (1 act rv v heap hp i)
+  define c where \<open>c = (if 2 * i + 1 + 1 < length heap \<and> before_m act rv (heap ! (2 * i + 1 + 1)) (heap ! (2 * i + 1))
     then 2 * i + 1 + 1 else 2 * i + 1)\<close>
   show ?case
-  proof (cases \<open>length heap \<le> 2 * i + 1 \<or> \<not> before_m act (heap ! c) v\<close>)
+  proof (cases \<open>length heap \<le> 2 * i + 1 \<or> \<not> before_m act rv (heap ! c) v\<close>)
     case True
     then show ?thesis using 1(2,3) down_loop_eq[OF c_def] by simp
   next
     case False
     have c: \<open>c < length heap\<close> \<open>c \<noteq> i\<close> using False by (auto simp: c_def)
     note M = hole_inv_move[OF 1(2) c]
-    have \<open>down_loop act v (heap[i := heap ! c]) (hp[heap ! c := i]) c = (h, p, j)\<close>
+    have \<open>down_loop act rv v (heap[i := heap ! c]) (hp[heap ! c := i]) c = (h, p, j)\<close>
       using 1(3) down_loop_eq[OF c_def] False by simp
     then show ?thesis using 1(1)[OF refl _ c_def _ refl] False M by simp
   qed
 qed
 
 lemma heap_down_m_inv:
-  assumes \<open>hole_inv n heap hp (heap ! i) i\<close> \<open>heap_down_m act heap hp i = (h, p)\<close>
+  assumes \<open>hole_inv n heap hp (heap ! i) i\<close> \<open>heap_down_m act rv heap hp i = (h, p)\<close>
   shows \<open>hinv n h p \<and> set h = set heap \<and> length h = length heap\<close>
 proof -
-  obtain h1 p1 j where U: \<open>down_loop act (heap ! i) heap hp i = (h1, p1, j)\<close> by (cases \<open>down_loop act (heap ! i) heap hp i\<close>) auto
+  obtain h1 p1 j where U: \<open>down_loop act rv (heap ! i) heap hp i = (h1, p1, j)\<close> by (cases \<open>down_loop act rv (heap ! i) heap hp i\<close>) auto
   then have \<open>h = h1[j := heap ! i]\<close> \<open>p = p1[heap ! i := j]\<close> using assms(2) by (auto simp: heap_down_m_def Let_def)
   then show ?thesis using down_loop_inv[OF assms(1) U] down_loop_length[OF U] by (simp add: hole_inv_def)
 qed
 
 lemma heap_down_m_hinv:
-  \<open>hinv n heap hp \<Longrightarrow> i < length heap \<Longrightarrow> heap_down_m act heap hp i = (h, p) \<Longrightarrow> hinv n h p \<and> set h = set heap\<close>
+  \<open>hinv n heap hp \<Longrightarrow> i < length heap \<Longrightarrow> heap_down_m act rv heap hp i = (h, p) \<Longrightarrow> hinv n h p \<and> set h = set heap\<close>
   using heap_down_m_inv hole_inv_hinv by blast
 
 lemma rebuild_loop_inv:
-  \<open>hinv n heap hp \<Longrightarrow> i \<le> length heap \<Longrightarrow> rebuild_loop act heap hp i = (h, p) \<Longrightarrow>
+  \<open>hinv n heap hp \<Longrightarrow> i \<le> length heap \<Longrightarrow> rebuild_loop act rv heap hp i = (h, p) \<Longrightarrow>
     hinv n h p \<and> set h = set heap\<close>
 proof (induction i arbitrary: heap hp)
   case 0
   then show ?case by simp
 next
   case (Suc i)
-  obtain h2 p2 where D: \<open>heap_down_m act heap hp i = (h2, p2)\<close> by (cases \<open>heap_down_m act heap hp i\<close>) auto
+  obtain h2 p2 where D: \<open>heap_down_m act rv heap hp i = (h2, p2)\<close> by (cases \<open>heap_down_m act rv heap hp i\<close>) auto
   have I: \<open>hinv n h2 p2 \<and> set h2 = set heap \<and> length h2 = length heap\<close>
     using heap_down_m_inv[OF hole_inv_hinv[OF Suc(2)] D] Suc(3) by simp
   then show ?case using Suc D by auto
 qed
 
 lemma heap_rebuild_m_inv:
-  \<open>hinv n heap hp \<Longrightarrow> heap_rebuild_m act heap hp = (h, p) \<Longrightarrow> hinv n h p \<and> set h = set heap\<close>
+  \<open>hinv n heap hp \<Longrightarrow> heap_rebuild_m act rv heap hp = (h, p) \<Longrightarrow> hinv n h p \<and> set h = set heap\<close>
   unfolding heap_rebuild_m_def by (erule rebuild_loop_inv) auto
 
 text \<open>The index of the loop of \<^verbatim>\<open>heap_rebuild\<close> is in the heap.\<close>
@@ -386,7 +387,7 @@ lemma rebuild_bound: \<open>Suc i \<le> length heap div 2 \<Longrightarrow> i < 
   by simp
 
 lemma heap_insert_m_inv:
-  assumes h: \<open>hinv n heap hp\<close> and v: \<open>v < n\<close> and I: \<open>heap_insert_m act heap hp v = (h', p')\<close>
+  assumes h: \<open>hinv n heap hp\<close> and v: \<open>v < n\<close> and I: \<open>heap_insert_m act rv heap hp v = (h', p')\<close>
   shows \<open>hinv n h' p' \<and> set h' = insert v (set heap)\<close>
 proof (cases \<open>hp ! v \<noteq> NONE_POS\<close>)
   case True
@@ -406,12 +407,12 @@ next
   qed
   then have H: \<open>hole_inv n (heap @ [v]) hp ((heap @ [v]) ! length heap) (length heap)\<close>
     by (simp add: hole_inv_def)
-  have \<open>heap_up_m act (heap @ [v]) hp (length heap) = (h', p')\<close> using I False by (simp add: heap_insert_m_def)
+  have \<open>heap_up_m act rv (heap @ [v]) hp (length heap) = (h', p')\<close> using I False by (simp add: heap_insert_m_def)
   then show ?thesis using heap_up_m_inv[OF H] by simp
 qed
 
 lemma heap_pop_m_inv:
-  assumes h: \<open>hinv n heap hp\<close> and P: \<open>heap_pop_m act heap hp = (h', p', r)\<close>
+  assumes h: \<open>hinv n heap hp\<close> and P: \<open>heap_pop_m act rv heap hp = (h', p', r)\<close>
   shows \<open>hinv n h' p' \<and> (r = None \<longleftrightarrow> heap = []) \<and>
     (heap = [] \<longrightarrow> h' = []) \<and>
     (\<forall>x. r = Some x \<longrightarrow> x \<in> set heap \<and> set h' = set heap - {x})\<close>
@@ -431,7 +432,7 @@ next
     then obtain mid lst where R: \<open>rest = mid @ [lst]\<close> by (metis list.distinct(1) rev_exhaust)
     have hc: \<open>heap = top # mid @ [lst]\<close> using \<open>heap = top # rest\<close> R by simp
     let ?H = \<open>lst # mid\<close> and ?P = \<open>hp[top := NONE_POS, lst := 0]\<close>
-    have D: \<open>heap_down_m act ?H ?P 0 = (h', p')\<close> \<open>r = Some top\<close>
+    have D: \<open>heap_down_m act rv ?H ?P 0 = (h', p')\<close> \<open>r = Some top\<close>
       using P hc by (auto simp: heap_pop_m_def Let_def split: prod.splits)
     have dist: \<open>distinct heap\<close> and lt: \<open>\<forall>v \<in> set heap. v < n\<close> and ln: \<open>length hp = n\<close> \<open>n \<le> NONE_POS\<close>
       and ps: \<open>\<forall>i < length heap. hp ! (heap ! i) = i\<close> and nn: \<open>\<forall>v < n. v \<notin> set heap \<longrightarrow> hp ! v = NONE_POS\<close>
@@ -470,14 +471,14 @@ definition hcov :: \<open>nat \<Rightarrow> nat list \<Rightarrow> bool option l
   \<open>hcov n heap a \<longleftrightarrow> (\<forall>v < n. a ! v = None \<longrightarrow> v \<in> set heap)\<close>
 
 lemma heap_pick_m_inv:
-  \<open>hinv n heap hp \<Longrightarrow> heap_pick_m act a heap hp = (h', p', r) \<Longrightarrow>
+  \<open>hinv n heap hp \<Longrightarrow> heap_pick_m act rv a heap hp = (h', p', r) \<Longrightarrow>
     hinv n h' p' \<and> set h' \<subseteq> set heap \<and>
     (r = None \<longrightarrow> h' = [] \<and> (\<forall>v \<in> set heap. a ! v \<noteq> None)) \<and>
     (\<forall>x. r = Some x \<longrightarrow> x \<in> set heap \<and> x \<notin> set h' \<and> a ! x = None \<and>
        (\<forall>v \<in> set heap. v \<notin> set h' \<and> v \<noteq> x \<longrightarrow> a ! v \<noteq> None))\<close>
-proof (induction act a heap hp arbitrary: h' p' r rule: heap_pick_m.induct)
-  case (1 act a heap hp)
-  obtain h2 p2 y where Q: \<open>heap_pop_m act heap hp = (h2, p2, y)\<close> by (cases \<open>heap_pop_m act heap hp\<close>) auto
+proof (induction act rv a heap hp arbitrary: h' p' r rule: heap_pick_m.induct)
+  case (1 act rv a heap hp)
+  obtain h2 p2 y where Q: \<open>heap_pop_m act rv heap hp = (h2, p2, y)\<close> by (cases \<open>heap_pop_m act rv heap hp\<close>) auto
   note I = heap_pop_m_inv[OF 1(2) Q]
   show ?case
   proof (cases y)
@@ -491,7 +492,7 @@ proof (induction act a heap hp arbitrary: h' p' r rule: heap_pick_m.induct)
       then show ?thesis using 1(3) Q I Some by (subst (asm) heap_pick_m.simps) auto
     next
       case False
-      then have R: \<open>heap_pick_m act a h2 p2 = (h', p', r)\<close>
+      then have R: \<open>heap_pick_m act rv a h2 p2 = (h', p', r)\<close>
         using 1(3) Q Some by (subst (asm) heap_pick_m.simps) (simp del: not_None_eq)
       have IH: \<open>hinv n h' p' \<and> set h' \<subseteq> set h2 \<and>
         (r = None \<longrightarrow> h' = [] \<and> (\<forall>v \<in> set h2. a ! v \<noteq> None)) \<and>
@@ -507,7 +508,7 @@ text \<open>(i) of the decision: \<open>heap_pick_m\<close> returns an unassigne
   variable is assigned; the covering holds after the returned variable is assigned.\<close>
 theorem heap_pick_m_hcov:
   assumes h: \<open>hinv n heap hp\<close> and c: \<open>hcov n heap a\<close> and la: \<open>length a = n\<close>
-    and P: \<open>heap_pick_m act a heap hp = (h', p', r)\<close>
+    and P: \<open>heap_pick_m act rv a heap hp = (h', p', r)\<close>
   shows \<open>hinv n h' p' \<and>
     (r = None \<longrightarrow> (\<forall>v < n. a ! v \<noteq> None) \<and> hcov n h' a) \<and>
     (\<forall>x. r = Some x \<longrightarrow> x < n \<and> a ! x = None \<and> (\<forall>b. hcov n h' (a[x := Some b])))\<close>
@@ -532,17 +533,17 @@ proof -
 qed
 
 lemma back_loop_inv:
-  \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set ts. v < n \<Longrightarrow> back_loop act ts heap hp k = (h', p') \<Longrightarrow>
+  \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set ts. v < n \<Longrightarrow> back_loop act rv ts heap hp k = (h', p') \<Longrightarrow>
     hinv n h' p' \<and> set h' = set heap \<union> set (drop k ts)\<close>
-proof (induction act ts heap hp k arbitrary: h' p' rule: back_loop.induct)
-  case (1 act ts heap hp k)
+proof (induction act rv ts heap hp k arbitrary: h' p' rule: back_loop.induct)
+  case (1 act rv ts heap hp k)
   show ?case
   proof (cases \<open>k < length ts\<close>)
     case True
-    obtain h2 p2 where Q: \<open>heap_insert_m act heap hp (ts ! k) = (h2, p2)\<close> by (cases \<open>heap_insert_m act heap hp (ts ! k)\<close>) auto
+    obtain h2 p2 where Q: \<open>heap_insert_m act rv heap hp (ts ! k) = (h2, p2)\<close> by (cases \<open>heap_insert_m act rv heap hp (ts ! k)\<close>) auto
     have I: \<open>hinv n h2 p2 \<and> set h2 = insert (ts ! k) (set heap)\<close>
       using heap_insert_m_inv[OF 1(2) _ Q] 1(3) True by simp
-    have \<open>back_loop act ts h2 p2 (Suc k) = (h', p')\<close> using 1(4) True Q by (subst (asm) back_loop.simps) simp
+    have \<open>back_loop act rv ts h2 p2 (Suc k) = (h', p')\<close> using 1(4) True Q by (subst (asm) back_loop.simps) simp
     then have \<open>hinv n h' p' \<and> set h' = set h2 \<union> set (drop (Suc k) ts)\<close>
       using 1(1)[OF True Q[symmetric]] I 1(3) by blast
     moreover have \<open>set (drop k ts) = insert (ts ! k) (set (drop (Suc k) ts))\<close>
@@ -555,7 +556,7 @@ proof (induction act ts heap hp k arbitrary: h' p' rule: back_loop.induct)
 qed
 
 lemma heap_back_m_inv:
-  \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set ts. v < n \<Longrightarrow> heap_back_m act heap hp ts p = (h', p') \<Longrightarrow>
+  \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set ts. v < n \<Longrightarrow> heap_back_m act rv heap hp ts p = (h', p') \<Longrightarrow>
     hinv n h' p' \<and> set h' = set heap \<union> set (drop p ts)\<close>
   unfolding heap_back_m_def by (rule back_loop_inv)
 
@@ -567,7 +568,7 @@ theorem heap_back_m_hcov:
   assumes h: \<open>hinv n heap hp\<close> and c: \<open>hcov n heap a\<close> and lt: \<open>\<forall>v \<in> set ts. v < n\<close>
     and A: \<open>\<forall>v < n. a ! v \<noteq> None \<longrightarrow> v \<in> set ts\<close>
     and A2: \<open>\<forall>v \<in> set (take p ts). a2 ! v \<noteq> None\<close>
-    and B: \<open>heap_back_m act heap hp ts p = (h', p')\<close>
+    and B: \<open>heap_back_m act rv heap hp ts p = (h', p')\<close>
   shows \<open>hinv n h' p' \<and> hcov n h' a2 \<and> set h' = set heap \<union> set (drop p ts)\<close>
 proof -
   note I = heap_back_m_inv[OF h lt B]
@@ -586,10 +587,10 @@ qed
 subsection \<open>Bumping\<close>
 
 lemma bump_loop_inv:
-  \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set vs. v < n \<Longrightarrow> bump_loop act vs heap hp k = (h', p') \<Longrightarrow>
+  \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set vs. v < n \<Longrightarrow> bump_loop act rv vs heap hp k = (h', p') \<Longrightarrow>
     hinv n h' p' \<and> set h' = set heap\<close>
-proof (induction act vs heap hp k arbitrary: h' p' rule: bump_loop.induct)
-  case (1 act vs heap hp k)
+proof (induction act rv vs heap hp k arbitrary: h' p' rule: bump_loop.induct)
+  case (1 act rv vs heap hp k)
   show ?case
   proof (cases \<open>k < length vs\<close>)
     case True
@@ -597,16 +598,16 @@ proof (induction act vs heap hp k arbitrary: h' p' rule: bump_loop.induct)
     show ?thesis
     proof (cases \<open>hp ! (vs ! k) \<noteq> NONE_POS\<close>)
       case T2: True
-      obtain h2 p2 where Q: \<open>heap_up_m act heap hp (hp ! (vs ! k)) = (h2, p2)\<close>
-        by (cases \<open>heap_up_m act heap hp (hp ! (vs ! k))\<close>) auto
+      obtain h2 p2 where Q: \<open>heap_up_m act rv heap hp (hp ! (vs ! k)) = (h2, p2)\<close>
+        by (cases \<open>heap_up_m act rv heap hp (hp ! (vs ! k))\<close>) auto
       have I: \<open>hinv n h2 p2 \<and> set h2 = set heap\<close>
         using heap_up_m_hinv[OF 1(3) _ Q] hinv_pos(2)[OF 1(3) v T2] by simp
-      have \<open>bump_loop act vs h2 p2 (Suc k) = (h', p')\<close>
+      have \<open>bump_loop act rv vs h2 p2 (Suc k) = (h', p')\<close>
         using 1(5) True T2 Q by (subst (asm) bump_loop.simps) (simp add: Let_def)
       then show ?thesis using 1(1)[OF True refl refl T2 Q[symmetric]] I 1(4) by simp
     next
       case F2: False
-      have \<open>bump_loop act vs heap hp (Suc k) = (h', p')\<close>
+      have \<open>bump_loop act rv vs heap hp (Suc k) = (h', p')\<close>
         using 1(5) True F2 by (subst (asm) bump_loop.simps) (simp add: Let_def)
       then show ?thesis using 1(2)[OF True refl refl F2] 1(3,4) by simp
     qed
@@ -618,13 +619,13 @@ qed
 
 lemma heap_bumped_m_inv:
   \<open>hinv n heap hp \<Longrightarrow> \<forall>v \<in> set cv. v < n \<Longrightarrow> \<forall>v \<in> set ts. v < n \<Longrightarrow>
-    heap_bumped_m act heap hp cv ts start = (h', p') \<Longrightarrow> hinv n h' p' \<and> set h' = set heap\<close>
+    heap_bumped_m act rv heap hp cv ts start = (h', p') \<Longrightarrow> hinv n h' p' \<and> set h' = set heap\<close>
 proof -
   assume h: \<open>hinv n heap hp\<close> and cv: \<open>\<forall>v \<in> set cv. v < n\<close> and ts: \<open>\<forall>v \<in> set ts. v < n\<close>
-    and B: \<open>heap_bumped_m act heap hp cv ts start = (h', p')\<close>
-  obtain h2 p2 where Q: \<open>bump_loop act cv heap hp 0 = (h2, p2)\<close> by (metis surj_pair)
+    and B: \<open>heap_bumped_m act rv heap hp cv ts start = (h', p')\<close>
+  obtain h2 p2 where Q: \<open>bump_loop act rv cv heap hp 0 = (h2, p2)\<close> by (metis surj_pair)
   note I = bump_loop_inv[OF h cv Q]
-  have \<open>bump_loop act ts h2 p2 start = (h', p')\<close> using B Q by (simp add: heap_bumped_m_def)
+  have \<open>bump_loop act rv ts h2 p2 start = (h', p')\<close> using B Q by (simp add: heap_bumped_m_def)
   then show ?thesis using bump_loop_inv[OF I[THEN conjunct1] ts] I by simp
 qed
 

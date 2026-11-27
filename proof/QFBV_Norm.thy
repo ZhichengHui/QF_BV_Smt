@@ -769,4 +769,18 @@ proof -
     using ca cs by (auto simp add: cis_model_def)
 qed
 
+
+text \<open>The number of definitions grows at most 15-fold: a flattened product adds at most 15.\<close>
+lemma normalize_defs_length:
+  assumes \<open>cproblem_wt q\<close> \<open>15 * length (CoreProblemL_defs q) < 2 ^ 64\<close>
+  shows \<open>length (CoreProblemL_defs (normalize_m q)) \<le> 15 * length (CoreProblemL_defs q)\<close>
+proof -
+  let ?ws = \<open>cvar_widths q\<close> and ?D = \<open>CoreProblemL_defs q\<close>
+  obtain L M where nl: \<open>norm_loop (cdef_widths ?ws [] ?D) ?D (([], []), []) = (L, M)\<close> by fastforce
+  have wtD: \<open>cdefs_wt ?ws [] ?D\<close> using assms(1) by (simp add: cproblem_wt_def Let_def)
+  have \<open>ninv ?ws ?D L M\<close>
+    using norm_loop_ok[of ?ws \<open>[]\<close> ?D \<open>([], [])\<close> \<open>[]\<close> L M] wtD assms(2) ninv_init nl by simp
+  then show ?thesis using nl by (simp add: normalize_m_def ninv_def)
+qed
+
 end

@@ -708,9 +708,11 @@ fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
 // Decision heap: a binary max-heap of variables by activity; `hp[v]` is the position of `v` in
 // `heap`, or `usize::MAX` if `v` is not in the heap.
 
-/// Whether variable `u` comes before `v` in the heap: higher activity, then lower index.
+/// Whether variable `u` comes before `v` in the heap: higher activity, then higher index (the
+/// variables of the definitions and assertions come after those of the inputs, so that the search
+/// starts at the outputs of the circuits rather than enumerating their inputs).
 fn before(act: &Vec<usize>, u: usize, v: usize) -> bool {
-    act[u] > act[v] || (act[u] == act[v] && u < v)
+    act[u] > act[v] || (act[u] == act[v] && u > v)
 }
 
 fn heap_up(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, i: usize) -> (Vec<usize>, Vec<usize>) {
@@ -1296,8 +1298,8 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut hp: Vec<usize> = vec![usize::MAX; n];
     let mut v0: usize = 0;
     while v0 < n {
-        heap.push(v0);
-        hp[v0] = v0;
+        heap.push(n - 1 - v0);
+        hp[n - 1 - v0] = v0;
         v0 += 1;
     }
     let mut conflicts: usize = 0;

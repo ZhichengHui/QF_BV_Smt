@@ -708,17 +708,18 @@ fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
 // Decision heap: a binary max-heap of variables by activity; `hp[v]` is the position of `v` in
 // `heap`, or `usize::MAX` if `v` is not in the heap.
 
-/// Whether variable `u` comes before `v` in the heap: higher activity, then lower index.
-fn before(act: &Vec<usize>, u: usize, v: usize) -> bool {
-    act[u] > act[v] || (act[u] == act[v] && u < v)
+/// Whether variable `u` comes before `v` in the heap: higher activity, then lower index (higher
+/// index if `rev`).
+fn before(act: &Vec<usize>, rev: bool, u: usize, v: usize) -> bool {
+    act[u] > act[v] || (act[u] == act[v] && (if rev { u > v } else { u < v }))
 }
 
-fn heap_up(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, i: usize) -> (Vec<usize>, Vec<usize>) {
+fn heap_up(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, i: usize) -> (Vec<usize>, Vec<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     let mut i = i;
     let v = heap[i];
-    while i > 0 && before(act, v, heap[(i - 1) / 2]) {
+    while i > 0 && before(act, rev, v, heap[(i - 1) / 2]) {
         let u = heap[(i - 1) / 2];
         heap[i] = u;
         hp[u] = i;
@@ -729,7 +730,7 @@ fn heap_up(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, i: usize) -> (Vec
     (heap, hp)
 }
 
-fn heap_down(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, i: usize) -> (Vec<usize>, Vec<usize>) {
+fn heap_down(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, i: usize) -> (Vec<usize>, Vec<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     let mut i = i;
@@ -740,10 +741,10 @@ fn heap_down(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, i: usize) -> (V
             break;
         }
         let mut c = l;
-        if l + 1 < heap.len() && before(act, heap[l + 1], heap[l]) {
+        if l + 1 < heap.len() && before(act, rev, heap[l + 1], heap[l]) {
             c = l + 1;
         }
-        if !before(act, heap[c], v) {
+        if !before(act, rev, heap[c], v) {
             break;
         }
         let u = heap[c];
@@ -757,31 +758,31 @@ fn heap_down(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, i: usize) -> (V
 }
 
 /// Restores the heap order of the whole heap (after the activities were rescaled).
-fn heap_rebuild(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>) -> (Vec<usize>, Vec<usize>) {
+fn heap_rebuild(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool) -> (Vec<usize>, Vec<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     let mut i = heap.len() / 2;
     while i > 0 {
         i -= 1;
-        let (h2, p2) = heap_down(heap, hp, act, i);
+        let (h2, p2) = heap_down(heap, hp, act, rev, i);
         heap = h2;
         hp = p2;
     }
     (heap, hp)
 }
 
-fn heap_insert(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, v: usize) -> (Vec<usize>, Vec<usize>) {
+fn heap_insert(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, v: usize) -> (Vec<usize>, Vec<usize>) {
     if hp[v] != usize::MAX {
         return (heap, hp);
     }
     let mut heap = heap;
     let i = heap.len();
     heap.push(v);
-    heap_up(heap, hp, act, i)
+    heap_up(heap, hp, act, rev, i)
 }
 
 /// Removes the variable of highest activity from the heap.
-fn heap_pop(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>) -> (Vec<usize>, Vec<usize>, Option<usize>) {
+fn heap_pop(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool) -> (Vec<usize>, Vec<usize>, Option<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     match heap.pop() {
@@ -795,18 +796,18 @@ fn heap_pop(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>) -> (Vec<usize>, 
             hp[top] = usize::MAX;
             heap[0] = last;
             hp[last] = 0;
-            let (h2, p2) = heap_down(heap, hp, act, 0);
+            let (h2, p2) = heap_down(heap, hp, act, rev, 0);
             (h2, p2, Some(top))
         }
     }
 }
 
 /// The unassigned variable of highest activity, popping the assigned ones off the heap.
-fn heap_pick(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, a: &Vec<Option<bool>>) -> (Vec<usize>, Vec<usize>, Option<usize>) {
+fn heap_pick(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, a: &Vec<Option<bool>>) -> (Vec<usize>, Vec<usize>, Option<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     loop {
-        let (h2, p2, v) = heap_pop(heap, hp, act);
+        let (h2, p2, v) = heap_pop(heap, hp, act, rev);
         heap = h2;
         hp = p2;
         match v {
@@ -821,12 +822,12 @@ fn heap_pick(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, a: &Vec<Option<
 }
 
 /// Puts the variables of the trail from position `p` on back into the heap.
-fn heap_back(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, trail: &Vec<Lit>, p: usize) -> (Vec<usize>, Vec<usize>) {
+fn heap_back(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, trail: &Vec<Lit>, p: usize) -> (Vec<usize>, Vec<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     let mut k = p;
     while k < trail.len() {
-        let (h2, p2) = heap_insert(heap, hp, act, trail[k].var);
+        let (h2, p2) = heap_insert(heap, hp, act, rev, trail[k].var);
         heap = h2;
         hp = p2;
         k += 1;
@@ -836,7 +837,7 @@ fn heap_back(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, trail: &Vec<Lit
 
 /// Restores the heap order after the activities of the variables of the trail from position
 /// `start` on, and of the clause `c`, have grown.
-fn heap_bumped(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, c: &Vec<Lit>, trail: &Vec<Lit>, start: usize) -> (Vec<usize>, Vec<usize>) {
+fn heap_bumped(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, c: &Vec<Lit>, trail: &Vec<Lit>, start: usize) -> (Vec<usize>, Vec<usize>) {
     let mut heap = heap;
     let mut hp = hp;
     let mut k: usize = 0;
@@ -844,7 +845,7 @@ fn heap_bumped(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, c: &Vec<Lit>,
         let v = c[k].var;
         let i = hp[v];
         if i != usize::MAX {
-            let (h2, p2) = heap_up(heap, hp, act, i);
+            let (h2, p2) = heap_up(heap, hp, act, rev, i);
             heap = h2;
             hp = p2;
         }
@@ -855,7 +856,7 @@ fn heap_bumped(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, c: &Vec<Lit>,
         let v = trail[j].var;
         let i = hp[v];
         if i != usize::MAX {
-            let (h2, p2) = heap_up(heap, hp, act, i);
+            let (h2, p2) = heap_up(heap, hp, act, rev, i);
             heap = h2;
             hp = p2;
         }
@@ -1260,7 +1261,10 @@ fn add_clause_watched(cs: Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head
 /// order on the trail; `lim` holds the trail positions of the decisions, so that the decision level
 /// of an entry is the number of decisions at or before it. Every implied entry has a reason, a
 /// clause whose other literals are false by the entries before it (`rs`, per trail position);
-/// `tp` gives the trail position of every assigned variable. A pass over the clauses first assigns
+/// `tp` gives the trail position of every assigned variable. Decisions take the unassigned variable
+/// of highest activity from the heap; every restart switches between two orders, each with its own
+/// activities: ties go to the lower index in the first (the inputs of the circuits, which come
+/// first), to the higher index in the second (the gates). A pass over the clauses first assigns
 /// the unit clauses; then the watches propagate the trail entries from position `q` on. On a
 /// conflict, the analysis learns a clause (`analyze`) that follows from the clauses; it is added to
 /// the clauses, the search backjumps to the second-highest level of its literals and its first
@@ -1290,6 +1294,8 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut q: usize = 0;
     let mut learn = true;
     let mut act: Vec<usize> = vec![0; n];
+    let mut act2: Vec<usize> = vec![0; n];
+    let mut rev = false;
     let mut inc: usize = 1 << 10;
     let mut ph: Vec<bool> = vec![true; n];
     let mut heap: Vec<usize> = Vec::new();
@@ -1318,7 +1324,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             let p = lim[0];
             lim = cut(lim, 0);
             ph = save_phase(ph, &trail, p);
-            let (hh, hq) = heap_back(heap, hp, &act, &trail, p);
+            let (hh, hq) = heap_back(heap, hp, &act, rev, &trail, p);
             heap = hh;
             hp = hq;
             let (a2, t2) = backtrack(a, trail, p);
@@ -1326,12 +1332,19 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             trail = t2;
             rs = cut(rs, p);
             q = p;
+            let other = act2;
+            act2 = act;
+            act = other;
+            rev = !rev;
+            let (hh, hq) = heap_rebuild(heap, hp, &act, rev);
+            heap = hh;
+            hp = hq;
             restarts += 1;
             conflicts = 0;
             budget = 100 * luby(restarts);
         }
         if ok {
-            let (h2, p2, pv) = heap_pick(heap, hp, &act, &a);
+            let (h2, p2, pv) = heap_pick(heap, hp, &act, rev, &a);
             heap = h2;
             hp = p2;
             match pv {
@@ -1359,14 +1372,15 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 found = f1;
                 act = ac1;
                 conflicts += 1;
-                let (hh, hq) = heap_bumped(heap, hp, &act, &c, &trail, start);
+                let (hh, hq) = heap_bumped(heap, hp, &act, rev, &c, &trail, start);
                 heap = hh;
                 hp = hq;
                 inc = inc + inc / 20;
                 if inc >= 1 << 40 {
                     act = rescale(act, 30);
+                    act2 = rescale(act2, 30);
                     inc = inc >> 30;
-                    let (hh, hq) = heap_rebuild(heap, hp, &act);
+                    let (hh, hq) = heap_rebuild(heap, hp, &act, rev);
                     heap = hh;
                     hp = hq;
                 }
@@ -1380,7 +1394,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 let p = lim[j];
                 lim = cut(lim, j);
                 ph = save_phase(ph, &trail, p);
-                let (hh, hq) = heap_back(heap, hp, &act, &trail, p);
+                let (hh, hq) = heap_back(heap, hp, &act, rev, &trail, p);
                 heap = hh;
                 hp = hq;
                 let (a2, t2) = backtrack(a, trail, p);
@@ -1405,7 +1419,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     Some(p) => {
                         let d = trail[p];
                         ph = save_phase(ph, &trail, p);
-                        let (hh, hq) = heap_back(heap, hp, &act, &trail, p);
+                        let (hh, hq) = heap_back(heap, hp, &act, rev, &trail, p);
                         heap = hh;
                         hp = hq;
                         let (a2, t2) = backtrack(a, trail, p);

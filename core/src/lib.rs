@@ -2837,10 +2837,71 @@ fn mk_raw(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<u
     (defs, widths, head, next, k)
 }
 
+/// An earlier definition of width `w` equal to `t`; `usize::MAX` if there is none.
+fn lookup(defs: &Vec<CoreTerm>, widths: &Vec<usize>, head: &Vec<usize>, next: &Vec<usize>, t: &CoreTerm, w: usize) -> usize {
+    let h = term_hash(t) % head.len();
+    find_def(defs, widths, next, head[h], t, w)
+}
+
+/// The pair `(x, y)` if the definition `k` is the sum `x + y` of two definitions; `usize::MAX`
+/// twice otherwise.
+fn sum_of(defs: &Vec<CoreTerm>, k: usize) -> (usize, usize) {
+    match &defs[k] {
+        CoreTerm::Bin(op, a, b) => {
+            let x = ref_index(a, usize::MAX);
+            let y = ref_index(b, usize::MAX);
+            if op_code(op) == 3 && x != usize::MAX && y != usize::MAX {
+                (x, y)
+            } else {
+                (usize::MAX, usize::MAX)
+            }
+        }
+        _ => (usize::MAX, usize::MAX),
+    }
+}
+
+/// For a product `t` of width `w` of two definitions, one of which is a sum: the sum of the two
+/// distributed products, `a * x + a * y` for `a * (x + y)` and `x * b + y * b` for `(x + y) * b`
+/// (operands in this order), if both products are earlier definitions; `t` otherwise. So the
+/// rewrite adds at most one definition, the sum, and no product.
+fn distribute(defs: &Vec<CoreTerm>, widths: &Vec<usize>, head: &Vec<usize>, next: &Vec<usize>, t: CoreTerm, w: usize) -> CoreTerm {
+    let mut ka = usize::MAX;
+    let mut kb = usize::MAX;
+    match &t {
+        CoreTerm::Bin(op, a, b) => {
+            if op_code(op) == 4 {
+                ka = ref_index(a, usize::MAX);
+                kb = ref_index(b, usize::MAX);
+            }
+        }
+        _ => {}
+    }
+    if ka == usize::MAX || kb == usize::MAX {
+        return t;
+    }
+    let (x, y) = sum_of(defs, kb);
+    if x != usize::MAX {
+        let p = lookup(defs, widths, head, next, &cbin(BinOp::Mul, cref(ka), cref(x)), w);
+        let q = lookup(defs, widths, head, next, &cbin(BinOp::Mul, cref(ka), cref(y)), w);
+        if p != usize::MAX && q != usize::MAX {
+            return cbin(BinOp::Add, cref(p), cref(q));
+        }
+    }
+    let (x, y) = sum_of(defs, ka);
+    if x != usize::MAX {
+        let p = lookup(defs, widths, head, next, &cbin(BinOp::Mul, cref(x), cref(kb)), w);
+        let q = lookup(defs, widths, head, next, &cbin(BinOp::Mul, cref(y), cref(kb)), w);
+        if p != usize::MAX && q != usize::MAX {
+            return cbin(BinOp::Add, cref(p), cref(q));
+        }
+    }
+    t
+}
+
 /// The definition of the term `t` of width `w` (over the new definitions), rewritten; a product
 /// of more than two factors becomes the product of its sorted factors, from the left.
 fn mk(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<usize>, t: &CoreTerm, w: usize) -> (Vec<CoreTerm>, Vec<usize>, Vec<usize>, Vec<usize>, usize) {
-    let r = rewrite(&defs, t, w);
+    let r = distribute(&defs, &widths, &head, &next, rewrite(&defs, t, w), w);
     let (fs, ok) = product_factors(&defs, &r);
     if ok && fs.len() > 2 {
         let fs = sort_usize(fs);

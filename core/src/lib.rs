@@ -945,6 +945,42 @@ const REPHASE: bool = true;
 /// Whether the LBD of a learned clause taking part in a conflict analysis is updated (Glucose).
 const LBD_UPDATE: bool = true;
 
+/// Whether the search alternates between a focused mode (restarts when the fast average of the
+/// learned clauses' LBD exceeds 1.1 times the slow one, saved phases only) and a stable mode
+/// (Luby·100 restarts, target phases), as CaDiCaL does. The first focused phase lasts
+/// `STABILIZE_INIT` conflicts, each next phase twice as many (CaDiCaL's `stabilizeinit`,
+/// `stabilizefactor`; CaDiCaL counts ticks, here conflicts).
+const MODES: bool = true;
+
+/// Whether the search stays in focused mode (no switch, no target phases); for measurement.
+const FOCUSED_ONLY: bool = false;
+
+const STABILIZE_INIT: usize = 1000;
+
+/// One step of an exponential moving average with 32 fractional bits, of weight `1 / d` while
+/// fewer than `d` values were seen (`t`), so a running mean at first, and `num / den` after.
+fn ema_step(e: usize, y: usize, t: usize, num: usize, den: usize, d: usize) -> usize {
+    let mut y1: usize = 1 << 52;
+    if y < 1 << 20 {
+        y1 = y << 32;
+    }
+    let mut r = e;
+    if t + 1 < d {
+        if y1 >= e {
+            r = e + (y1 - e) / (t + 1);
+        } else {
+            r = e - (e - y1) / (t + 1);
+        }
+    } else {
+        if y1 >= e {
+            r = e + (y1 - e) * num / den;
+        } else {
+            r = e - (e - y1) * num / den;
+        }
+    }
+    r
+}
+
 fn luby(i: usize) -> usize {
     let mut size: usize = 1;
     let mut seq: usize = 0;
@@ -1569,6 +1605,13 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut conflicts: usize = 0;
     let mut restarts: usize = 0;
     let mut budget: usize = 100 * luby(0);
+    let mut stable = !MODES && !FOCUSED_ONLY;
+    let mut lu: usize = 0;
+    let mut next_switch: usize = STABILIZE_INIT;
+    let mut switch_inc: usize = STABILIZE_INIT;
+    let mut ema_fast: usize = 0;
+    let mut ema_slow: usize = 0;
+    let mut ema_t: usize = 0;
     let m0 = cs.len();
     let mut lbd: Vec<usize> = Vec::new();
     let mut lmark: Vec<usize> = vec![0; n + 1];
@@ -1603,7 +1646,14 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             reductions += 1;
             next_reduce = total + 2000 + 300 * reductions;
         }
-        if RESTARTS && ok && learn && conflicts >= budget && restarts < 1 << 20 && lim.len() > 0 {
+        let switching = MODES && !FOCUSED_ONLY && total >= next_switch;
+        let trigger = if stable {
+            conflicts >= budget
+        } else {
+            conflicts >= 2 && ema_fast / 11 > ema_slow / 10
+        };
+        if RESTARTS && ok && learn && (switching || trigger) && restarts < 1 << 20 && lim.len() > 0 {
+            let swap = stable;
             let p = lim[0];
             lim = cut(lim, 0);
             ph = save_phase(ph, &trail, p);
@@ -1637,16 +1687,29 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             trail = t2;
             rs = cut(rs, p);
             q = p;
-            let other = act2;
-            act2 = act;
-            act = other;
-            rev = !rev;
-            let (hh, hq) = heap_rebuild(heap, hp, &act, rev);
-            heap = hh;
-            hp = hq;
+            if swap {
+                let other = act2;
+                act2 = act;
+                act = other;
+                rev = !rev;
+                let (hh, hq) = heap_rebuild(heap, hp, &act, rev);
+                heap = hh;
+                hp = hq;
+            }
             restarts += 1;
             conflicts = 0;
-            budget = 100 * luby(restarts);
+            if stable {
+                lu += 1;
+            }
+            if switching {
+                stable = !stable;
+                lu = 0;
+                if switch_inc < 1 << 30 {
+                    switch_inc = 2 * switch_inc;
+                }
+                next_switch = total + switch_inc;
+            }
+            budget = 100 * luby(lu);
         }
         if ok {
             let (h2, p2, pv) = heap_pick(heap, hp, &act, rev, &a);
@@ -1656,7 +1719,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 None => return Some(a),
                 Some(v) => {
                     let mut s = ph[v];
-                    if TARGET {
+                    if TARGET && stable {
                         match tph[v] {
                             Some(b) => s = b,
                             None => {}
@@ -1715,6 +1778,13 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 stamp += 1;
                 let (b, lm) = clause_lbd(&c, &tp, &lim, lmark, stamp);
                 lmark = lm;
+                if !stable {
+                    ema_fast = ema_step(ema_fast, b, ema_t, 3, 100, 33);
+                    ema_slow = ema_step(ema_slow, b, ema_t, 1, 100000, 100000);
+                    if ema_t < 1 << 20 {
+                        ema_t += 1;
+                    }
+                }
                 let mut j: usize = 0;
                 if c.len() >= 2 {
                     c = second_watch(c, &tp);

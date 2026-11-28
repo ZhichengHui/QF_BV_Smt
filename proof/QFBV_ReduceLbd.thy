@@ -184,4 +184,47 @@ proof -
     using r that lvls_card_le[of tp lim \<open>length mark\<close> \<open>db ! (m0 + i)\<close>] by (auto simp: upd_ok_def cur_lbd_def)
 qed
 
+text \<open>The lengths alone, without the freshness of the stamps in \<open>mark\<close>: they hold also when the
+  stamp wraps around, which breaks the hypothesis of \<open>update_lbd_m_props\<close>.\<close>
+lemma lbd_loop_length:
+  \<open>lbd_loop vs tp lim mark st d k = (d', mark') \<Longrightarrow> length mark' = length mark\<close>
+proof (induction vs tp lim mark st d k rule: lbd_loop.induct)
+  case (1 vs tp lim mark st d k)
+  then show ?case by (subst (asm) (2) lbd_loop.simps) (auto simp: Let_def split: if_splits)
+qed
+
+lemma upd_loop_length:
+  \<open>upd_loop db used tp lim lbd mark st m0 k = (lbd', mark', st') \<Longrightarrow>
+    length lbd' = length lbd \<and> length mark' = length mark\<close>
+proof (induction db used tp lim lbd mark st m0 k rule: upd_loop.induct)
+  case (1 db used tp lim lbd mark st m0 k)
+  show ?case
+  proof (cases \<open>k < length used\<close>)
+    case True
+    show ?thesis
+    proof (cases \<open>m0 \<le> used ! k \<and> used ! k - m0 < length lbd \<and> 2 < lbd ! (used ! k - m0)\<close>)
+      case g: True
+      obtain b m2 where r: \<open>clause_lbd_m (db ! (used ! k)) tp lim mark (st + 1) = (b, m2)\<close> by (metis prod.exhaust)
+      have lm: \<open>length m2 = length mark\<close> using r lbd_loop_length by (simp add: clause_lbd_m_def)
+      have e: \<open>upd_loop db used tp lim lbd mark st m0 k = upd_loop db used tp lim (if b + 1 < lbd ! (used ! k - m0) then lbd[used ! k - m0 := b] else lbd) m2 (st + 1) m0 (k + 1)\<close>
+        by (subst upd_loop.simps) (simp only: Let_def r if_P[OF True] if_P[OF g] fst_conv snd_conv)
+      show ?thesis using "1.IH"(1)[OF True refl g r[symmetric], unfolded fst_conv snd_conv, OF "1.prems"[unfolded e]] lm
+        by (cases \<open>b + 1 < lbd ! (used ! k - m0)\<close>) auto
+    next
+      case n: False
+      have e: \<open>upd_loop db used tp lim lbd mark st m0 k = upd_loop db used tp lim lbd mark st m0 (k + 1)\<close>
+        by (subst upd_loop.simps) (simp only: Let_def if_P[OF True] if_not_P[OF n])
+      show ?thesis using "1.IH"(2)[OF True refl n "1.prems"[unfolded e]] .
+    qed
+  next
+    case False
+    then show ?thesis using "1.prems" by (subst (asm) upd_loop.simps) auto
+  qed
+qed
+
+lemma update_lbd_m_length:
+  \<open>update_lbd_m db used tp lim lbd mark st m0 = (lbd', mark', st') \<Longrightarrow>
+    length lbd' = length lbd \<and> length mark' = length mark\<close>
+  unfolding update_lbd_m_def by (rule upd_loop_length)
+
 end

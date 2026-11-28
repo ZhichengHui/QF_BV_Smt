@@ -9,6 +9,7 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
     QFBV_Proof
     QFBV_Norm
     QFBV_Distrib
+    QFBV_NormBudget
     QFBV_Heap
     QFBV_Luby
     QFBV_Reduce

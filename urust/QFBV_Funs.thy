@@ -1017,6 +1017,138 @@ definition "cut" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow
     * v
   \<rbrakk>\<close>
 
+(* Rust: set_pos *)
+definition "set_pos" :: \<open>((64 word) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>set_pos \<equiv> \<lambda>tp trail k. FunctionBody \<lbrakk>
+    let mut tp = { let init_1 = tp; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    let mut k = k;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(trail) {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* k].Lit_var]) = * k;
+      * k += 1_usize;
+    };
+    * tp
+  \<rbrakk>\<close>
+
+(* Rust: analyze_clause *)
+definition "analyze_clause" :: \<open>(Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool rvec) \<times> (Lit rvec) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze_clause \<equiv> \<lambda>c tp start seen learned cnt. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut learned = { let init_2 = learned; \<llangle>init_2 :: Lit rvec\<rrangle> };
+    let mut cnt = cnt;
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(c) {
+      let l = \<llangle>rvec_elems\<rrangle>\<^sub>1(c)[* k];
+      if !(\<llangle>rvec_elems\<rrangle>\<^sub>1(* seen)[l.Lit_var]) {
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(seen)[l.Lit_var]) = true;
+        if (\<llangle>rvec_elems\<rrangle>\<^sub>1(tp)[l.Lit_var]) >= start {
+          * cnt += 1_usize;
+        } else {
+          rvec_push(learned, l);
+        }
+      };
+      * k += 1_usize;
+    };
+    (* seen, * learned, * cnt)
+  \<rbrakk>\<close>
+
+(* Rust: analyze *)
+definition "analyze" :: \<open>((Lit rvec) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((Lit rvec) \<times> (bool rvec) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze \<equiv> \<lambda>cs trail rs tp start seen cf. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut learned = { let init_4 = { let res_3 = { let vec_2 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_2 :: Lit rvec\<rrangle> }; \<llangle>res_3 :: Lit rvec\<rrangle> }; \<llangle>init_4 :: Lit rvec\<rrangle> };
+    rvec_push(learned, Lit_mk { Lit_var: 0_usize, Lit_neg: false });
+    let destr_5 = analyze_clause(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[cf], tp, start, * seen, * learned, 0_usize);
+    let s1 = destr_5.0;
+    let l1 = destr_5.1;
+    let c1 = destr_5.2;
+    * seen = s1;
+    * learned = l1;
+    let mut cnt = c1;
+    let mut i = rvec_len(trail);
+    let mut ok_v = (* cnt) > 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* ok_v) && (start < (* i)) {
+      * i -= 1_usize;
+      if \<llangle>rvec_elems\<rrangle>\<^sub>1(* seen)[\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* i].Lit_var] {
+        if (* cnt) <= 1_usize {
+          * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(learned)[0_usize]) = lit_neg(\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* i]);
+          * ok_v = false;
+        } else {
+          let destr_6 = analyze_clause(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[\<llangle>rvec_elems\<rrangle>\<^sub>1(rs)[* i]], tp, start, * seen, * learned, (* cnt) - 1_usize);
+          let s2 = destr_6.0;
+          let l2 = destr_6.1;
+          let c2 = destr_6.2;
+          * seen = s2;
+          * learned = l2;
+          * cnt = c2;
+        }
+      }
+    };
+    let found = ((* cnt) == 1_usize) && (!(* ok_v));
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(* learned) {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(seen)[\<llangle>rvec_elems\<rrangle>\<^sub>1(* learned)[* k].Lit_var]) = false;
+      * k += 1_usize;
+    };
+    let mut j = start;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(trail) {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(seen)[\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* j].Lit_var]) = false;
+      * j += 1_usize;
+    };
+    (* learned, * seen, found)
+  \<rbrakk>\<close>
+
+(* Rust: second_watch *)
+definition "second_watch" :: \<open>(Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>second_watch \<equiv> \<lambda>c tp. FunctionBody \<lbrakk>
+    let mut c = { let init_1 = c; \<llangle>init_1 :: Lit rvec\<rrangle> };
+    let mut b = 1_usize;
+    let mut k = 2_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(* c) {
+      if (\<llangle>rvec_elems\<rrangle>\<^sub>1(tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[* k].Lit_var]) > (\<llangle>rvec_elems\<rrangle>\<^sub>1(tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[* b].Lit_var]) {
+        * b = * k;
+      };
+      * k += 1_usize;
+    };
+    let l = \<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[1_usize];
+    * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(c)[1_usize]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[* b];
+    * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(c)[* b]) = l;
+    * c
+  \<rbrakk>\<close>
+
+(* Rust: level_of *)
+definition "level_of" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>level_of \<equiv> \<lambda>lim p. FunctionBody \<lbrakk>
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* j) < rvec_len(lim)) && ((\<llangle>rvec_elems\<rrangle>\<^sub>1(lim)[* j]) <= p) {
+      * j += 1_usize;
+    };
+    * j
+  \<rbrakk>\<close>
+
+(* Rust: add_clause_watched *)
+definition "add_clause_watched" :: \<open>((Lit rvec) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (((Lit rvec) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>add_clause_watched \<equiv> \<lambda>cs pos next_v head c. FunctionBody \<lbrakk>
+    let mut cs = { let init_1 = cs; \<llangle>init_1 :: (Lit rvec) rvec\<rrangle> };
+    let mut pos = { let init_2 = pos; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_3 = next_v; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_4 = head; \<llangle>init_4 :: (64 word) rvec\<rrangle> };
+    let s = rvec_len(* next_v);
+    rvec_push(pos, 0_usize);
+    rvec_push(pos, 1_usize);
+    rvec_push(next_v, 18446744073709551615_usize);
+    rvec_push(next_v, 18446744073709551615_usize);
+    if rvec_len(c) >= 2_usize {
+      let x0 = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(c)[0_usize]);
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(next_v)[s]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x0];
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(head)[x0]) = s;
+      let x1 = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(c)[1_usize]);
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(next_v)[s + 1_usize]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x1];
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(head)[x1]) = s + 1_usize;
+    };
+    rvec_push(cs, c);
+    (* cs, * pos, * next_v, * head)
+  \<rbrakk>\<close>
+
 (* Rust: dpll *)
 definition "dpll" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool option) rvec) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>dpll \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>
@@ -1024,33 +1156,38 @@ definition "dpll" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarr
     let pos0 = destr_1.0;
     let next0 = destr_1.1;
     let head0 = destr_1.2;
-    let mut pos = { let init_2 = pos0; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
-    let mut next_v = { let init_3 = next0; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
-    let mut head = { let init_4 = head0; \<llangle>init_4 :: (64 word) rvec\<rrangle> };
-    let destr_9 = propagate_pass(cs, rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, None, n), { let res_6 = { let vec_5 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_5 :: Lit rvec\<rrangle> }; \<llangle>res_6 :: Lit rvec\<rrangle> }, { let res_8 = { let vec_7 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_7 :: (64 word) rvec\<rrangle> }; \<llangle>res_8 :: (64 word) rvec\<rrangle> });
-    let a0 = destr_9.0;
-    let t0 = destr_9.1;
-    let r0 = destr_9.2;
-    let ok0 = destr_9.3;
+    let mut db = { let init_2 = rvec_clone(cs); \<llangle>init_2 :: (Lit rvec) rvec\<rrangle> };
+    let mut pos = { let init_3 = pos0; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_4 = next0; \<llangle>init_4 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_5 = head0; \<llangle>init_5 :: (64 word) rvec\<rrangle> };
+    let destr_10 = propagate_pass(cs, rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, None, n), { let res_7 = { let vec_6 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_6 :: Lit rvec\<rrangle> }; \<llangle>res_7 :: Lit rvec\<rrangle> }, { let res_9 = { let vec_8 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_8 :: (64 word) rvec\<rrangle> }; \<llangle>res_9 :: (64 word) rvec\<rrangle> });
+    let a0 = destr_10.0;
+    let t0 = destr_10.1;
+    let r0 = destr_10.2;
+    let ok0 = destr_10.3;
     if !ok0 {
       return None;
     };
-    let mut a = { let init_10 = a0; \<llangle>init_10 :: (bool option) rvec\<rrangle> };
-    let mut trail = { let init_11 = t0; \<llangle>init_11 :: Lit rvec\<rrangle> };
-    let mut rs = { let init_12 = r0; \<llangle>init_12 :: (64 word) rvec\<rrangle> };
-    let mut lim = { let init_15 = { let res_14 = { let vec_13 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_13 :: (64 word) rvec\<rrangle> }; \<llangle>res_14 :: (64 word) rvec\<rrangle> }; \<llangle>init_15 :: (64 word) rvec\<rrangle> };
+    let mut a = { let init_11 = a0; \<llangle>init_11 :: (bool option) rvec\<rrangle> };
+    let mut trail = { let init_12 = t0; \<llangle>init_12 :: Lit rvec\<rrangle> };
+    let mut rs = { let init_13 = r0; \<llangle>init_13 :: (64 word) rvec\<rrangle> };
+    let mut tp = { let init_14 = set_pos(rvec_from_elem(\<llangle>make_elem_layout 8 8\<rrangle>, 0_usize, n), * trail, 0_usize); \<llangle>init_14 :: (64 word) rvec\<rrangle> };
+    let mut seen = { let init_15 = rvec_from_elem(\<llangle>make_elem_layout 1 1\<rrangle>, false, n); \<llangle>init_15 :: bool rvec\<rrangle> };
+    let mut lim = { let init_18 = { let res_17 = { let vec_16 = rvec_new(\<llangle>make_elem_layout 8 8\<rrangle>); \<llangle>vec_16 :: (64 word) rvec\<rrangle> }; \<llangle>res_17 :: (64 word) rvec\<rrangle> }; \<llangle>init_18 :: (64 word) rvec\<rrangle> };
     let mut q = 0_usize;
+    let mut learn = true;
     #[fuel(\<epsilon>\<open>urust_fuel\<close>)] loop {
-      let destr_16 = wpropagate(cs, * pos, * next_v, * head, * a, * trail, * rs, * q);
-      let p1 = destr_16.0;
-      let n1 = destr_16.1;
-      let h1 = destr_16.2;
-      let a1 = destr_16.3;
-      let t1 = destr_16.4;
-      let r1 = destr_16.5;
-      let q1 = destr_16.6;
-      let ok_v = destr_16.7;
-      let v_cf = destr_16.8;
+      let q0 = rvec_len(* trail);
+      let destr_19 = wpropagate(* db, * pos, * next_v, * head, * a, * trail, * rs, * q);
+      let p1 = destr_19.0;
+      let n1 = destr_19.1;
+      let h1 = destr_19.2;
+      let a1 = destr_19.3;
+      let t1 = destr_19.4;
+      let r1 = destr_19.5;
+      let q1 = destr_19.6;
+      let ok_v = destr_19.7;
+      let cf = destr_19.8;
       * pos = p1;
       * next_v = n1;
       * head = h1;
@@ -1058,6 +1195,7 @@ definition "dpll" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarr
       * trail = t1;
       * rs = r1;
       * q = q1;
+      * tp = set_pos(* tp, * trail, q0);
       if ok_v {
         match find_unassigned(* a) {
           None \<Rightarrow> {
@@ -1066,28 +1204,77 @@ definition "dpll" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarr
           Some(v) \<Rightarrow> {
             rvec_push(lim, rvec_len(* trail));
             * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[v]) = Some(true);
+            * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(tp)[v]) = rvec_len(* trail);
             rvec_push(trail, Lit_mk { Lit_var: v, Lit_neg: false });
             rvec_push(rs, 0_usize);
           }
         }
       };
       if !ok_v {
-        match rvec_pop(lim) {
-          None \<Rightarrow> {
-            return None;
-          },
-          Some(p) \<Rightarrow> {
-            let d = \<llangle>rvec_elems\<rrangle>\<^sub>1(* trail)[p];
-            let destr_17 = backtrack(* a, * trail, p);
-            let a2 = destr_17.0;
-            let t2 = destr_17.1;
-            * a = a2;
-            * trail = t2;
-            * rs = cut(* rs, p);
-            * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[d.Lit_var]) = Some(d.Lit_neg);
-            rvec_push(trail, lit_neg(d));
-            rvec_push(rs, 0_usize);
-            * q = p;
+        if rvec_len(* lim) == 0_usize {
+          return None;
+        };
+        let mut found = false;
+        let mut c = { let init_22 = { let res_21 = { let vec_20 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_20 :: Lit rvec\<rrangle> }; \<llangle>res_21 :: Lit rvec\<rrangle> }; \<llangle>init_22 :: Lit rvec\<rrangle> };
+        if (* learn) && (rvec_len(* db) < (18446744073709551615_usize / 4_usize)) {
+          let start = \<llangle>rvec_elems\<rrangle>\<^sub>1(* lim)[rvec_len(* lim) - 1_usize];
+          let destr_23 = analyze(* db, * trail, * rs, * tp, start, * seen, cf);
+          let c1 = destr_23.0;
+          let s1 = destr_23.1;
+          let f1 = destr_23.2;
+          * c = c1;
+          * seen = s1;
+          * found = f1;
+        };
+        if * found {
+          let mut j = 0_usize;
+          if rvec_len(* c) >= 2_usize {
+            * c = second_watch(* c, * tp);
+            * j = level_of(* lim, \<llangle>rvec_elems\<rrangle>\<^sub>1(* tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[1_usize].Lit_var]);
+          };
+          let p = \<llangle>rvec_elems\<rrangle>\<^sub>1(* lim)[* j];
+          * lim = cut(* lim, * j);
+          let destr_24 = backtrack(* a, * trail, p);
+          let a2 = destr_24.0;
+          let t2 = destr_24.1;
+          * a = a2;
+          * trail = t2;
+          * rs = cut(* rs, p);
+          let l = \<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[0_usize];
+          let destr_25 = add_clause_watched(* db, * pos, * next_v, * head, * c);
+          let d1 = destr_25.0;
+          let p1 = destr_25.1;
+          let n1 = destr_25.2;
+          let h1 = destr_25.3;
+          rvec_push(rs, rvec_len(d1) - 1_usize);
+          * db = d1;
+          * pos = p1;
+          * next_v = n1;
+          * head = h1;
+          * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[l.Lit_var]) = Some(!(l.Lit_neg));
+          * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(tp)[l.Lit_var]) = p;
+          rvec_push(trail, l);
+          * q = p;
+        } else {
+          * learn = false;
+          match rvec_pop(lim) {
+            None \<Rightarrow> {
+              return None;
+            },
+            Some(p) \<Rightarrow> {
+              let d = \<llangle>rvec_elems\<rrangle>\<^sub>1(* trail)[p];
+              let destr_26 = backtrack(* a, * trail, p);
+              let a2 = destr_26.0;
+              let t2 = destr_26.1;
+              * a = a2;
+              * trail = t2;
+              * rs = cut(* rs, p);
+              * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(a)[d.Lit_var]) = Some(d.Lit_neg);
+              * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(tp)[d.Lit_var]) = p;
+              rvec_push(trail, lit_neg(d));
+              rvec_push(rs, 0_usize);
+              * q = p;
+            }
           }
         }
       }

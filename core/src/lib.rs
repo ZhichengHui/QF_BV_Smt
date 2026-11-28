@@ -917,20 +917,155 @@ fn cut(v: Vec<usize>, p: usize) -> Vec<usize> {
     v
 }
 
+/// Records the trail position of every trail entry from position `k` on in `tp` (per variable).
+fn set_pos(tp: Vec<usize>, trail: &Vec<Lit>, k: usize) -> Vec<usize> {
+    let mut tp = tp;
+    let mut k = k;
+    while k < trail.len() {
+        tp[trail[k].var] = k;
+        k += 1;
+    }
+    tp
+}
+
+/// Marks the variables of clause `c` in `seen`: a variable assigned at the current decision level
+/// (trail position at or above `start`) is counted in `cnt`, any other literal is pushed on
+/// `learned`. Variables already marked are skipped.
+fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, learned: Vec<Lit>, cnt: usize) -> (Vec<bool>, Vec<Lit>, usize) {
+    let mut seen = seen;
+    let mut learned = learned;
+    let mut cnt = cnt;
+    let mut k: usize = 0;
+    while k < c.len() {
+        let l = c[k];
+        if !seen[l.var] {
+            seen[l.var] = true;
+            if tp[l.var] >= start {
+                cnt += 1;
+            } else {
+                learned.push(l);
+            }
+        }
+        k += 1;
+    }
+    (seen, learned, cnt)
+}
+
+/// Conflict analysis (first unique implication point) of the clause `cf` in conflict; the current
+/// decision level starts at trail position `start`. The clause is resolved with the reasons of the
+/// entries of the current level, from the end of the trail backwards, until one marked entry of
+/// the current level is left; the learned clause is its negation, first, followed by the literals
+/// of lower levels. The flag is false if the conflict has no literal of the current level. `seen`
+/// is all false on entry and on exit.
+fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize) -> (Vec<Lit>, Vec<bool>, bool) {
+    let mut seen = seen;
+    let mut learned: Vec<Lit> = Vec::new();
+    learned.push(Lit { var: 0, neg: false });
+    let (s1, l1, c1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0);
+    seen = s1;
+    learned = l1;
+    let mut cnt = c1;
+    let mut i = trail.len();
+    let mut ok = cnt > 0;
+    while ok && start < i {
+        i -= 1;
+        if seen[trail[i].var] {
+            if cnt <= 1 {
+                learned[0] = lit_neg(trail[i]);
+                ok = false;
+            } else {
+                let (s2, l2, c2) = analyze_clause(&cs[rs[i]], tp, start, seen, learned, cnt - 1);
+                seen = s2;
+                learned = l2;
+                cnt = c2;
+            }
+        }
+    }
+    let found = cnt == 1 && !ok;
+    let mut k: usize = 0;
+    while k < learned.len() {
+        seen[learned[k].var] = false;
+        k += 1;
+    }
+    let mut j = start;
+    while j < trail.len() {
+        seen[trail[j].var] = false;
+        j += 1;
+    }
+    (learned, seen, found)
+}
+
+/// Moves a literal of the learned clause `c` (at least two literals) whose trail position is the
+/// highest after the first literal to position 1.
+fn second_watch(c: Vec<Lit>, tp: &Vec<usize>) -> Vec<Lit> {
+    let mut c = c;
+    let mut b: usize = 1;
+    let mut k: usize = 2;
+    while k < c.len() {
+        if tp[c[k].var] > tp[c[b].var] {
+            b = k;
+        }
+        k += 1;
+    }
+    let l = c[1];
+    c[1] = c[b];
+    c[b] = l;
+    c
+}
+
+/// The number of decision positions in `lim` (increasing) at or below `p`.
+fn level_of(lim: &Vec<usize>, p: usize) -> usize {
+    let mut j: usize = 0;
+    while j < lim.len() && lim[j] <= p {
+        j += 1;
+    }
+    j
+}
+
+/// Appends the clause `c` to the clauses with its two slots; a clause of at least two literals
+/// watches its first two, at the heads of their lists.
+fn add_clause_watched(cs: Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, c: Vec<Lit>) -> (Vec<Vec<Lit>>, Vec<usize>, Vec<usize>, Vec<usize>) {
+    let mut cs = cs;
+    let mut pos = pos;
+    let mut next = next;
+    let mut head = head;
+    let s = next.len();
+    pos.push(0);
+    pos.push(1);
+    next.push(usize::MAX);
+    next.push(usize::MAX);
+    if c.len() >= 2 {
+        let x0 = lit_index(c[0]);
+        next[s] = head[x0];
+        head[x0] = s;
+        let x1 = lit_index(c[1]);
+        next[s + 1] = head[x1];
+        head[x1] = s + 1;
+    }
+    cs.push(c);
+    (cs, pos, next, head)
+}
+
 /// A total assignment of the `n` variables that satisfies the clauses, if there is one.
 ///
-/// The search assigns in place and records the true literals in order on the trail; `lim` holds
-/// the trail positions of the decisions, so that the decision level of an entry is the number of
-/// decisions at or before it. `rs` holds the reason of every trail entry: the clause that implied
-/// it, or 0 for a decision or a flipped decision (not used yet). A pass over the clauses first
-/// assigns the unit clauses; then the watches propagate the trail entries from position `q` on. On
-/// a conflict the last decision is
-/// undone with every entry after it and its negation is pushed as an implied entry (chronological
-/// backtracking). The watches are complete (every clause of at least two literals that is not
-/// satisfied watches two literals that are not false, or its unit literal is still to be
-/// propagated), so a total assignment reached without a conflict satisfies every clause.
+/// Conflict-driven clause learning. The search assigns in place and records the true literals in
+/// order on the trail; `lim` holds the trail positions of the decisions, so that the decision level
+/// of an entry is the number of decisions at or before it. Every implied entry has a reason, a
+/// clause whose other literals are false by the entries before it (`rs`, per trail position);
+/// `tp` gives the trail position of every assigned variable. A pass over the clauses first assigns
+/// the unit clauses; then the watches propagate the trail entries from position `q` on. On a
+/// conflict, the analysis learns a clause (`analyze`) that follows from the clauses; it is added to
+/// the clauses, the search backjumps to the second-highest level of its literals and its first
+/// literal is implied there. Learning stops for good when the clauses reach `usize::MAX / 4` or the
+/// analysis finds no literal of the current level (neither happens in practice); from then on the
+/// last decision is undone on a conflict and its negation implied (chronological backtracking),
+/// without a reason, which is why no analysis may follow. The watches are
+/// complete (every clause of at least two literals that is not satisfied watches two literals that
+/// are not false, or its unit literal is still to be propagated), so a total assignment reached
+/// without a conflict satisfies every clause.
 fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let (pos0, next0, head0) = watch_init(cs, n);
+    let mut db: Vec<Vec<Lit>> = cs.clone();
     let mut pos = pos0;
     let mut next = next0;
     let mut head = head0;
@@ -941,10 +1076,14 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut a: Vec<Option<bool>> = a0;
     let mut trail: Vec<Lit> = t0;
     let mut rs: Vec<usize> = r0;
+    let mut tp: Vec<usize> = set_pos(vec![0; n], &trail, 0);
+    let mut seen: Vec<bool> = vec![false; n];
     let mut lim: Vec<usize> = Vec::new();
     let mut q: usize = 0;
+    let mut learn = true;
     loop {
-        let (p1, n1, h1, a1, t1, r1, q1, ok, _cf) = wpropagate(cs, pos, next, head, a, trail, rs, q);
+        let q0 = trail.len();
+        let (p1, n1, h1, a1, t1, r1, q1, ok, cf) = wpropagate(&db, pos, next, head, a, trail, rs, q);
         pos = p1;
         next = n1;
         head = h1;
@@ -952,30 +1091,71 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         trail = t1;
         rs = r1;
         q = q1;
+        tp = set_pos(tp, &trail, q0);
         if ok {
             match find_unassigned(&a) {
                 None => return Some(a),
                 Some(v) => {
                     lim.push(trail.len());
                     a[v] = Some(true);
+                    tp[v] = trail.len();
                     trail.push(Lit { var: v, neg: false });
                     rs.push(0);
                 }
             }
         }
         if !ok {
-            match lim.pop() {
-                None => return None,
-                Some(p) => {
-                    let d = trail[p];
-                    let (a2, t2) = backtrack(a, trail, p);
-                    a = a2;
-                    trail = t2;
-                    rs = cut(rs, p);
-                    a[d.var] = Some(d.neg);
-                    trail.push(lit_neg(d));
-                    rs.push(0);
-                    q = p;
+            if lim.len() == 0 {
+                return None;
+            }
+            let mut found = false;
+            let mut c: Vec<Lit> = Vec::new();
+            if learn && db.len() < usize::MAX / 4 {
+                let start = lim[lim.len() - 1];
+                let (c1, s1, f1) = analyze(&db, &trail, &rs, &tp, start, seen, cf);
+                c = c1;
+                seen = s1;
+                found = f1;
+            }
+            if found {
+                let mut j: usize = 0;
+                if c.len() >= 2 {
+                    c = second_watch(c, &tp);
+                    j = level_of(&lim, tp[c[1].var]);
+                }
+                let p = lim[j];
+                lim = cut(lim, j);
+                let (a2, t2) = backtrack(a, trail, p);
+                a = a2;
+                trail = t2;
+                rs = cut(rs, p);
+                let l = c[0];
+                let (d1, p1, n1, h1) = add_clause_watched(db, pos, next, head, c);
+                rs.push(d1.len() - 1);
+                db = d1;
+                pos = p1;
+                next = n1;
+                head = h1;
+                a[l.var] = Some(!l.neg);
+                tp[l.var] = p;
+                trail.push(l);
+                q = p;
+            } else {
+                learn = false;
+                match lim.pop() {
+                    None => return None,
+                    Some(p) => {
+                        let d = trail[p];
+                        let (a2, t2) = backtrack(a, trail, p);
+                        a = a2;
+                        trail = t2;
+                        rs = cut(rs, p);
+                        a[d.var] = Some(d.neg);
+                        tp[d.var] = p;
+                        trail.push(lit_neg(d));
+                        rs.push(0);
+                        q = p;
+                    }
                 }
             }
         }

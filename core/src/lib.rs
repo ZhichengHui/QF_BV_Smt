@@ -2971,6 +2971,50 @@ fn rewrite(defs: &Vec<CoreTerm>, t: &CoreTerm, w: usize) -> CoreTerm {
     }
 }
 
+/// The CNF cost `bcost` (`QFBV_Bound.thy`) of the operator with code `c` on operands of width
+/// `w`, saturated at `cap()`.
+fn bcost(c: usize, w: usize) -> usize {
+    if c <= 2 {
+        sat_mul(5, w)
+    } else if c == 3 || c == 11 {
+        sat_mul(15, w)
+    } else if c == 4 {
+        sat_mul(sat_mul(19, w), w)
+    } else if c == 5 || c == 6 {
+        sat_add(sat_add(sat_mul(sat_mul(76, w), w), sat_mul(92, w)), 14)
+    } else if c == 7 || c == 8 {
+        sat_add(sat_mul(sat_mul(5, w), stages(w)), sat_mul(9, w))
+    } else if c == 10 {
+        sat_mul(9, w)
+    } else {
+        0
+    }
+}
+
+/// `ccount` (`QFBV_Bound.thy`) of the term `t` over variables of widths `ws` and definitions of
+/// widths `dw`, saturated at `cap()`, and the width of `t`.
+fn term_ccount(ws: &Vec<usize>, dw: &Vec<usize>, t: &CoreTerm) -> (usize, usize) {
+    match t {
+        CoreTerm::Const(bits) => (0, bits.len()),
+        CoreTerm::Var(i) => (0, ws[*i]),
+        CoreTerm::Ref(i) => (0, dw[*i]),
+        CoreTerm::Not(a) => term_ccount(ws, dw, a),
+        CoreTerm::Bin(op, a, b) => {
+            let (ca, wa) = term_ccount(ws, dw, a);
+            let (cb, wb) = term_ccount(ws, dw, b);
+            let c = op_code(op);
+            let w = if c == 9 { wa + wb } else if c == 10 || c == 11 { 1 } else { wa };
+            (sat_add(sat_add(ca, cb), bcost(c, wa)), w)
+        }
+        CoreTerm::Extract(hi, lo, a) => (term_ccount(ws, dw, a).0, *hi - *lo + 1),
+        CoreTerm::Ite(c, a, b) => {
+            let (ca, wa) = term_ccount(ws, dw, a);
+            let cc = sat_add(sat_add(term_ccount(ws, dw, c).0, ca), term_ccount(ws, dw, b).0);
+            (sat_add(cc, sat_mul(5, wa)), wa)
+        }
+    }
+}
+
 /// The first definition in the list from `k` on (through `next`) of width `w` equal to `t`;
 /// `usize::MAX` if there is none.
 fn find_def(defs: &Vec<CoreTerm>, widths: &Vec<usize>, next: &Vec<usize>, k: usize, t: &CoreTerm, w: usize) -> usize {
@@ -3072,11 +3116,14 @@ fn distribute(defs: &Vec<CoreTerm>, widths: &Vec<usize>, head: &Vec<usize>, next
 }
 
 /// The definition of the term `t` of width `w` (over the new definitions), rewritten; a product
-/// of more than two factors becomes the product of its sorted factors, from the left.
-fn mk(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<usize>, t: &CoreTerm, w: usize) -> (Vec<CoreTerm>, Vec<usize>, Vec<usize>, Vec<usize>, usize) {
+/// of `n > 2` factors becomes the product of its sorted factors, from the left, if `w > 0` and
+/// its `n - 2` extra products cost at most `room` (`ccount` of a product: `19 * w * w` each).
+/// Also the cost charged: those `n - 2` products if flattened, 0 otherwise.
+fn mk(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<usize>, t: &CoreTerm, w: usize, room: usize) -> (Vec<CoreTerm>, Vec<usize>, Vec<usize>, Vec<usize>, usize, usize) {
     let r = distribute(&defs, &widths, &head, &next, rewrite(&defs, t, w), w);
     let (fs, ok) = product_factors(&defs, &r);
-    if ok && fs.len() > 2 {
+    let extra = if ok && fs.len() > 2 { sat_mul(bcost(4, w), fs.len() - 2) } else { 0 };
+    if ok && fs.len() > 2 && w > 0 && extra <= room {
         let fs = sort_usize(fs);
         let mut defs = defs;
         let mut widths = widths;
@@ -3093,9 +3140,10 @@ fn mk(defs: Vec<CoreTerm>, widths: Vec<usize>, head: Vec<usize>, next: Vec<usize
             acc = k;
             i += 1;
         }
-        (defs, widths, head, next, acc)
+        (defs, widths, head, next, acc, extra)
     } else {
-        mk_raw(defs, widths, head, next, r, w)
+        let (d1, w1, h1, n1, k) = mk_raw(defs, widths, head, next, r, w);
+        (d1, w1, h1, n1, k, 0)
     }
 }
 
@@ -3166,7 +3214,16 @@ fn substitution(q: &CoreProblem) -> (Vec<usize>, Vec<usize>) {
 
 /// The normalization of `q`.
 pub fn normalize(q: &CoreProblem) -> CoreProblem {
+    normalize_k(q, 2)
+}
+
+/// The normalization of `q` whose flattening keeps `ccount` of the result at most `f` times that
+/// of `q`: a product is flattened only while the cost charged for the extra products so far
+/// stays at most `f - 1` times `ccount` of the definitions of `q` up to the current one.
+pub fn normalize_k(q: &CoreProblem, f: usize) -> CoreProblem {
     let dw = def_widths(q);
+    let mut seen: usize = 0;
+    let mut spent: usize = 0;
     let (sb, ss) = substitution(q);
     let mut defs: Vec<CoreTerm> = Vec::new();
     let mut widths: Vec<usize> = Vec::new();
@@ -3180,8 +3237,12 @@ pub fn normalize(q: &CoreProblem) -> CoreProblem {
             let m = map[sb[v]];
             map.push(m);
         } else {
+            seen = sat_add(seen, term_ccount(&q.widths, &dw, &q.defs[j]).0);
+            let lim = sat_mul(seen, f - 1);
+            let room = if spent < lim { lim - spent } else { 0 };
             let t = remap(&q.defs[j], &map);
-            let (d1, w1, h1, n1, k) = mk(defs, widths, head, next, &t, dw[j]);
+            let (d1, w1, h1, n1, k, c) = mk(defs, widths, head, next, &t, dw[j], room);
+            spent = sat_add(spent, c);
             defs = d1;
             widths = w1;
             head = h1;

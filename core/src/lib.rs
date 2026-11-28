@@ -3874,3 +3874,37 @@ pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
         Answer::Unsat => SmtAnswer::Unsat,
     }
 }
+
+/// Debug (scratch only): `[Σccount q, Σccount q', |defs q|, |defs q'|]` for the lowered problem
+/// `q` of `p` and its normalization `q'` with factor `f`; empty outside the fragment.
+pub fn norm_growth(p: &SmtProblem, f: usize) -> Vec<usize> {
+    let mut r: Vec<usize> = Vec::new();
+    if !in_fragment(p) || tr_size(p) >= cap() {
+        return r;
+    }
+    let pr = tr_problem(p);
+    if !size_ok(&pr) {
+        return r;
+    }
+    let q = lower_problem(&pr);
+    let q2 = normalize_k(&q, f);
+    let dw = def_widths(&q);
+    let dw2 = def_widths(&q2);
+    let mut c: usize = 0;
+    let mut c2: usize = 0;
+    let mut j: usize = 0;
+    while j < q.defs.len() {
+        c = sat_add(c, term_ccount(&q.widths, &dw, &q.defs[j]).0);
+        j += 1;
+    }
+    j = 0;
+    while j < q2.defs.len() {
+        c2 = sat_add(c2, term_ccount(&q2.widths, &dw2, &q2.defs[j]).0);
+        j += 1;
+    }
+    r.push(c);
+    r.push(c2);
+    r.push(q.defs.len());
+    r.push(q2.defs.len());
+    r
+}

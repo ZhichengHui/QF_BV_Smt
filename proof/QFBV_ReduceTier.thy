@@ -241,6 +241,12 @@ proof -
     using sel2_m_props[OF s] by auto
 qed
 
+text \<open>The tier-2 mask is the mask of \<^const>\<open>keep_m\<close> with the flagged clauses of LBD at most \<open>T\<close>
+  added to the reasons, so every fact of \<^const>\<open>keep_m\<close> carries over.\<close>
+lemma keep2_m_keep_m:
+  \<open>keep2_m T m lbd uf rs m0 = keep_m m lbd (rs @ tier_rs T lbd uf m0 m) m0\<close>
+  by (simp add: keep2_m_def keep_m_def sel2_m_sel_m split: prod.split)
+
 subsection \<open>The flags \<^verbatim>\<open>uflag\<close>\<close>
 
 text \<open>\<^verbatim>\<open>uf2.push(false)\<close> in the compaction, in the branch \<^verbatim>\<open>if keep[c] { .. if c >= m0 { .. } }\<close>
@@ -366,6 +372,38 @@ proof -
     have \<open>keep ! (rs ! j)\<close> using kept that by simp
     then show ?thesis using kc[OF that(2)] rn that by simp
   qed
+qed
+
+text \<open>The remaining facts of \<open>reduce_m_props\<close>: \<open>db2\<close> is not longer than \<open>db\<close>, a renumbered reason
+  keeps its watched positions, and a reason out of range (as \<^verbatim>\<open>usize::MAX\<close> of a decision) is
+  unchanged; every slot of \<open>db2\<close> is that of a kept clause.\<close>
+lemma reduce2_m_len_pos:
+  assumes \<open>reduce2_m T db lbd uf pos rs m0 = (db2, lbd2, uf2, rs2, pos2, keep, mp)\<close> \<open>m0 \<le> length db\<close>
+  shows \<open>length db2 \<le> length db\<close>
+    \<open>j < length rs \<Longrightarrow> rs ! j < length db \<Longrightarrow> \<forall>i < 2. pos2 ! (2 * rs2 ! j + i) = pos ! (2 * rs ! j + i)\<close>
+proof -
+  note p = reduce2_m_props[OF assms]
+  show \<open>length db2 \<le> length db\<close> using p(5) by (rule list_emb_length)
+  show \<open>\<forall>i < 2. pos2 ! (2 * rs2 ! j + i) = pos ! (2 * rs ! j + i)\<close> if \<open>j < length rs\<close> \<open>rs ! j < length db\<close>
+  proof -
+    have \<open>keep ! (rs ! j)\<close> using p(3) that by simp
+    then show ?thesis using p(12)[OF that(2)] p(15)[OF that] by simp
+  qed
+qed
+
+lemma reduce2_m_rs_out:
+  assumes \<open>reduce2_m T db lbd uf pos rs m0 = (db2, lbd2, uf2, rs2, pos2, keep, mp)\<close>
+    \<open>j < length rs\<close> \<open>\<not> rs ! j < length db\<close>
+  shows \<open>rs2 ! j = rs ! j\<close>
+  using assms renum_loop_nth[of mp \<open>length db\<close> rs 0] by (auto simp: reduce2_m_def Let_def split: prod.splits)
+
+lemma reduce2_m_onto:
+  assumes \<open>reduce2_m T db lbd uf pos rs m0 = (db2, lbd2, uf2, rs2, pos2, keep, mp)\<close> \<open>c' < length db2\<close>
+  shows \<open>\<exists>c < length db. keep ! c \<and> mp ! c = c'\<close>
+proof -
+  have \<open>compact_m keep db lbd pos m0 = (mp, db2, lbd2, pos2)\<close> \<open>keep = keep2_m T (length db) lbd uf rs m0\<close>
+    using assms(1) by (auto simp: reduce2_m_def Let_def split: prod.splits)
+  then show ?thesis using compact_m_onto assms(2) keep2_m_props(1) by blast
 qed
 
 subsection \<open>The invariant \<open>length uflag = length lbd\<close>\<close>

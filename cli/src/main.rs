@@ -5,9 +5,16 @@
 smtlib::bridge!(qfbv);
 
 fn solve(p: &smtlib::SmtProblem) -> smtlib::SmtAnswer {
-    answer_from_core(qfbv::check_sat(&problem_to_core(p)))
+    let t = qfbv::prof::rep("parse", *qfbv::prof::START.get().unwrap());
+    let c = problem_to_core(p);
+    let t = qfbv::prof::rep("bridge", t);
+    let r = answer_from_core(qfbv::check_sat(&c));
+    qfbv::prof::rep("solve_total", t);
+    qfbv::prof::rep("total_to_answer", *qfbv::prof::START.get().unwrap());
+    r
 }
 
 fn main() {
+    let _ = qfbv::prof::START.set(qfbv::prof::now());
     smtlib::cli_main(solve)
 }

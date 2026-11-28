@@ -1587,6 +1587,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         trail = t1;
         rs = r1;
         q = q1;
+        prof::inc(&prof::PROPS, trail.len() - q0);
         tp = set_pos(tp, &trail, q0);
         if ok {
             nc = trail.len();
@@ -1601,6 +1602,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             next = n2;
             head = h2;
             reductions += 1;
+            prof::inc(&prof::RED, 1);
             next_reduce = total + 2000 + 300 * reductions;
         }
         if RESTARTS && ok && learn && conflicts >= budget && restarts < 1 << 20 && lim.len() > 0 {
@@ -1645,6 +1647,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             heap = hh;
             hp = hq;
             restarts += 1;
+            prof::inc(&prof::RST, 1);
             conflicts = 0;
             budget = 100 * luby(restarts);
         }
@@ -1662,6 +1665,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                             None => {}
                         }
                     }
+                    prof::inc(&prof::DEC, 1);
                     lim.push(trail.len());
                     a[v] = Some(s);
                     tp[v] = trail.len();
@@ -1698,6 +1702,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 act = ac1;
                 conflicts += 1;
                 total += 1;
+                prof::inc(&prof::CONF, 1);
                 let (hh, hq) = heap_bumped(heap, hp, &act, rev, &c, &trail, start);
                 heap = hh;
                 hp = hq;
@@ -1760,6 +1765,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 q = p;
             } else {
                 learn = false;
+                prof::inc(&prof::CHRONO, 1);
                 match lim.pop() {
                     None => return None,
                     Some(p) => {
@@ -1799,6 +1805,47 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     }
 }
 
+
+// Scratch profiling (issue #142, not for merge): env QFBV_PROF=1 prints phase times and search
+// counters to standard error.
+pub mod prof {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    pub static DEC: AtomicUsize = AtomicUsize::new(0);
+    pub static CONF: AtomicUsize = AtomicUsize::new(0);
+    pub static RST: AtomicUsize = AtomicUsize::new(0);
+    pub static RED: AtomicUsize = AtomicUsize::new(0);
+    pub static PROPS: AtomicUsize = AtomicUsize::new(0);
+    pub static CHRONO: AtomicUsize = AtomicUsize::new(0);
+    pub static START: OnceLock<Instant> = OnceLock::new();
+    pub fn on() -> bool {
+        static ON: OnceLock<bool> = OnceLock::new();
+        *ON.get_or_init(|| std::env::var_os("QFBV_PROF").is_some())
+    }
+    pub fn inc(c: &AtomicUsize, k: usize) {
+        c.fetch_add(k, Ordering::Relaxed);
+    }
+    pub fn get(c: &AtomicUsize) -> usize {
+        c.load(Ordering::Relaxed)
+    }
+    pub fn now() -> Instant {
+        Instant::now()
+    }
+    pub fn rep(name: &str, t: Instant) -> Instant {
+        let n = Instant::now();
+        if on() {
+            eprintln!("prof {} {:.6}", name, (n - t).as_secs_f64());
+        }
+        n
+    }
+    pub fn kv(name: &str, v: usize) {
+        if on() {
+            eprintln!("prof {} {}", name, v);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // The solver
 
@@ -1831,8 +1878,21 @@ fn encode(p: &CoreProblem) -> (Cnf, Vec<Vec<Lit>>) {
 }
 
 fn solve_core(p: &CoreProblem) -> Answer {
+    let t = prof::now();
     let (cnf, vars) = encode(p);
-    match dpll(&cnf.clauses, cnf.num_vars) {
+    let t = prof::rep("blast", t);
+    prof::kv("cnf_vars", cnf.num_vars);
+    prof::kv("cnf_clauses", cnf.clauses.len());
+    prof::kv("cnf_lits", cnf.clauses.iter().map(|c| c.len()).sum());
+    let r = dpll(&cnf.clauses, cnf.num_vars);
+    prof::rep("sat", t);
+    prof::kv("decisions", prof::get(&prof::DEC));
+    prof::kv("conflicts", prof::get(&prof::CONF));
+    prof::kv("chrono", prof::get(&prof::CHRONO));
+    prof::kv("restarts", prof::get(&prof::RST));
+    prof::kv("reductions", prof::get(&prof::RED));
+    prof::kv("props", prof::get(&prof::PROPS));
+    match r {
         None => Answer::Unsat,
         Some(a) => Answer::Sat(read_model(&a, &vars)),
     }
@@ -2109,10 +2169,23 @@ fn lower_problem(p: &Problem) -> CoreProblem {
 /// The solver: rewrites the problem into the core language, eliminates its unconstrained
 /// definitions, solves the result and reconstructs a model of the problem from a model of it.
 pub fn solve(p: &Problem) -> Answer {
-    let q = normalize(&lower_problem(p));
+    let t = prof::now();
+    let l = lower_problem(p);
+    let t = prof::rep("lower", t);
+    prof::kv("lower_defs", l.defs.len());
+    let q = normalize(&l);
+    let t = prof::rep("normalize", t);
+    prof::kv("norm_defs", q.defs.len());
     let (q2, kind, mark) = elim(&q);
+    let _ = prof::rep("elim", t);
+    prof::kv("elim_defs", q2.defs.len());
     match solve_core(&q2) {
-        Answer::Sat(m2) => Answer::Sat(reconstruct(&q, &kind, &mark, &q2, &m2)),
+        Answer::Sat(m2) => {
+            let t = prof::now();
+            let m = reconstruct(&q, &kind, &mark, &q2, &m2);
+            prof::rep("reconstruct", t);
+            Answer::Sat(m)
+        }
         Answer::Unsat => Answer::Unsat,
     }
 }
@@ -4065,10 +4138,12 @@ pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
     if tr_size(p) >= cap() {
         return SmtAnswer::Unknown;
     }
+    let t = prof::now();
     let q = tr_problem(p);
     if !size_ok(&q) {
         return SmtAnswer::Unknown;
     }
+    prof::rep("translate", t);
     match solve(&q) {
         Answer::Sat(m) => SmtAnswer::Sat(tr_model(p, &m)),
         Answer::Unsat => SmtAnswer::Unsat,

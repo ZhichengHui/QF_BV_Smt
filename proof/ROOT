@@ -11,6 +11,8 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
     QFBV_Luby
     QFBV_Reduce
     QFBV_ReduceCompact
+    QFBV_ReduceLbd
+    QFBV_ReduceTier
     QFBV_Activity
 
 session "QFBV_Smt" in "smt" = "QFBV_CoreSpec" +

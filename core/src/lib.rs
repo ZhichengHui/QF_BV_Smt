@@ -871,6 +871,9 @@ const RESTARTS: bool = true;
 /// Whether the search reduces the learned clauses (`reduce_db`).
 const REDUCE: bool = true;
 
+/// Whether the LBD of a learned clause taking part in a conflict analysis is updated (Glucose).
+const LBD_UPDATE: bool = true;
+
 fn luby(i: usize) -> usize {
     let mut size: usize = 1;
     let mut seq: usize = 0;
@@ -1165,10 +1168,13 @@ fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, 
 /// entries of the current level, from the end of the trail backwards, until one marked entry of
 /// the current level is left; the learned clause is its negation, first, followed by the literals
 /// of lower levels. The flag is false if the conflict has no literal of the current level. `seen`
-/// is all false on entry and on exit.
-fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize, act: Vec<usize>, inc: usize) -> (Vec<Lit>, Vec<bool>, bool, Vec<usize>) {
+/// is all false on entry and on exit. Also returns the clauses taking part: `cf` and the reasons
+/// resolved with.
+fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize, act: Vec<usize>, inc: usize) -> (Vec<Lit>, Vec<bool>, bool, Vec<usize>, Vec<usize>) {
     let mut act = act;
     let mut seen = seen;
+    let mut used: Vec<usize> = Vec::new();
+    used.push(cf);
     let mut learned: Vec<Lit> = Vec::new();
     learned.push(Lit { var: 0, neg: false });
     let (s1, l1, c1, a1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0, act, inc);
@@ -1185,6 +1191,7 @@ fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize
                 learned[0] = lit_neg(trail[i]);
                 ok = false;
             } else {
+                used.push(rs[i]);
                 let (s2, l2, c2, a2) = analyze_clause(&cs[rs[i]], tp, start, seen, learned, cnt - 1, act, inc);
                 act = a2;
                 seen = s2;
@@ -1204,7 +1211,7 @@ fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize
         seen[trail[j].var] = false;
         j += 1;
     }
-    (learned, seen, found, act)
+    (learned, seen, found, act, used)
 }
 
 /// Moves a literal of the learned clause `c` (at least two literals) whose trail position is the
@@ -1289,6 +1296,29 @@ fn clause_lbd(c: &Vec<Lit>, tp: &Vec<usize>, lim: &Vec<usize>, mark: Vec<usize>,
         k += 1;
     }
     (d, mark)
+}
+
+/// Glucose's LBD update: every learned clause (index at least `m0`) of LBD above 2 among `used`,
+/// all of whose literals are assigned, gets its present LBD if that is smaller by more than one.
+/// `st` is the last stamp used in `mark`; returns the new one.
+fn update_lbd(db: &Vec<Vec<Lit>>, used: &Vec<usize>, tp: &Vec<usize>, lim: &Vec<usize>, lbd: Vec<usize>, mark: Vec<usize>, st: usize, m0: usize) -> (Vec<usize>, Vec<usize>, usize) {
+    let mut lbd = lbd;
+    let mut mark = mark;
+    let mut st = st;
+    let mut k: usize = 0;
+    while k < used.len() {
+        let c = used[k];
+        if c >= m0 && c - m0 < lbd.len() && lbd[c - m0] > 2 {
+            st += 1;
+            let (b, m2) = clause_lbd(&db[c], tp, lim, mark, st);
+            mark = m2;
+            if b + 1 < lbd[c - m0] {
+                lbd[c - m0] = b;
+            }
+        }
+        k += 1;
+    }
+    (lbd, mark, st)
 }
 
 /// Clause-database reduction. The learned clauses are the clauses from index `m0` on, `lbd[c - m0]`
@@ -1410,7 +1440,8 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>
 /// without a reason, which is why no analysis may follow. While learning is on, after a
 /// propagation without conflict, once the conflicts reach `next_reduce` (first 2000, then 300
 /// more apart each time), `reduce_db` removes about half of the learned clauses: it keeps those of
-/// LBD at most 2 (the LBD of a clause is computed when it is learned) and the reasons of the trail.
+/// LBD at most 2 (the LBD of a clause is computed when it is learned, and lowered when the clause
+/// takes part in an analysis, `update_lbd`) and the reasons of the trail.
 /// The watches are
 /// complete (every clause of at least two literals that is not satisfied watches two literals that
 /// are not false, or its unit literal is still to be propagated), so a total assignment reached
@@ -1452,6 +1483,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let m0 = cs.len();
     let mut lbd: Vec<usize> = Vec::new();
     let mut lmark: Vec<usize> = vec![0; n + 1];
+    let mut stamp: usize = 0;
     let mut total: usize = 0;
     let mut reductions: usize = 0;
     let mut next_reduce: usize = 2000;
@@ -1523,7 +1555,13 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             let mut c: Vec<Lit> = Vec::new();
             if learn && db.len() < usize::MAX / 4 {
                 let start = lim[lim.len() - 1];
-                let (c1, s1, f1, ac1) = analyze(&db, &trail, &rs, &tp, start, seen, cf, act, inc);
+                let (c1, s1, f1, ac1, u1) = analyze(&db, &trail, &rs, &tp, start, seen, cf, act, inc);
+                if LBD_UPDATE {
+                    let (l2, m2, st2) = update_lbd(&db, &u1, &tp, &lim, lbd, lmark, stamp, m0);
+                    lbd = l2;
+                    lmark = m2;
+                    stamp = st2;
+                }
                 c = c1;
                 seen = s1;
                 found = f1;
@@ -1544,7 +1582,8 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 }
             }
             if found {
-                let (b, lm) = clause_lbd(&c, &tp, &lim, lmark, total);
+                stamp += 1;
+                let (b, lm) = clause_lbd(&c, &tp, &lim, lmark, stamp);
                 lmark = lm;
                 let mut j: usize = 0;
                 if c.len() >= 2 {

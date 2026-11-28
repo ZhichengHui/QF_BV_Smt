@@ -16,46 +16,51 @@ lemma dpll_total_sem:
    cnf_sem (sigma_of x) cs\<close>
   by (rule dpll_quiet_total) (auto simp: dpll_cs_ok_def dpll_wf_def)
 
-definition dpll_lit_value_contract :: \<open>bool option list \<Rightarrow> Lit \<Rightarrow> ('s, bool option, 'abort) function_contract\<close> where
+definition dpll_lit_value_contract :: \<open>bool option rvec \<Rightarrow> Lit \<Rightarrow> ('s, bool option, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_lit_value_contract a l \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>unat (Lit_var l) < length a\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = lit_value_m a l\<rangle>)\<close>
+     make_function_contract (can_alloc_reference \<star> \<langle>unat (Lit_var l) < rvec_length a\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = lit_value_m (rvec_elems a) l\<rangle>)\<close>
 
 lemma dpll_lit_value_spec [crush_specs]:
   shows \<open>\<Gamma>; lit_value a l \<Turnstile>\<^sub>F dpll_lit_value_contract a l\<close>
   apply (crush_boot f: lit_value_def contract: dpll_lit_value_contract_def)
   apply (crush_base simp add: lit_value_m_def word_less_nat_alt)
-  apply (cases \<open>a ! unat (Lit_var l)\<close>; crush_base simp add: lit_value_m_def)
+  apply (cases \<open>(rvec_elems a) ! unat (Lit_var l)\<close>; crush_base simp add: lit_value_m_def)
   done
 
-definition dpll_clause_status_contract :: \<open>bool option list \<Rightarrow> Lit list \<Rightarrow> ('s, Status, 'abort) function_contract\<close> where
+definition dpll_clause_status_contract :: \<open>bool option rvec \<Rightarrow> Lit rvec \<Rightarrow> ('s, Status, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_clause_status_contract a c \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>lits_lt (length a) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = status_m a c None False\<rangle>)\<close>
+       (can_alloc_reference \<star> \<langle>lits_lt (rvec_length a) (rvec_elems c) \<and> rvec_length c + 2 \<le> urust_fuel \<and> rvec_length c < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>r = status_m (rvec_elems a) (rvec_elems c) None False\<rangle>)\<close>
 
 lemma dpll_clause_status_spec [crush_specs]:
   shows \<open>\<Gamma>; clause_status a c \<Turnstile>\<^sub>F dpll_clause_status_contract a c\<close>
   apply (crush_boot f: clause_status_def contract: dpll_clause_status_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for u_ref o_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gu u go op gi i. u_ref \<mapsto>\<langle>\<top>\<rangle> gu\<down>u \<star> o_ref \<mapsto>\<langle>\<top>\<rangle> go\<down>op \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
-               \<langle>unat i \<le> length c \<and> status_m a c None False = status_m a (drop (unat i) c) u op \<and>
-                length c - unat i \<le> k\<rangle>\<close> and
+               \<langle>unat i \<le> rvec_length c \<and> status_m (rvec_elems a) (rvec_elems c) None False = status_m (rvec_elems a) (drop (unat i) (rvec_elems c)) u op \<and>
+                rvec_length c - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gu u go op gi i. u_ref \<mapsto>\<langle>\<top>\<rangle> gu\<down>u \<star> o_ref \<mapsto>\<langle>\<top>\<rangle> go\<down>op \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star>
                can_alloc_reference \<star>
-               \<langle>unat i < length c \<and> status_m a c None False = status_m a (drop (unat i) c) u op \<and>
-                length c - unat i \<le> Suc k\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = status_m a c None False\<rangle>\<close> and
+               \<langle>unat i < rvec_length c \<and> status_m (rvec_elems a) (rvec_elems c) None False = status_m (rvec_elems a) (drop (unat i) (rvec_elems c)) u op \<and>
+                rvec_length c - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = status_m (rvec_elems a) (rvec_elems c) None False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: option.splits simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
     apply (auto simp add: dpll_status_drop ASSUMPTION_def Option.is_none_def intro: dpll_lits_lt_nth)
     done
   done
+
+text \<open>An update of the elements of a vector through \<^verbatim>\<open>rvec_elems_focus\<close> (as
+  \<open>rvec_elems_focus_modify\<close> of \<^verbatim>\<open>QFBV_Eval\<close>).\<close>
+lemma dw_focus_modify: \<open>\<nabla>{rvec_elems_focus} f v = update_rvec_elems f v\<close>
+  by (simp add: focus_modify_def' focus_components rvec.expand)
 
 text \<open>The reasons \<open>rs1\<close> extend the reasons \<open>rs\<close> of the trail \<open>t\<close> with a reason of every entry of
   \<open>t1\<close> after \<open>t\<close>.\<close>
@@ -138,110 +143,143 @@ proof -
     by simp
 qed
 
+text \<open>The facts above for the clauses of a vector of vectors.\<close>
+lemma tpass_drop_v:
+  \<open>i < rvec_length cs \<Longrightarrow> tpass_m (drop i (vecs_of cs)) a t =
+     (case status_m a (rvec_elems (rvec_elems cs ! i)) None False of
+        Status_Conflict \<Rightarrow> (a, t, False)
+      | Status_Unit l \<Rightarrow> tpass_m (drop (Suc i) (vecs_of cs)) (a[unat (Lit_var l) := Some (\<not> Lit_neg l)]) (t @ [l])
+      | Status_Satisfied \<Rightarrow> tpass_m (drop (Suc i) (vecs_of cs)) a t
+      | Status_Open \<Rightarrow> tpass_m (drop (Suc i) (vecs_of cs)) a t)\<close>
+  using dpll_tpass_drop[of i \<open>vecs_of cs\<close> a t] by simp
+
+lemma unit_var_v:
+  \<open>\<forall>c \<in> set (vecs_of cs). lits_lt n c \<and> Q c \<Longrightarrow> i < rvec_length cs \<Longrightarrow>
+   status_m r (rvec_elems (rvec_elems cs ! i)) None False = Status_Unit l \<Longrightarrow> unat (Lit_var l) < n\<close>
+  using dpll_unit_var_nth[of \<open>vecs_of cs\<close> n Q i r l] by simp
+
+lemma pp_unit_v:
+  fixes i :: \<open>64 word\<close> and cs :: \<open>Lit rvec rvec\<close>
+  assumes \<open>wprop_inv (vecs_of cs) t n a' t'\<close> \<open>rext (vecs_of cs) t rs t' rs'\<close> \<open>unat i < rvec_length cs\<close>
+    \<open>\<forall>c \<in> set (vecs_of cs). lits_lt n c \<and> Q c\<close>
+    \<open>status_m a' (rvec_elems (rvec_elems cs ! unat i)) None False = Status_Unit l\<close>
+  shows \<open>wprop_inv (vecs_of cs) t n (a'[unat (Lit_var l) := Some (\<not> Lit_neg l)]) (t' @ [l]) \<and>
+         rext (vecs_of cs) t rs (t' @ [l]) (rs' @ [i])\<close>
+  using pp_unit[of \<open>vecs_of cs\<close> t n a' t' rs rs' i Q l] assms by simp
+
+lemma vecs_nth_mem: \<open>\<forall>c \<in> set (vecs_of cs). P c \<Longrightarrow> i < rvec_length cs \<Longrightarrow> P (rvec_elems (rvec_elems cs ! i))\<close>
+  by (metis nth_mem vecs_of_simps)
+
+lemma vecs_nth_rev: \<open>i < rvec_length cs \<Longrightarrow> rvec_elems (rvec_elems cs ! i) = vecs_of cs ! i\<close>
+  by simp
+
+lemma len56_tr: \<open>tr_ok n a t \<Longrightarrow> n < 72057594037927936 \<Longrightarrow> length t < 72057594037927936\<close>
+  using tr_ok_length[of n a t] by simp
+
+lemma len56_wi: \<open>wprop_inv cs t0 n a1 (t1 @ [l]) \<Longrightarrow> n < 72057594037927936 \<Longrightarrow> length t1 < 72057594037927935\<close>
+  using tr_ok_length[of n a1 \<open>t1 @ [l]\<close>] by (simp add: wprop_inv_def)
+
 definition dpll_propagate_pass_contract ::
-  \<open>Lit list list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word list \<Rightarrow>
-   ('s, bool option list \<times> Lit list \<times> 64 word list \<times> bool \<times> tnil, 'abort) function_contract\<close> where
+  \<open>Lit rvec rvec \<Rightarrow> bool option rvec \<Rightarrow> Lit rvec \<Rightarrow> 64 word rvec \<Rightarrow>
+   ('s, bool option rvec \<times> Lit rvec \<times> 64 word rvec \<times> bool \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_propagate_pass_contract cs a t rs \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>(\<forall>c \<in> set cs. lits_lt (length a) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64) \<and>
-           length cs + 2 \<le> urust_fuel \<and> length cs < 2 ^ 64 \<and> length a < 2 ^ 64 \<and>
-           tr_ok (length a) a t \<and> length rs = length t\<rangle>)
+          \<langle>(\<forall>c \<in> set (vecs_of cs). lits_lt (rvec_length a) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64) \<and>
+           length (vecs_of cs) + 2 \<le> urust_fuel \<and> length (vecs_of cs) < 2 ^ 64 \<and> rvec_length a < 2 ^ 56 \<and>
+           tr_ok (rvec_length a) (rvec_elems a) (rvec_elems t) \<and> vok t \<and> vok rs \<and> rvec_length rs = rvec_length t\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (a1, t1, rs1, b, _) \<Rightarrow> tpass_m cs a t = (a1, t1, b) \<and> rext cs t rs t1 rs1\<rangle>)\<close>
+          \<langle>case r of (a1, t1, rs1, b, _) \<Rightarrow> tpass_m (vecs_of cs) (rvec_elems a) (rvec_elems t) = ((rvec_elems a1), (rvec_elems t1), b) \<and> rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t1) (rvec_elems rs1) \<and> vok t1 \<and> vok rs1\<rangle>)\<close>
 
 lemma dpll_propagate_pass_spec [crush_specs]:
   shows \<open>\<Gamma>; propagate_pass cs a t rs \<Turnstile>\<^sub>F dpll_propagate_pass_contract cs a t rs\<close>
   apply (crush_boot f: propagate_pass_def contract: dpll_propagate_pass_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for a_ref t_ref r_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>ga a' gt t' gr rs' gi i. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star>
                r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs' \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> length cs \<and> length a' = length a \<and>
-                tpass_m cs a t = tpass_m (drop (unat i) cs) a' t' \<and> length cs - unat i \<le> k \<and>
-                wprop_inv cs t (length a) a' t' \<and> rext cs t rs t' rs'\<rangle>\<close> and
+               \<langle>unat i \<le> length (vecs_of cs) \<and> rvec_length a' = rvec_length a \<and>
+                tpass_m (vecs_of cs) (rvec_elems a) (rvec_elems t) = tpass_m (drop (unat i) (vecs_of cs)) (rvec_elems a') (rvec_elems t') \<and> length (vecs_of cs) - unat i \<le> k \<and>
+                wprop_inv (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a') (rvec_elems t') \<and> rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t') (rvec_elems rs') \<and> vok t' \<and> vok rs' \<and>
+                rvec_length t' < 2 ^ 56 \<and> rvec_length rs' = rvec_length t'\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>ga a' gt t' gr rs' gi i. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star>
                r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>rs' \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < length cs \<and> length a' = length a \<and>
-                tpass_m cs a t = tpass_m (drop (unat i) cs) a' t' \<and> length cs - unat i \<le> Suc k \<and>
-                wprop_inv cs t (length a) a' t' \<and> rext cs t rs t' rs'\<rangle>\<close> and
+               \<langle>unat i < length (vecs_of cs) \<and> rvec_length a' = rvec_length a \<and>
+                tpass_m (vecs_of cs) (rvec_elems a) (rvec_elems t) = tpass_m (drop (unat i) (vecs_of cs)) (rvec_elems a') (rvec_elems t') \<and> length (vecs_of cs) - unat i \<le> Suc k \<and>
+                wprop_inv (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a') (rvec_elems t') \<and> rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t') (rvec_elems rs') \<and> vok t' \<and> vok rs' \<and>
+                rvec_length t' < 2 ^ 56 \<and> rvec_length rs' = rvec_length t'\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (a1, t1, rs1, b, _) \<Rightarrow> tpass_m cs a t = (a1, t1, b) \<and> rext cs t rs t1 rs1\<rangle>\<close> and
+          \<langle>case r of (a1, t1, rs1, b, _) \<Rightarrow> tpass_m (vecs_of cs) (rvec_elems a) (rvec_elems t) = ((rvec_elems a1), (rvec_elems t1), b) \<and> rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t1) (rvec_elems rs1) \<and> vok t1 \<and> vok rs1\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base wp split: Status.splits inline: vec_push_def
-        simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
-    apply (all \<open>(frule (4) pp_unit)?\<close>)
-    apply (auto simp add: dpll_tpass_drop ASSUMPTION_def intro: dpll_unit_var_nth wprop_refl rext_refl)
+    apply (crush_base wp split: Status.splits simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
+    apply (all \<open>(frule (4) pp_unit_v)?\<close>)
+    apply (auto simp add: tpass_drop_v ASSUMPTION_def push_not_None dw_focus_modify intro: unit_var_v wprop_refl rext_refl len56_tr len56_wi)
+    apply (all \<open>(drule (1) vecs_nth_mem, simp)\<close>)
     done
   done
 
 definition dpll_backtrack_contract ::
-  \<open>bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word \<Rightarrow> ('s, bool option list \<times> Lit list \<times> tnil, 'abort) function_contract\<close> where
+  \<open>bool option rvec \<Rightarrow> Lit rvec \<Rightarrow> 64 word \<Rightarrow> ('s, bool option rvec \<times> Lit rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_backtrack_contract a t p \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>tr_ok (length a) a t \<and> unat p \<le> length t \<and> length t + 2 \<le> urust_fuel \<and> length t < 2 ^ 64\<rangle>)
+          \<langle>tr_ok (rvec_length a) (rvec_elems a) (rvec_elems t) \<and> unat p \<le> rvec_length t \<and> rvec_length t + 2 \<le> urust_fuel \<and> rvec_length t < 2 ^ 64 \<and>
+           vok t \<and> rvec_length t < 2 ^ 56\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (a1, t1, _) \<Rightarrow> tr_ok (length a) a1 t1 \<and> t1 = take (unat p) t\<rangle>)\<close>
+          \<langle>case r of (a1, t1, _) \<Rightarrow> tr_ok (rvec_length a) (rvec_elems a1) (rvec_elems t1) \<and> (rvec_elems t1) = take (unat p) (rvec_elems t) \<and>
+             vok t1 \<and> rvec_length t1 < 2 ^ 56\<rangle>)\<close>
 
 lemma dpll_backtrack_spec [crush_specs]:
   shows \<open>\<Gamma>; backtrack a t p \<Turnstile>\<^sub>F dpll_backtrack_contract a t p\<close>
   apply (crush_boot f: backtrack_def contract: dpll_backtrack_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for a_ref t_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>ga a' gt t'. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> can_alloc_reference \<star>
-               \<langle>tr_ok (length a) a' t' \<and> t' = take (length t') t \<and> unat p \<le> length t' \<and>
-                length t' - unat p \<le> k\<rangle>\<close> and
+               \<langle>tr_ok (rvec_length a) (rvec_elems a') (rvec_elems t') \<and> (rvec_elems t') = take (rvec_length t') (rvec_elems t) \<and> unat p \<le> rvec_length t' \<and>
+                rvec_length t' - unat p \<le> k \<and> vok t' \<and> rvec_length t' < 2 ^ 56\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>ga a' gt t'. a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> can_alloc_reference \<star>
-               \<langle>tr_ok (length a) a' t' \<and> t' = take (length t') t \<and> unat p < length t' \<and>
-                length t' - unat p \<le> Suc k\<rangle>\<close> and
+               \<langle>tr_ok (rvec_length a) (rvec_elems a') (rvec_elems t') \<and> (rvec_elems t') = take (rvec_length t') (rvec_elems t) \<and> unat p < rvec_length t' \<and>
+                rvec_length t' - unat p \<le> Suc k \<and> vok t' \<and> rvec_length t' < 2 ^ 56\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base wp split: option.splits inline: vec_pop_def simp add: word_less_nat_alt)
-    subgoal for k ga a' gt r
-      using dpll_bt_step[of \<open>length a\<close> a' r t p] by blast
-    subgoal for k ga a' gt r
-      using dpll_bt_step[of \<open>length a\<close> a' r t p] by blast
-    subgoal for k ga a' gt r
-      using dpll_bt_step[of \<open>length a\<close> a' r t p] by blast
-    subgoal for k ga a' gt r
-      using dpll_bt_step[of \<open>length a\<close> a' r t p] by blast
-    subgoal for k ga a' gt r
-      using take_length_le[of r t] by (simp add: unat_of_nat_eq)
-    subgoal for k ga a' gt r
-      using take_length_le[of r t] by (simp add: unat_of_nat_eq)
+    apply (crush_base wp split: option.splits simp add: word_less_nat_alt dw_focus_modify)
+    apply (all \<open>(match premises in \<open>rvec_elems r = take (rvec_length r) (rvec_elems t)\<close> and
+        \<open>tr_ok _ (rvec_elems a'') (rvec_elems r)\<close> for r a'' \<Rightarrow>
+      \<open>insert dpll_bt_step[of \<open>rvec_length a\<close> \<open>rvec_elems a''\<close> \<open>rvec_elems r\<close> \<open>rvec_elems t\<close> p]
+        take_length_le[of \<open>rvec_elems r\<close> \<open>rvec_elems t\<close>]\<close>)?\<close>)
+    apply (auto simp add: unat_of_nat_eq)
     done
   done
 
 definition dpll_find_unassigned_contract ::
-  \<open>bool option list \<Rightarrow> ('s, 64 word option, 'abort) function_contract\<close> where
+  \<open>bool option rvec \<Rightarrow> ('s, 64 word option, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_find_unassigned_contract a \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>length a + 2 \<le> urust_fuel \<and> length a < 2 ^ 64\<rangle>)
+       (can_alloc_reference \<star> \<langle>rvec_length a + 2 \<le> urust_fuel \<and> rvec_length a < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of None \<Rightarrow> (\<forall>v < length a. a ! v \<noteq> None)
-                   | Some v \<Rightarrow> unat v < length a \<and> a ! unat v = None\<rangle>)\<close>
+          \<langle>case r of None \<Rightarrow> (\<forall>v < rvec_length a. (rvec_elems a) ! v \<noteq> None)
+                   | Some v \<Rightarrow> unat v < rvec_length a \<and> (rvec_elems a) ! unat v = None\<rangle>)\<close>
 
 lemma dpll_find_unassigned_spec [crush_specs]:
   shows \<open>\<Gamma>; find_unassigned a \<Turnstile>\<^sub>F dpll_find_unassigned_contract a\<close>
   apply (crush_boot f: find_unassigned_def contract: dpll_find_unassigned_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gi i. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> length a \<and> (\<forall>j < unat i. a ! j \<noteq> None) \<and> length a - unat i \<le> k\<rangle>\<close> and
+               \<langle>unat i \<le> rvec_length a \<and> (\<forall>j < unat i. (rvec_elems a) ! j \<noteq> None) \<and> rvec_length a - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gi i. i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < length a \<and> (\<forall>j < unat i. a ! j \<noteq> None) \<and> length a - unat i \<le> Suc k\<rangle>\<close> and
+               \<langle>unat i < rvec_length a \<and> (\<forall>j < unat i. (rvec_elems a) ! j \<noteq> None) \<and> rvec_length a - unat i \<le> Suc k\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of None \<Rightarrow> (\<forall>v < length a. a ! v \<noteq> None)
-                   | Some v \<Rightarrow> unat v < length a \<and> a ! unat v = None\<rangle>\<close> and
+          \<langle>case r of None \<Rightarrow> (\<forall>v < rvec_length a. (rvec_elems a) ! v \<noteq> None)
+                   | Some v \<Rightarrow> unat v < rvec_length a \<and> (rvec_elems a) ! unat v = None\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
@@ -250,60 +288,66 @@ lemma dpll_find_unassigned_spec [crush_specs]:
   done
 
 
-definition dpll_read_bits_contract :: \<open>bool option list \<Rightarrow> Lit list \<Rightarrow> ('s, bool list, 'abort) function_contract\<close> where
+definition dpll_read_bits_contract :: \<open>bool option rvec \<Rightarrow> Lit rvec \<Rightarrow> ('s, bool rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_read_bits_contract a ls \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>lits_lt (length a) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = read_bits_m a ls\<rangle>)\<close>
+       (can_alloc_reference \<star> \<langle>lits_lt (rvec_length a) (rvec_elems ls) \<and> rvec_length ls + 2 \<le> urust_fuel \<and> rvec_length ls < 2 ^ 56\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>(rvec_elems r) = read_bits_m (rvec_elems a) (rvec_elems ls) \<and> vok r\<rangle>)\<close>
 
 lemma dpll_read_bits_spec [crush_specs]:
   shows \<open>\<Gamma>; read_bits a ls \<Turnstile>\<^sub>F dpll_read_bits_contract a ls\<close>
   apply (crush_boot f: read_bits_def contract: dpll_read_bits_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for r_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> length ls \<and> r = map (\<lambda>l. lit_value_m a l = Some True) (take (unat i) ls) \<and>
-                length ls - unat i \<le> k\<rangle>\<close> and
+               \<langle>unat i \<le> rvec_length ls \<and> (rvec_elems r) = map (\<lambda>l. lit_value_m (rvec_elems a) l = Some True) (take (unat i) (rvec_elems ls)) \<and> vok r \<and>
+                rvec_length ls - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gr r gi i. r_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>r \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < length ls \<and> r = map (\<lambda>l. lit_value_m a l = Some True) (take (unat i) ls) \<and>
-                length ls - unat i \<le> Suc k\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = read_bits_m a ls\<rangle>\<close> and
+               \<langle>unat i < rvec_length ls \<and> (rvec_elems r) = map (\<lambda>l. lit_value_m (rvec_elems a) l = Some True) (take (unat i) (rvec_elems ls)) \<and> vok r \<and>
+                rvec_length ls - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>(rvec_elems r) = read_bits_m (rvec_elems a) (rvec_elems ls) \<and> vok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: vec_push_def simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc
+    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq dpll_unat_Suc
         take_Suc_conv_app_nth read_bits_m_def)
     apply (auto simp add: lits_lt_def read_bits_m_def)
     done
   done
 
-definition read_model_contract :: \<open>bool option list \<Rightarrow> Lit list list \<Rightarrow> ('s, bool list list, 'abort) function_contract\<close> where
+lemma map_take_len: \<open>map f xs = map g (take i (map h ys)) \<Longrightarrow> i < length ys \<Longrightarrow> length xs = i\<close>
+  by (drule arg_cong[where f=length]) simp
+
+definition read_model_contract :: \<open>bool option rvec \<Rightarrow> Lit rvec rvec \<Rightarrow> ('s, bool rvec rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>read_model_contract a vs \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>(\<forall>ls \<in> set vs. lits_lt (length a) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 64) \<and>
-           length vs + 2 \<le> urust_fuel \<and> length vs < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = read_model_m a vs\<rangle>)\<close>
+          \<langle>(\<forall>ls \<in> set (vecs_of vs). lits_lt (rvec_length a) ls \<and> length ls + 2 \<le> urust_fuel \<and> length ls < 2 ^ 56) \<and>
+           length (vecs_of vs) + 2 \<le> urust_fuel \<and> length (vecs_of vs) < 2 ^ 56\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>(vecs_of r) = read_model_m (rvec_elems a) (vecs_of vs) \<and> vok r \<and> allvok r\<rangle>)\<close>
 
 lemma read_model_spec [crush_specs]:
   shows \<open>\<Gamma>; read_model a vs \<Turnstile>\<^sub>F read_model_contract a vs\<close>
   apply (crush_boot f: read_model_def contract: read_model_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for m_ref i_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gm m gi i. m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>m \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i \<le> length vs \<and> m = map (read_bits_m a) (take (unat i) vs) \<and>
-                length vs - unat i \<le> k\<rangle>\<close> and
+               \<langle>unat i \<le> length (vecs_of vs) \<and> (vecs_of m) = map (read_bits_m (rvec_elems a)) (take (unat i) (vecs_of vs)) \<and> vok m \<and> allvok m \<and>
+                length (vecs_of vs) - unat i \<le> k\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gm m gi i. m_ref \<mapsto>\<langle>\<top>\<rangle> gm\<down>m \<star> i_ref \<mapsto>\<langle>\<top>\<rangle> gi\<down>i \<star> can_alloc_reference \<star>
-               \<langle>unat i < length vs \<and> m = map (read_bits_m a) (take (unat i) vs) \<and>
-                length vs - unat i \<le> Suc k\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>r = read_model_m a vs\<rangle>\<close> and
+               \<langle>unat i < length (vecs_of vs) \<and> (vecs_of m) = map (read_bits_m (rvec_elems a)) (take (unat i) (vecs_of vs)) \<and> vok m \<and> allvok m \<and>
+                length (vecs_of vs) - unat i \<le> Suc k\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>(vecs_of r) = read_model_m (rvec_elems a) (vecs_of vs) \<and> vok r \<and> allvok r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base inline: vec_push_def simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc
+    apply (crush_base simp add: push_not_None word_less_nat_alt unat_of_nat_eq dpll_unat_Suc
         take_Suc_conv_app_nth read_model_m_def)
+    apply (all \<open>(match premises in \<open>vecs_of m = _\<close> for m \<Rightarrow> \<open>subgoal_tac \<open>rvec_length m < 2 ^ 56\<close>\<close> \<bar> \<open>map rvec_elems (rvec_elems m) = _\<close> for m \<Rightarrow> \<open>subgoal_tac \<open>rvec_length m < 2 ^ 56\<close>\<close>)?\<close>)
+    apply (auto simp add: vecs_of_def take_Suc_conv_app_nth push_not_None allvok_def)
+    apply (all \<open>(drule (1) map_take_len, simp)\<close>)
     done
   done
 
@@ -350,17 +394,21 @@ lemma dpll_lit_index_spec [crush_specs]:
   apply (auto simp add: unat64_dbl unat64_dbl1 is_sat_pure_precise elim!: is_sat_splitE)
   done
 
+lemma from_elem88:
+  \<open>rvec_from_elem_val (make_elem_layout 8 8) x n = Some r \<Longrightarrow> rvec_elems r = replicate n x \<and> vok r\<close>
+  using from_elem_Some[of \<open>make_elem_layout 8 8\<close> x n r] by simp
+
 definition dpll_watch_init_contract ::
-  \<open>Lit list list \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> tnil, 'abort) function_contract\<close> where
+  \<open>Lit rvec rvec \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word rvec \<times> 64 word rvec \<times> 64 word rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_watch_init_contract cs n \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>(\<forall>c \<in> set cs. lits_lt (unat n) c \<and> length c < 2 ^ 64) \<and> 2 * length cs < 2 ^ 64 \<and>
-           2 * unat n < 2 ^ 64 \<and> length cs + 2 \<le> urust_fuel\<rangle>)
+          \<langle>(\<forall>c \<in> set (vecs_of cs). lits_lt (unat n) c \<and> length c < 2 ^ 64) \<and> 2 * length (vecs_of cs) < 2 ^ 60 \<and>
+           2 * unat n < 2 ^ 60 \<and> length (vecs_of cs) + 2 \<le> urust_fuel\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of (p, nx, h, _) \<Rightarrow>
-             length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and> wl_ok cs p nx h \<and>
-             lends nx h\<rangle>)\<close>
+             rvec_length p = 2 * length (vecs_of cs) \<and> rvec_length nx = 2 * length (vecs_of cs) \<and> rvec_length h = 2 * unat n \<and> wl_ok (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and>
+             lends (rvec_elems nx) (rvec_elems h)\<rangle>)\<close>
 
 text \<open>The loop of \<^verbatim>\<open>watch_init\<close> has set up the watches of the first \<open>c\<close> clauses.\<close>
 definition wl_init :: \<open>Lit list list \<Rightarrow> nat \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool\<close> where
@@ -423,6 +471,21 @@ lemma lends_addw:
     \<open>x0 < length h\<close> \<open>x1 < length h\<close>
   shows \<open>lends (nx[i := h ! x0, j := h[x0 := 2 * r] ! x1]) (h[x0 := 2 * r, x1 := 2 * r + 1])\<close>
   using lends_add[OF assms(1) _ _ assms(5,6)] unat64_dbl_lt[OF assms(2,3)] assms(2,4) by simp
+
+lemma xltv:
+  assumes \<open>\<forall>i < rvec_length cs. rvec_length (rvec_elems cs ! i) < M0 \<and>
+             (\<forall>j < rvec_length (rvec_elems cs ! i). 2 * lv (rvec_elems (rvec_elems cs ! i) ! j) < M \<and>
+                lv (rvec_elems (rvec_elems cs ! i) ! j) < N)\<close>
+    \<open>i < rvec_length cs\<close> \<open>j < rvec_length (rvec_elems cs ! i)\<close>
+  shows \<open>length h = 2 * N \<Longrightarrow> 2 * lv (rvec_elems (rvec_elems cs ! i) ! j) < length h\<close>
+    and \<open>length h = 2 * N \<Longrightarrow> Suc (2 * lv (rvec_elems (rvec_elems cs ! i) ! j)) < length h\<close>
+    and \<open>lv (rvec_elems (rvec_elems cs ! i) ! j) < N\<close>
+    and \<open>2 * lv (rvec_elems (rvec_elems cs ! i) ! j) < 2 * N\<close>
+    and \<open>Suc (2 * lv (rvec_elems (rvec_elems cs ! i) ! j)) < 2 * N\<close>
+  using assms by fastforce+
+
+lemma lv_dbl: \<open>lv x < m \<Longrightarrow> m < 576460752303423488 \<Longrightarrow> 2 * lv x < 18446744073709551615\<close>
+  by simp
 
 lemma len2_ne: \<open>2 \<le> length xs \<Longrightarrow> xs \<noteq> []\<close>
   by auto
@@ -493,42 +556,49 @@ lemma wl_init_skipw:
 lemma dpll_watch_init_spec [crush_specs]:
   shows \<open>\<Gamma>; watch_init cs n \<Turnstile>\<^sub>F dpll_watch_init_contract cs n\<close>
   apply (crush_boot f: watch_init_def contract: dpll_watch_init_contract_def)
-  apply (crush_base inline: len_def)
-  subgoal for p_ref nx_ref h_ref c_ref
+  apply (crush_base)
+  subgoal for p0 p_ref nx0 nx_ref h0 h_ref c_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h gc c. p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx \<star>
                h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h \<star> c_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> can_alloc_reference \<star>
-               \<langle>(\<forall>i < length cs. length (cs ! i) < 18446744073709551616 \<and>
-                  (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < 18446744073709551615 \<and>
-                     unat (Lit_var (cs ! i ! j)) < unat n)) \<and>
-                length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and>
-                unat c \<le> length cs \<and> length cs - unat c \<le> k \<and> wl_init cs (unat c) p nx h \<and> lends nx h\<rangle>\<close> and
+               \<langle>(\<forall>i < length (vecs_of cs). length ((vecs_of cs) ! i) < 18446744073709551616 \<and>
+                  (\<forall>j < length ((vecs_of cs) ! i). 2 * unat (Lit_var ((vecs_of cs) ! i ! j)) < 18446744073709551615 \<and>
+                     unat (Lit_var ((vecs_of cs) ! i ! j)) < unat n)) \<and>
+                rvec_length p = 2 * length (vecs_of cs) \<and> rvec_length nx = 2 * length (vecs_of cs) \<and> rvec_length h = 2 * unat n \<and>
+                unat c \<le> length (vecs_of cs) \<and> length (vecs_of cs) - unat c \<le> k \<and> wl_init (vecs_of cs) (unat c) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> lends (rvec_elems nx) (rvec_elems h)\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gp p gn nx gh h gc c. p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx \<star>
                h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h \<star> c_ref \<mapsto>\<langle>\<top>\<rangle> gc\<down>c \<star> can_alloc_reference \<star>
-               \<langle>(\<forall>i < length cs. length (cs ! i) < 18446744073709551616 \<and>
-                  (\<forall>j < length (cs ! i). 2 * unat (Lit_var (cs ! i ! j)) < 18446744073709551615 \<and>
-                     unat (Lit_var (cs ! i ! j)) < unat n)) \<and>
-                length p = 2 * length cs \<and> length nx = 2 * length cs \<and> length h = 2 * unat n \<and>
-                unat c < length cs \<and> length cs - unat c \<le> Suc k \<and> wl_init cs (unat c) p nx h \<and> lends nx h\<rangle>\<close> and
+               \<langle>(\<forall>i < length (vecs_of cs). length ((vecs_of cs) ! i) < 18446744073709551616 \<and>
+                  (\<forall>j < length ((vecs_of cs) ! i). 2 * unat (Lit_var ((vecs_of cs) ! i ! j)) < 18446744073709551615 \<and>
+                     unat (Lit_var ((vecs_of cs) ! i ! j)) < unat n)) \<and>
+                rvec_length p = 2 * length (vecs_of cs) \<and> rvec_length nx = 2 * length (vecs_of cs) \<and> rvec_length h = 2 * unat n \<and>
+                unat c < length (vecs_of cs) \<and> length (vecs_of cs) - unat c \<le> Suc k \<and> wl_init (vecs_of cs) (unat c) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> lends (rvec_elems nx) (rvec_elems h)\<rangle>\<close> and
         \<tau>=\<open>\<lambda>_. \<langle>False\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
-    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc word_le_nat_alt len2_0 len2_1)
+    apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc word_le_nat_alt len2_0 len2_1 dw_focus_modify)
+    apply (all \<open>(drule from_elem88)+\<close>)
     apply (all \<open>(rule wl_init_skipw; (assumption | (simp; fail)))?\<close>)
     apply (all \<open>(rule wl_init_addw; (assumption | (simp add: lidx_def; fail)))?\<close>)
-    apply (all \<open>(frule unat64_dbl_lt, assumption)?\<close>)
+    apply (all \<open>(frule unat64_dbl_lt[where m=\<open>rvec_length cs\<close>], simp)?\<close>)
     apply (auto simp add: unat_of_nat_eq unat64_dbl intro!: nth_var_lt)
     apply (all \<open>(frule lits_lt_nth2, assumption, assumption)?\<close>)
-    apply auto
+    apply auto?
     apply (all \<open>(rule wl_init_end, assumption, simp)?\<close>)
-    apply (all \<open>(rule wl_init_0, simp)?\<close>)
+    apply (all \<open>(rule wl_init_0[of \<open>vecs_of cs\<close>, simplified], simp)?\<close>)
     apply (all \<open>(rule lends_init)?\<close>)
-    apply (all \<open>(rule lends_addw, assumption, assumption, assumption, assumption)?\<close>)
-    apply (all \<open>((rule xlt[THEN conjunct1] xlt[THEN conjunct2]), assumption, assumption, assumption, simp)?\<close>)
+    apply (all \<open>(rule lends_addw, assumption, assumption, simp, assumption)?\<close>)
+    apply (all \<open>((rule xltv), assumption, simp, simp, assumption?)?\<close>)
     apply (all \<open>(rule len2_ne, assumption)?\<close>)
+    apply (all \<open>(assumption | simp)?\<close>)
+    apply (all \<open>(drule (1) vecs_nth_mem, force simp: lits_lt_def)?\<close>)
+    apply (all \<open>(drule (1) vecs_nth_mem, rule lv_dbl[where m=\<open>unat n\<close>], force simp: lits_lt_def, simp)?\<close>)
     done
-  apply (auto simp add: unat_of_nat_eq)
+  apply (all \<open>((rule xltv), assumption, simp, simp, assumption?)?\<close>)
+  apply (all \<open>(rule wl_init_0[of \<open>vecs_of cs\<close>, simplified], simp)?\<close>)
+  apply (all \<open>(rule lends_init)?\<close>)
+  apply (auto simp add: unat_of_nat_eq unat64_dbl)
   done
 
 lemma fw_step:
@@ -538,26 +608,26 @@ lemma fw_step:
   by (metis less_Suc_eq unat_inj)
 
 definition dpll_find_watch_contract ::
-  \<open>bool option list \<Rightarrow> Lit list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word option, 'abort) function_contract\<close> where
+  \<open>bool option rvec \<Rightarrow> Lit rvec \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word option, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_find_watch_contract a c i j \<equiv>
      make_function_contract
-       (can_alloc_reference \<star> \<langle>lits_lt (length a) c \<and> length c + 2 \<le> urust_fuel \<and> length c < 2 ^ 64\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>fw_post a c i j r\<rangle>)\<close>
+       (can_alloc_reference \<star> \<langle>lits_lt (rvec_length a) (rvec_elems c) \<and> rvec_length c + 2 \<le> urust_fuel \<and> rvec_length c < 2 ^ 64\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>fw_post (rvec_elems a) (rvec_elems c) i j r\<rangle>)\<close>
 
 lemma dpll_find_watch_spec [crush_specs]:
   shows \<open>\<Gamma>; find_watch a c i j \<Turnstile>\<^sub>F dpll_find_watch_contract a c i j\<close>
   apply (crush_boot f: find_watch_def contract: dpll_find_watch_contract_def)
-  apply (crush_base inline: len_def)
+  apply (crush_base)
   subgoal for k_ref
     apply (ucincl_discharge\<open>
       rule_tac
         INV=\<open>\<lambda>m. \<Squnion>gk k. k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star> can_alloc_reference \<star>
-               \<langle>unat k \<le> length c \<and> length c - unat k \<le> m \<and>
-                (\<forall>m' < unat k. m' \<noteq> unat i \<and> m' \<noteq> unat j \<longrightarrow> lit_value_m a (c ! m') = Some False)\<rangle>\<close> and
+               \<langle>unat k \<le> rvec_length c \<and> rvec_length c - unat k \<le> m \<and>
+                (\<forall>m' < unat k. m' \<noteq> unat i \<and> m' \<noteq> unat j \<longrightarrow> lit_value_m (rvec_elems a) ((rvec_elems c) ! m') = Some False)\<rangle>\<close> and
         INV'=\<open>\<lambda>m. \<Squnion>gk k. k_ref \<mapsto>\<langle>\<top>\<rangle> gk\<down>k \<star> can_alloc_reference \<star>
-               \<langle>unat k < length c \<and> length c - unat k \<le> Suc m \<and>
-                (\<forall>m' < unat k. m' \<noteq> unat i \<and> m' \<noteq> unat j \<longrightarrow> lit_value_m a (c ! m') = Some False)\<rangle>\<close> and
-        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>fw_post a c i j r\<rangle>\<close> and
+               \<langle>unat k < rvec_length c \<and> rvec_length c - unat k \<le> Suc m \<and>
+                (\<forall>m' < unat k. m' \<noteq> unat i \<and> m' \<noteq> unat j \<longrightarrow> lit_value_m (rvec_elems a) ((rvec_elems c) ! m') = Some False)\<rangle>\<close> and
+        \<tau>=\<open>\<lambda>r. can_alloc_reference \<star> \<langle>fw_post (rvec_elems a) (rvec_elems c) i j r\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
@@ -600,33 +670,33 @@ lemma tb_dbl:
   using tb_var[of n a t j] by simp
 
 definition dpll_set_at_contract ::
-  \<open>64 word list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word list, 'abort) function_contract\<close> where
+  \<open>64 word rvec \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> ('s, 64 word rvec, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_set_at_contract v i e \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>unat i < length v\<rangle>)
-       (\<lambda>r. can_alloc_reference \<star> \<langle>r = v[unat i := e]\<rangle>)\<close>
+     make_function_contract (can_alloc_reference \<star> \<langle>unat i < rvec_length v\<rangle>)
+       (\<lambda>r. can_alloc_reference \<star> \<langle>(rvec_elems r) = (rvec_elems v)[unat i := e]\<rangle>)\<close>
 
 lemma dpll_set_at_spec [crush_specs]:
   shows \<open>\<Gamma>; set_at v i e \<Turnstile>\<^sub>F dpll_set_at_contract v i e\<close>
   apply (crush_boot f: set_at_def contract: dpll_set_at_contract_def)
-  apply (crush_base simp add: word_less_nat_alt)
+  apply (crush_base simp add: word_less_nat_alt dw_focus_modify)
   done
 
 definition dpll_move_watch_contract ::
-  \<open>64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
-   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> tnil, 'abort) function_contract\<close> where
+  \<open>64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
+   ('s, 64 word rvec \<times> 64 word rvec \<times> 64 word rvec \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_move_watch_contract p nx h s prev x k y \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>unat s < length nx \<and> length p = length nx \<and> unat x < length h \<and> unat y < length h \<and>
-           length nx < 2 ^ 64\<rangle>)
+          \<langle>unat s < rvec_length nx \<and> rvec_length p = rvec_length nx \<and> unat x < rvec_length h \<and> unat y < rvec_length h \<and>
+           rvec_length nx < 2 ^ 64\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of (p1, nx1, h1, _) \<Rightarrow> length p1 = length p \<and> length nx1 = length nx \<and> length h1 = length h \<and>
-             (p1, nx1, h1) = mw_m p nx h s prev x k y\<rangle>)\<close>
+          \<langle>case r of (p1, nx1, h1, _) \<Rightarrow> rvec_length p1 = rvec_length p \<and> rvec_length nx1 = rvec_length nx \<and> rvec_length h1 = rvec_length h \<and>
+             ((rvec_elems p1), (rvec_elems nx1), (rvec_elems h1)) = mw_m (rvec_elems p) (rvec_elems nx) (rvec_elems h) s prev x k y\<rangle>)\<close>
 
 lemma dpll_move_watch_spec [crush_specs]:
   shows \<open>\<Gamma>; move_watch p nx h s prev x k y \<Turnstile>\<^sub>F dpll_move_watch_contract p nx h s prev x k y\<close>
   apply (crush_boot f: move_watch_def contract: dpll_move_watch_contract_def)
-  apply (crush_base inline: len_def simp add: word_less_nat_alt unat_of_nat_eq mw_m_def Let_def)
+  apply (crush_base simp add: word_less_nat_alt unat_of_nat_eq mw_m_def Let_def)
   done
 
 lemma w_odd:
@@ -727,20 +797,32 @@ lemma lends_mwv1:
    length h = 2 * N \<Longrightarrow> i < length cs \<Longrightarrow> j < length (cs ! i) \<Longrightarrow> lends nx1 h1\<close>
   using lends_mwv[of p1 nx1 h1 p nx h s prev x k y cs N i j] by simp
 
+lemma wcs_conv:
+  assumes \<open>\<forall>i < rvec_length cs. lits_lt n (rvec_elems (rvec_elems cs ! i)) \<and> Suc (Suc (rvec_length (rvec_elems cs ! i))) \<le> F \<and>
+     rvec_length (rvec_elems cs ! i) < M0 \<and> (\<forall>j < rvec_length (rvec_elems cs ! i).
+       2 * lv (rvec_elems (rvec_elems cs ! i) ! j) < M \<and> lv (rvec_elems (rvec_elems cs ! i) ! j) < n)\<close>
+  shows \<open>\<forall>i < length (vecs_of cs). lits_lt n (vecs_of cs ! i) \<and> Suc (Suc (length (vecs_of cs ! i))) \<le> F \<and>
+     length (vecs_of cs ! i) < M0 \<and> (\<forall>j < length (vecs_of cs ! i).
+       2 * lv (vecs_of cs ! i ! j) < M \<and> lv (vecs_of cs ! i ! j) < n)\<close>
+  using assms by simp
+
+lemma div2_lt_v: \<open>x < 2 * rvec_length (cs :: Lit rvec rvec) \<Longrightarrow> x div 2 < length (vecs_of cs)\<close>
+  by simp
+
 definition dpll_visit_slot_contract ::
-  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow>
-   64 word list \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
-   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> 64 word list \<times> bool \<times> bool \<times> tnil, 'abort) function_contract\<close> where
+  \<open>Lit rvec rvec \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> bool option rvec \<Rightarrow> Lit rvec \<Rightarrow>
+   64 word rvec \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow> 64 word \<Rightarrow>
+   ('s, 64 word rvec \<times> 64 word rvec \<times> 64 word rvec \<times> bool option rvec \<times> Lit rvec \<times> 64 word rvec \<times> bool \<times> bool \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_visit_slot_contract cs p nx h a t rs x s prev \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>dpll_wpre cs (length a) p nx h \<and> unat x < length h \<and> unat s < 2 * length cs \<and> tr_ok (length a) a t \<and>
-           length rs = length t \<and> lends nx h\<rangle>)
+          \<langle>dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> unat x < rvec_length h \<and> unat s < 2 * length (vecs_of cs) \<and> tr_ok (rvec_length a) (rvec_elems a) (rvec_elems t) \<and> vok t \<and> vok rs \<and>
+           rvec_length a < 2 ^ 56 \<and> rvec_length rs = rvec_length t \<and> lends (rvec_elems nx) (rvec_elems h)\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of (p1, nx1, h1, a1, t1, rs1, keep, b, _) \<Rightarrow>
-             dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             vslot_post cs p nx h a t x s prev p1 nx1 h1 a1 t1 keep b \<and>
-             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat s div 2)) \<and> lends nx1 h1\<rangle>)\<close>
+             dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) \<and> rvec_length a1 = rvec_length a \<and> wprop_post (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a1) (rvec_elems t1) b \<and>
+             vslot_post (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) (rvec_elems a) (rvec_elems t) x s prev (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) (rvec_elems a1) (rvec_elems t1) keep b \<and>
+             rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t1) (rvec_elems rs1) \<and> vok t1 \<and> vok rs1 \<and> (\<not> b \<longrightarrow> cfl (vecs_of cs) (rvec_elems t1) (unat s div 2)) \<and> lends (rvec_elems nx1) (rvec_elems h1)\<rangle>)\<close>
 
 lemma oslot_even: \<open>even s \<Longrightarrow> oslot s (s + 1)\<close>
   by (simp add: oslot_def even_iff_mod_2_eq_zero)
@@ -763,10 +845,15 @@ lemma var_bnd2:
 lemma dpll_visit_slot_spec [crush_specs]:
   shows \<open>\<Gamma>; visit_slot cs p nx h a t rs x s prev \<Turnstile>\<^sub>F dpll_visit_slot_contract cs p nx h a t rs x s prev\<close>
   apply (crush_boot f: visit_slot_def contract: dpll_visit_slot_contract_def)
-  apply (crush_base wp split: option.splits Status.splits inline: vec_push_def
-      simp add: dpll_wpre_def wcs_ok_def word_less_nat_alt unat_of_nat_eq unat_div unat_mod div2_lt
-        even_Suc_lt Suc2_lt)
-  apply (all \<open>(frule div2_lt[where L=\<open>length cs\<close>])?\<close>)
+  apply (subgoal_tac \<open>rvec_length t < 2 ^ 56 \<and> rvec_length rs < 2 ^ 56\<close>)
+   prefer 2 apply (auto dest: tr_ok_length)[1]
+  apply (crush_base wp split: option.splits Status.splits simp add: dpll_wpre_def wcs_ok_def word_less_nat_alt unat_of_nat_eq unat_div unat_mod div2_lt
+        even_Suc_lt Suc2_lt push_not_None dw_focus_modify)
+  apply (all \<open>(frule div2_lt[where L=\<open>rvec_length cs\<close>])?\<close>)
+  apply (all \<open>(simp only: vecs_nth_rev)?\<close>)
+  apply (all \<open>(frule wcs_conv)?\<close>)
+  apply (all \<open>(frule div2_lt_v)?\<close>)
+  apply (all \<open>(frule div2_lt[where L=\<open>length (vecs_of cs)\<close>])?\<close>)
   apply (all \<open>(frule oslot_even)?\<close>)
   apply (all \<open>(frule oslot_odd)?\<close>)
   apply (all \<open>(rule vsp_skip_i; assumption)?\<close>)
@@ -783,10 +870,11 @@ lemma dpll_visit_slot_spec [crush_specs]:
   apply (all \<open>(rule rext_refl, assumption)?\<close>)
   apply (all \<open>(rule vs_unit_r, assumption, assumption, assumption, assumption, assumption, simp add: unat_div)?\<close>)
   apply (all \<open>(rule vs_cfl, assumption, assumption, assumption, assumption)?\<close>)
-  apply (auto simp add: fw_post_def
-      intro: vs_refl vs_conflict vs_unit vs_unit_var w_odd[THEN conjunct1] w_odd[THEN conjunct2] w_even)
+  apply (all \<open>(rule vs_refl, assumption)?\<close>)
+  apply (all \<open>(rule vs_conflict vs_unit vs_unit_var; assumption)?\<close>)
   apply (all \<open>((rule lends_mwv0 lends_mwv1), assumption, assumption, assumption, (simp; fail), assumption,
-      assumption, assumption, assumption)?\<close>)
+      assumption, assumption, (simp add: fw_post_def; fail))?\<close>)
+  apply (auto simp add: fw_post_def intro: w_odd[THEN conjunct1] w_odd[THEN conjunct2] w_even)
   done
 
 text \<open>The invariant of the loop of \<^verbatim>\<open>visit\<close> for the false literal of index \<open>x\<close>.\<close>
@@ -874,26 +962,43 @@ lemma rext_step:
    rext cs t rs t1 rs1\<close>
   by (rule rext_trans) (auto simp: wprop_inv_def wprop_post_def)
 
+lemma vx_step2v:
+  fixes cs :: \<open>Lit rvec rvec\<close>
+  assumes \<open>vinvx (vecs_of cs) (unat x) p t p' nx' h' t' (unat s) (unat pr) st\<close> \<open>unat s < 2 * rvec_length cs\<close>
+    \<open>length nx' = 2 * rvec_length cs\<close> \<open>vslot_post (vecs_of cs) p' nx' h' a' t' x s pr p1 nx1 h1 a1 t1 keep True\<close>
+    \<open>wprop_inv (vecs_of cs) t n a' t'\<close> \<open>wcs_ok (vecs_of cs) n F\<close> \<open>length h' = 2 * n\<close>
+    \<open>rvec_length cs < 9223372036854775808\<close>
+  shows \<open>vinvx (vecs_of cs) (unat x) p t p1 nx1 h1 t1 (unat (nx' ! unat s)) (if keep then unat s else unat pr) (Suc st)\<close>
+  using vx_step2[of \<open>vecs_of cs\<close> x p t p' nx' h' t' s pr st] assms by simp
+
+lemma vx_entry_v:
+  fixes cs :: \<open>Lit rvec rvec\<close>
+  shows \<open>wl_ok (vecs_of cs) p nx h \<Longrightarrow> unat x < length h \<Longrightarrow> lidx w = unat x \<Longrightarrow> lneg w \<in> set t \<Longrightarrow>
+    length nx = 2 * rvec_length cs \<Longrightarrow>
+    vinvx (vecs_of cs) (unat x) p t p nx h t (unat (h ! unat x)) (2 * rvec_length cs) 0\<close>
+  using vx_entry[of \<open>vecs_of cs\<close> p nx h x t] by auto
+
 definition dpll_visit_contract ::
-  \<open>Lit list list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> 64 word list \<Rightarrow> bool option list \<Rightarrow> Lit list \<Rightarrow>
-   64 word list \<Rightarrow> 64 word \<Rightarrow>
-   ('s, 64 word list \<times> 64 word list \<times> 64 word list \<times> bool option list \<times> Lit list \<times> 64 word list \<times> bool \<times>
+  \<open>Lit rvec rvec \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> 64 word rvec \<Rightarrow> bool option rvec \<Rightarrow> Lit rvec \<Rightarrow>
+   64 word rvec \<Rightarrow> 64 word \<Rightarrow>
+   ('s, 64 word rvec \<times> 64 word rvec \<times> 64 word rvec \<times> bool option rvec \<times> Lit rvec \<times> 64 word rvec \<times> bool \<times>
      64 word \<times> tnil, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>dpll_visit_contract cs p nx h a t rs x \<equiv>
      make_function_contract
        (can_alloc_reference \<star>
-          \<langle>dpll_wpre cs (length a) p nx h \<and> unat x < length h \<and> tr_ok (length a) a t \<and> wl_ok cs p nx h \<and>
-           (\<exists>w. lidx w = unat x \<and> lneg w \<in> set t) \<and> length rs = length t \<and> lends nx h\<rangle>)
+          \<langle>dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and> unat x < rvec_length h \<and> tr_ok (rvec_length a) (rvec_elems a) (rvec_elems t) \<and> wl_ok (vecs_of cs) (rvec_elems p) (rvec_elems nx) (rvec_elems h) \<and>
+           (\<exists>w. lidx w = unat x \<and> lneg w \<in> set (rvec_elems t)) \<and> vok t \<and> vok rs \<and> rvec_length a < 2 ^ 56 \<and>
+           rvec_length rs = rvec_length t \<and> lends (rvec_elems nx) (rvec_elems h)\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of (p1, nx1, h1, a1, t1, rs1, b, cf, _) \<Rightarrow>
-             dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             visit_post cs (unat x) p t p1 nx1 h1 t1 b \<and>
-             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat cf)) \<and> lends nx1 h1\<rangle>)\<close>
+             dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) \<and> rvec_length a1 = rvec_length a \<and> wprop_post (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a1) (rvec_elems t1) b \<and>
+             visit_post (vecs_of cs) (unat x) (rvec_elems p) (rvec_elems t) (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) (rvec_elems t1) b \<and>
+             rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t1) (rvec_elems rs1) \<and> vok t1 \<and> vok rs1 \<and> (\<not> b \<longrightarrow> cfl (vecs_of cs) (rvec_elems t1) (unat cf)) \<and> lends (rvec_elems nx1) (rvec_elems h1)\<rangle>)\<close>
 
 lemma dpll_visit_spec [crush_specs]:
   shows \<open>\<Gamma>; visit cs p nx h a t rs x \<Turnstile>\<^sub>F dpll_visit_contract cs p nx h a t rs x\<close>
   apply (crush_boot f: visit_def contract: dpll_visit_contract_def)
-  apply (crush_base inline: len_def simp add: dpll_wpre_def)
+  apply (crush_base simp add: dpll_wpre_def)
   subgoal for w p_ref nx_ref h_ref a_ref t_ref r_ref s_ref pr_ref st_ref
     apply (ucincl_discharge\<open>
       rule_tac
@@ -902,36 +1007,37 @@ lemma dpll_visit_spec [crush_specs]:
                a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr'\<down>rs' \<star>
                s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>s' \<star> pr_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>pr \<star> st_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>st \<star>
                can_alloc_reference \<star>
-               \<langle>dpll_wpre cs (length a) p' nx' h' \<and> length nx' = length nx \<and> length h' = length h \<and>
-                length a' = length a \<and> tr_ok (length a) a' t' \<and> wprop_inv cs t (length a) a' t' \<and>
-                unat st \<le> length nx \<and> (unat s' < length nx \<longrightarrow> length nx - unat st \<le> k) \<and>
-                vinvx cs (unat x) p t p' nx' h' t' (unat s') (unat pr) (unat st) \<and>
-                rext cs t rs t' rs' \<and> lends nx' h'\<rangle>\<close> and
+               \<langle>dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p') (rvec_elems nx') (rvec_elems h') \<and> rvec_length nx' = rvec_length nx \<and> rvec_length h' = rvec_length h \<and>
+                rvec_length a' = rvec_length a \<and> tr_ok (rvec_length a) (rvec_elems a') (rvec_elems t') \<and> wprop_inv (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a') (rvec_elems t') \<and>
+                unat st \<le> rvec_length nx \<and> (unat s' < rvec_length nx \<longrightarrow> rvec_length nx - unat st \<le> k) \<and>
+                vinvx (vecs_of cs) (unat x) (rvec_elems p) (rvec_elems t) (rvec_elems p') (rvec_elems nx') (rvec_elems h') (rvec_elems t') (unat s') (unat pr) (unat st) \<and>
+                rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t') (rvec_elems rs') \<and> vok t' \<and> vok rs' \<and> lends (rvec_elems nx') (rvec_elems h')\<rangle>\<close> and
         INV'=\<open>\<lambda>k. \<Squnion>gp p' gn nx' gh h' ga a' gt t' gr' rs' gs s' gr pr gq st.
                p_ref \<mapsto>\<langle>\<top>\<rangle> gp\<down>p' \<star> nx_ref \<mapsto>\<langle>\<top>\<rangle> gn\<down>nx' \<star> h_ref \<mapsto>\<langle>\<top>\<rangle> gh\<down>h' \<star>
                a_ref \<mapsto>\<langle>\<top>\<rangle> ga\<down>a' \<star> t_ref \<mapsto>\<langle>\<top>\<rangle> gt\<down>t' \<star> r_ref \<mapsto>\<langle>\<top>\<rangle> gr'\<down>rs' \<star>
                s_ref \<mapsto>\<langle>\<top>\<rangle> gs\<down>s' \<star> pr_ref \<mapsto>\<langle>\<top>\<rangle> gr\<down>pr \<star> st_ref \<mapsto>\<langle>\<top>\<rangle> gq\<down>st \<star>
                can_alloc_reference \<star>
-               \<langle>dpll_wpre cs (length a) p' nx' h' \<and> length nx' = length nx \<and> length h' = length h \<and>
-                length a' = length a \<and> tr_ok (length a) a' t' \<and> wprop_inv cs t (length a) a' t' \<and>
-                unat s' < length nx \<and> unat st < length nx \<and> length nx - unat st \<le> Suc k \<and>
-                vinvx cs (unat x) p t p' nx' h' t' (unat s') (unat pr) (unat st) \<and>
-                rext cs t rs t' rs' \<and> lends nx' h'\<rangle>\<close> and
+               \<langle>dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p') (rvec_elems nx') (rvec_elems h') \<and> rvec_length nx' = rvec_length nx \<and> rvec_length h' = rvec_length h \<and>
+                rvec_length a' = rvec_length a \<and> tr_ok (rvec_length a) (rvec_elems a') (rvec_elems t') \<and> wprop_inv (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a') (rvec_elems t') \<and>
+                unat s' < rvec_length nx \<and> unat st < rvec_length nx \<and> rvec_length nx - unat st \<le> Suc k \<and>
+                vinvx (vecs_of cs) (unat x) (rvec_elems p) (rvec_elems t) (rvec_elems p') (rvec_elems nx') (rvec_elems h') (rvec_elems t') (unat s') (unat pr) (unat st) \<and>
+                rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t') (rvec_elems rs') \<and> vok t' \<and> vok rs' \<and> lends (rvec_elems nx') (rvec_elems h')\<rangle>\<close> and
         \<tau>=\<open>\<lambda>r. can_alloc_reference \<star>
           \<langle>case r of (p1, nx1, h1, a1, t1, rs1, b, cf, _) \<Rightarrow>
-             dpll_wpre cs (length a) p1 nx1 h1 \<and> length a1 = length a \<and> wprop_post cs t (length a) a1 t1 b \<and>
-             visit_post cs (unat x) p t p1 nx1 h1 t1 b \<and>
-             rext cs t rs t1 rs1 \<and> (\<not> b \<longrightarrow> cfl cs t1 (unat cf)) \<and> lends nx1 h1\<rangle>\<close> and
+             dpll_wpre (vecs_of cs) (rvec_length a) (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) \<and> rvec_length a1 = rvec_length a \<and> wprop_post (vecs_of cs) (rvec_elems t) (rvec_length a) (rvec_elems a1) (rvec_elems t1) b \<and>
+             visit_post (vecs_of cs) (unat x) (rvec_elems p) (rvec_elems t) (rvec_elems p1) (rvec_elems nx1) (rvec_elems h1) (rvec_elems t1) b \<and>
+             rext (vecs_of cs) (rvec_elems t) (rvec_elems rs) (rvec_elems t1) (rvec_elems rs1) \<and> vok t1 \<and> vok rs1 \<and> (\<not> b \<longrightarrow> cfl (vecs_of cs) (rvec_elems t1) (unat cf)) \<and> lends (rvec_elems nx1) (rvec_elems h1)\<rangle>\<close> and
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base wp split: prod.splits tnil.splits simp add: word_less_nat_alt unat_of_nat_eq dpll_unat_Suc)
     apply (all \<open>(frule (1) wprop_step)?\<close>)
     apply (all \<open>(frule (4) vx_step)?\<close>)
     apply (all \<open>(frule (7) vx_step2)?\<close>)
+    apply (all \<open>(frule (7) vx_step2v)?\<close>)
     apply (all \<open>(frule (1) vx_conflict)?\<close>)
     apply (all \<open>(frule (3) rext_step)?\<close>)
     apply (auto simp add: dpll_wpre_def unat64_dbl unat_of_nat_eq wprop_post_def unat2_len unat_div
-        intro: wprop_refl vx_entry' vx_entry2 vx_exit2 rext_refl dest: vx_bound rext_len)
+        intro: wprop_refl vx_entry' vx_entry2 vx_exit2 rext_refl vx_entry_v dest: vx_bound rext_len)
     done
   done
 

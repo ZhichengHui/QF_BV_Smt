@@ -485,32 +485,32 @@ lemma tw_app: \<open>cwt ws ds t \<Longrightarrow> cterm_weight ws (ds @ e) t = 
   using wt_sub wt_width_app by (auto intro!: arg_cong[where f = sum_list] map_cong)
 
 lemma tw_leaf:
-  \<open>t = CoreTerm_Const bs \<or> t = CoreTerm_Var i \<or> t = CoreTerm_Ref j \<Longrightarrow>
+  \<open>t = CoreTermL_Const bs \<or> t = CoreTermL_Var i \<or> t = CoreTermL_Ref j \<Longrightarrow>
    cterm_weight ws ds t = (cwidth ws ds t + 1) ^ 2\<close>
   by (auto simp: cterm_weight_def)
 
-lemma tw_Not: \<open>cterm_weight ws ds (CoreTerm_Not a) = (cwidth ws ds a + 1) ^ 2 + cterm_weight ws ds a\<close>
+lemma tw_Not: \<open>cterm_weight ws ds (CoreTermL_Not a) = (cwidth ws ds a + 1) ^ 2 + cterm_weight ws ds a\<close>
   by (simp add: cterm_weight_def)
 
 lemma tw_Bin:
-  \<open>cterm_weight ws ds (CoreTerm_Bin op a b) =
-   (cwidth ws ds (CoreTerm_Bin op a b) + 1) ^ 2 + cterm_weight ws ds a + cterm_weight ws ds b\<close>
+  \<open>cterm_weight ws ds (CoreTermL_Bin op a b) =
+   (cwidth ws ds (CoreTermL_Bin op a b) + 1) ^ 2 + cterm_weight ws ds a + cterm_weight ws ds b\<close>
   by (simp add: cterm_weight_def)
 
 lemma tw_Extract:
-  \<open>cterm_weight ws ds (CoreTerm_Extract hi lo a) =
-   (cwidth ws ds (CoreTerm_Extract hi lo a) + 1) ^ 2 + cterm_weight ws ds a\<close>
+  \<open>cterm_weight ws ds (CoreTermL_Extract hi lo a) =
+   (cwidth ws ds (CoreTermL_Extract hi lo a) + 1) ^ 2 + cterm_weight ws ds a\<close>
   by (simp add: cterm_weight_def)
 
 lemma tw_Ite:
-  \<open>cterm_weight ws ds (CoreTerm_Ite c a b) =
+  \<open>cterm_weight ws ds (CoreTermL_Ite c a b) =
    (cwidth ws ds a + 1) ^ 2 + cterm_weight ws ds c + cterm_weight ws ds a + cterm_weight ws ds b\<close>
   by (simp add: cterm_weight_def)
 
 lemma tw_ge: \<open>(cwidth ws ds t + 1) ^ 2 \<le> cterm_weight ws ds t\<close>
   by (cases t) (simp_all add: cterm_weight_def)
 
-lemma width_Bin: \<open>cwidth ws ds (CoreTerm_Bin op a b) = bin_width op (cwidth ws ds a) (cwidth ws ds b)\<close>
+lemma width_Bin: \<open>cwidth ws ds (CoreTermL_Bin op a b) = bin_width op (cwidth ws ds a) (cwidth ws ds b)\<close>
   by (cases op) (simp_all add: bin_width_def)
 
 text \<open>The lengths of the literal lists of an environment are the widths.\<close>
@@ -522,40 +522,40 @@ lemma blast_grows:
    length ls = cwidth ws ds t \<and>
    (\<exists>n. grows n s s' \<and> n + 100 * (cwidth ws ds t + 1) ^ 2 \<le> 100 * cterm_weight ws ds t)\<close>
 proof (induction t arbitrary: s s' ls)
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   then show ?case
-    using tw_leaf[of \<open>CoreTerm_Const bs\<close> bs undefined undefined ws ds]
+    using tw_leaf[of \<open>CoreTermL_Const bs\<close> bs undefined undefined ws ds]
     by (auto simp: const_m_def intro: exI[where x = 0] grows_refl)
 next
-  case (CoreTerm_Var i)
+  case (CoreTermL_Var i)
   then show ?case
-    using tw_leaf[of \<open>CoreTerm_Var i\<close> undefined i undefined ws ds]
+    using tw_leaf[of \<open>CoreTermL_Var i\<close> undefined i undefined ws ds]
     by (auto simp: lenv_def intro: exI[where x = 0] grows_refl)
 next
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?case
-    using tw_leaf[of \<open>CoreTerm_Ref i\<close> undefined undefined i ws ds]
+    using tw_leaf[of \<open>CoreTermL_Ref i\<close> undefined undefined i ws ds]
     by (auto simp: lenv_def intro: exI[where x = 0] grows_refl)
 next
-  case (CoreTerm_Not a)
+  case (CoreTermL_Not a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTerm_Not.prems(4) A by auto
-  note IA = CoreTerm_Not.IH[OF _ CoreTerm_Not.prems(2,3) A]
-  have wa: \<open>cwt ws ds a\<close> using CoreTerm_Not.prems(1) by simp
+  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTermL_Not.prems(4) A by auto
+  note IA = CoreTermL_Not.IH[OF _ CoreTermL_Not.prems(2,3) A]
+  have wa: \<open>cwt ws ds a\<close> using CoreTermL_Not.prems(1) by simp
   obtain n where n: \<open>grows n s s1\<close> \<open>n + 100 * (cwidth ws ds a + 1) ^ 2 \<le> 100 * cterm_weight ws ds a\<close>
     using IA[OF wa] by blast
   show ?case
     using IA[OF wa] n by (auto simp: E not_m_def tw_Not intro!: exI[where x = n])
 next
-  case (CoreTerm_Bin op a b)
+  case (CoreTermL_Bin op a b)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
   obtain s2 lb where B: \<open>blast_m vs dl s1 b = (s2, lb)\<close> by (cases \<open>blast_m vs dl s1 b\<close>)
-  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTerm_Bin.prems(4) A B by simp
+  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTermL_Bin.prems(4) A B by simp
   have wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
     and weq: \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ws ds a = cwidth ws ds b\<close>
-    using CoreTerm_Bin.prems(1) by simp_all
-  note IA = CoreTerm_Bin.IH(1)[OF wa CoreTerm_Bin.prems(2,3) A]
-  note IB = CoreTerm_Bin.IH(2)[OF wb CoreTerm_Bin.prems(2,3) B]
+    using CoreTermL_Bin.prems(1) by simp_all
+  note IA = CoreTermL_Bin.IH(1)[OF wa CoreTermL_Bin.prems(2,3) A]
+  note IB = CoreTermL_Bin.IH(2)[OF wb CoreTermL_Bin.prems(2,3) B]
   obtain n1 where n1: \<open>grows n1 s s1\<close> \<open>n1 + 100 * (cwidth ws ds a + 1) ^ 2 \<le> 100 * cterm_weight ws ds a\<close>
     using IA by blast
   obtain n2 where n2: \<open>grows n2 s1 s2\<close> \<open>n2 + 100 * (cwidth ws ds b + 1) ^ 2 \<le> 100 * cterm_weight ws ds b\<close>
@@ -567,26 +567,26 @@ next
   then show ?case
     using BB IA IB n1 n2 by (auto simp: width_Bin tw_Bin bin_width_def intro!: exI[where x = \<open>n1 + n2 + 100 * (length la + 1) ^ 2\<close>])
 next
-  case (CoreTerm_Extract hi lo a)
+  case (CoreTermL_Extract hi lo a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTerm_Extract.prems(4) A by auto
-  have wa: \<open>cwt ws ds a\<close> and lh: \<open>unat lo \<le> unat hi\<close> using CoreTerm_Extract.prems(1) by simp_all
-  note IA = CoreTerm_Extract.IH[OF wa CoreTerm_Extract.prems(2,3) A]
+  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTermL_Extract.prems(4) A by auto
+  have wa: \<open>cwt ws ds a\<close> and lh: \<open>unat lo \<le> unat hi\<close> using CoreTermL_Extract.prems(1) by simp_all
+  note IA = CoreTermL_Extract.IH[OF wa CoreTermL_Extract.prems(2,3) A]
   obtain n where n: \<open>grows n s s1\<close> \<open>n + 100 * (cwidth ws ds a + 1) ^ 2 \<le> 100 * cterm_weight ws ds a\<close>
     using IA by blast
   show ?case
     using n lh by (auto simp: E extract_m_def tw_Extract intro!: exI[where x = n])
 next
-  case (CoreTerm_Ite c a b)
+  case (CoreTermL_Ite c a b)
   obtain s1 lc where C: \<open>blast_m vs dl s c = (s1, lc)\<close> by (cases \<open>blast_m vs dl s c\<close>)
   obtain s2 la where A: \<open>blast_m vs dl s1 a = (s2, la)\<close> by (cases \<open>blast_m vs dl s1 a\<close>)
   obtain s3 lb where B: \<open>blast_m vs dl s2 b = (s3, lb)\<close> by (cases \<open>blast_m vs dl s2 b\<close>)
-  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTerm_Ite.prems(4) C A B by simp
+  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTermL_Ite.prems(4) C A B by simp
   have wc: \<open>cwt ws ds c\<close> and wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
-    using CoreTerm_Ite.prems(1) by simp_all
-  note IC = CoreTerm_Ite.IH(1)[OF wc CoreTerm_Ite.prems(2,3) C]
-  note IA = CoreTerm_Ite.IH(2)[OF wa CoreTerm_Ite.prems(2,3) A]
-  note IB = CoreTerm_Ite.IH(3)[OF wb CoreTerm_Ite.prems(2,3) B]
+    using CoreTermL_Ite.prems(1) by simp_all
+  note IC = CoreTermL_Ite.IH(1)[OF wc CoreTermL_Ite.prems(2,3) C]
+  note IA = CoreTermL_Ite.IH(2)[OF wa CoreTermL_Ite.prems(2,3) A]
+  note IB = CoreTermL_Ite.IH(3)[OF wb CoreTermL_Ite.prems(2,3) B]
   obtain nc where nc: \<open>grows nc s s1\<close> \<open>nc + 100 * (cwidth ws ds c + 1) ^ 2 \<le> 100 * cterm_weight ws ds c\<close>
     using IC by blast
   obtain na where na: \<open>grows na s1 s2\<close> \<open>na + 100 * (cwidth ws ds a + 1) ^ 2 \<le> 100 * cterm_weight ws ds a\<close>
@@ -731,14 +731,14 @@ qed
 lemma encode_grows:
   assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close>
   shows \<open>fst s + length (snd s) \<le>
-           2 + sum_list (cvar_widths p) + length (CoreProblem_asserts p) +
-           100 * sum_list (map (cterm_weight (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)))
-                              (CoreProblem_defs p @ CoreProblem_asserts p)) \<and>
+           2 + sum_list (cvar_widths p) + length (CoreProblemL_asserts p) +
+           100 * sum_list (map (cterm_weight (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)))
+                              (CoreProblemL_defs p @ CoreProblemL_asserts p)) \<and>
          cl4 s\<close>
 proof -
-  let ?W = \<open>CoreProblem_widths p\<close>
-  let ?D = \<open>CoreProblem_defs p\<close>
-  let ?A = \<open>CoreProblem_asserts p\<close>
+  let ?W = \<open>CoreProblemL_widths p\<close>
+  let ?D = \<open>CoreProblemL_defs p\<close>
+  let ?A = \<open>CoreProblemL_asserts p\<close>
   let ?ws = \<open>cvar_widths p\<close>
   let ?ds = \<open>cdef_widths ?ws [] ?D\<close>
   obtain s1 vs1 where V: \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W] = (s1, vs1)\<close>
@@ -833,13 +833,13 @@ qed
 
 text \<open>The cost of a node: its operator on the width of its first operand; \<open>ite\<close> builds one gate
   per bit; the other nodes build none.\<close>
-definition ncost :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat\<close> where
+definition ncost :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTermL \<Rightarrow> nat\<close> where
   \<open>ncost ws ds u = (case u of
-     CoreTerm_Bin op a b \<Rightarrow> bcost op (cwidth ws ds a)
-   | CoreTerm_Ite c a b \<Rightarrow> 5 * cwidth ws ds a
+     CoreTermL_Bin op a b \<Rightarrow> bcost op (cwidth ws ds a)
+   | CoreTermL_Ite c a b \<Rightarrow> 5 * cwidth ws ds a
    | _ \<Rightarrow> 0)\<close>
 
-definition ccount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat\<close> where
+definition ccount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> CoreTermL \<Rightarrow> nat\<close> where
   \<open>ccount ws ds t = sum_list (map (ncost ws ds) (csubterms t))\<close>
 
 lemma ccount_app: \<open>cwt ws ds t \<Longrightarrow> ccount ws (ds @ e) t = ccount ws ds t\<close>
@@ -857,31 +857,31 @@ lemma blast_cnt:
   \<open>cwt ws ds t \<Longrightarrow> lenv ws vs \<Longrightarrow> lenv ds dl \<Longrightarrow> blast_m vs dl s t = (s', ls) \<Longrightarrow>
    length ls = cwidth ws ds t \<and> grows (ccount ws ds t) s s'\<close>
 proof (induction t arbitrary: s s' ls)
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   then show ?case by (auto simp: const_m_def ccount_def ncost_def grows_refl)
 next
-  case (CoreTerm_Var i)
+  case (CoreTermL_Var i)
   then show ?case by (auto simp: lenv_def ccount_def ncost_def grows_refl)
 next
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?case by (auto simp: lenv_def ccount_def ncost_def grows_refl)
 next
-  case (CoreTerm_Not a)
+  case (CoreTermL_Not a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTerm_Not.prems(4) A by auto
-  have wa: \<open>cwt ws ds a\<close> using CoreTerm_Not.prems(1) by simp
-  note IA = CoreTerm_Not.IH[OF wa CoreTerm_Not.prems(2,3) A]
+  have E: \<open>s' = s1\<close> \<open>ls = not_m la\<close> using CoreTermL_Not.prems(4) A by auto
+  have wa: \<open>cwt ws ds a\<close> using CoreTermL_Not.prems(1) by simp
+  note IA = CoreTermL_Not.IH[OF wa CoreTermL_Not.prems(2,3) A]
   show ?case using IA by (auto simp: E not_m_def ccount_def ncost_def)
 next
-  case (CoreTerm_Bin op a b)
+  case (CoreTermL_Bin op a b)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
   obtain s2 lb where B: \<open>blast_m vs dl s1 b = (s2, lb)\<close> by (cases \<open>blast_m vs dl s1 b\<close>)
-  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTerm_Bin.prems(4) A B by simp
+  have C: \<open>blast_bin_m s2 op la lb = (s', ls)\<close> using CoreTermL_Bin.prems(4) A B by simp
   have wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
     and weq: \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ws ds a = cwidth ws ds b\<close>
-    using CoreTerm_Bin.prems(1) by simp_all
-  note IA = CoreTerm_Bin.IH(1)[OF wa CoreTerm_Bin.prems(2,3) A]
-  note IB = CoreTerm_Bin.IH(2)[OF wb CoreTerm_Bin.prems(2,3) B]
+    using CoreTermL_Bin.prems(1) by simp_all
+  note IA = CoreTermL_Bin.IH(1)[OF wa CoreTermL_Bin.prems(2,3) A]
+  note IB = CoreTermL_Bin.IH(2)[OF wb CoreTermL_Bin.prems(2,3) B]
   have len: \<open>op \<noteq> BinOp_Concat \<longrightarrow> length lb = length la\<close> using IA IB weq by simp
   have G: \<open>grows (bcost op (length la)) s2 s'\<close> using blast_bin_cost[OF len C] .
   have L: \<open>length ls = bin_width op (length la) (length lb)\<close> using blast_bin_grows[OF len C] by simp
@@ -889,23 +889,23 @@ next
     using grows_trans[OF grows_trans[OF IA[THEN conjunct2] IB[THEN conjunct2]] G] .
   show ?case using g L IA IB by (auto simp: width_Bin ccount_def ncost_def bin_width_def algebra_simps)
 next
-  case (CoreTerm_Extract hi lo a)
+  case (CoreTermL_Extract hi lo a)
   obtain s1 la where A: \<open>blast_m vs dl s a = (s1, la)\<close> by (cases \<open>blast_m vs dl s a\<close>)
-  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTerm_Extract.prems(4) A by auto
-  have wa: \<open>cwt ws ds a\<close> and lh: \<open>unat lo \<le> unat hi\<close> using CoreTerm_Extract.prems(1) by simp_all
-  note IA = CoreTerm_Extract.IH[OF wa CoreTerm_Extract.prems(2,3) A]
+  have E: \<open>s' = s1\<close> \<open>ls = extract_m la (unat hi) (unat lo)\<close> using CoreTermL_Extract.prems(4) A by auto
+  have wa: \<open>cwt ws ds a\<close> and lh: \<open>unat lo \<le> unat hi\<close> using CoreTermL_Extract.prems(1) by simp_all
+  note IA = CoreTermL_Extract.IH[OF wa CoreTermL_Extract.prems(2,3) A]
   show ?case using IA lh by (auto simp: E extract_m_def ccount_def ncost_def)
 next
-  case (CoreTerm_Ite c a b)
+  case (CoreTermL_Ite c a b)
   obtain s1 lc where C: \<open>blast_m vs dl s c = (s1, lc)\<close> by (cases \<open>blast_m vs dl s c\<close>)
   obtain s2 la where A: \<open>blast_m vs dl s1 a = (s2, la)\<close> by (cases \<open>blast_m vs dl s1 a\<close>)
   obtain s3 lb where B: \<open>blast_m vs dl s2 b = (s3, lb)\<close> by (cases \<open>blast_m vs dl s2 b\<close>)
-  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTerm_Ite.prems(4) C A B by simp
+  have D: \<open>ite_vec_m s3 (lc ! 0) la lb = (s', ls)\<close> using CoreTermL_Ite.prems(4) C A B by simp
   have wc: \<open>cwt ws ds c\<close> and wa: \<open>cwt ws ds a\<close> and wb: \<open>cwt ws ds b\<close>
-    using CoreTerm_Ite.prems(1) by simp_all
-  note IC = CoreTerm_Ite.IH(1)[OF wc CoreTerm_Ite.prems(2,3) C]
-  note IA = CoreTerm_Ite.IH(2)[OF wa CoreTerm_Ite.prems(2,3) A]
-  note IB = CoreTerm_Ite.IH(3)[OF wb CoreTerm_Ite.prems(2,3) B]
+    using CoreTermL_Ite.prems(1) by simp_all
+  note IC = CoreTermL_Ite.IH(1)[OF wc CoreTermL_Ite.prems(2,3) C]
+  note IA = CoreTermL_Ite.IH(2)[OF wa CoreTermL_Ite.prems(2,3) A]
+  note IB = CoreTermL_Ite.IH(3)[OF wb CoreTermL_Ite.prems(2,3) B]
   have V: \<open>grows (5 * length la) s3 s'\<close> \<open>length ls = length la\<close>
     using ite_vec_m_grows[where s = s3 and c = \<open>lc ! 0\<close> and a = la and b = lb] D by simp_all
   have g: \<open>grows (ccount ws ds c + ccount ws ds a + ccount ws ds b + 5 * length la) s s'\<close>
@@ -973,14 +973,14 @@ qed
 lemma encode_cnt:
   assumes \<open>cproblem_wt p\<close> \<open>encode_m p = (s, vs)\<close>
   shows \<open>fst s + length (snd s) \<le>
-           2 + sum_list (cvar_widths p) + length (CoreProblem_asserts p) +
-           sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)))
-                              (CoreProblem_defs p @ CoreProblem_asserts p)) \<and>
+           2 + sum_list (cvar_widths p) + length (CoreProblemL_asserts p) +
+           sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)))
+                              (CoreProblemL_defs p @ CoreProblemL_asserts p)) \<and>
          cl4 s\<close>
 proof -
-  let ?W = \<open>CoreProblem_widths p\<close>
-  let ?D = \<open>CoreProblem_defs p\<close>
-  let ?A = \<open>CoreProblem_asserts p\<close>
+  let ?W = \<open>CoreProblemL_widths p\<close>
+  let ?D = \<open>CoreProblemL_defs p\<close>
+  let ?A = \<open>CoreProblemL_asserts p\<close>
   let ?ws = \<open>cvar_widths p\<close>
   let ?ds = \<open>cdef_widths ?ws [] ?D\<close>
   obtain s1 vs1 where V: \<open>foldl (vars_step ?W) (init_st, []) [0..<length ?W] = (s1, vs1)\<close>
@@ -1006,52 +1006,52 @@ proof -
     using g ci by (simp add: grows_def init_st_def algebra_simps)
 qed
 
-text \<open>\<^const>\<open>fuel_bound\<close> fits in a 64-bit word when the counts, the numbers of variables,
+text \<open>\<^const>\<open>fuel_bound\<close> is at most \<open>2^57\<close> when the counts, the numbers of variables,
   definitions and assertions, the widths of the variables and the terms are small.\<close>
 theorem fuel_bound_lt:
   assumes \<open>cproblem_wt p\<close>
-    \<open>2 + sum_list (cvar_widths p) + length (CoreProblem_asserts p) +
-     sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)))
-                   (CoreProblem_defs p @ CoreProblem_asserts p)) < 2 ^ 63\<close>
-    \<open>length (cvar_widths p) < 2 ^ 63\<close> \<open>length (CoreProblem_defs p) < 2 ^ 63\<close>
-    \<open>length (CoreProblem_asserts p) < 2 ^ 63\<close>
-    \<open>\<forall>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p).
-       tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblem_defs p)) t < 2 ^ 63\<close>
-  shows \<open>fuel_bound p < 2 ^ 64\<close>
+    \<open>2 + sum_list (cvar_widths p) + length (CoreProblemL_asserts p) +
+     sum_list (map (ccount (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)))
+                   (CoreProblemL_defs p @ CoreProblemL_asserts p)) < 2 ^ 56\<close>
+    \<open>length (cvar_widths p) < 2 ^ 56\<close> \<open>length (CoreProblemL_defs p) < 2 ^ 56\<close>
+    \<open>length (CoreProblemL_asserts p) < 2 ^ 56\<close>
+    \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p).
+       tbound (cvar_widths p) (cdef_widths (cvar_widths p) [] (CoreProblemL_defs p)) t < 2 ^ 56\<close>
+  shows \<open>fuel_bound p \<le> 2 ^ 57\<close>
 proof -
   obtain s vs where e: \<open>encode_m p = (s, vs)\<close> by (cases \<open>encode_m p\<close>)
   note EC = encode_cnt[OF assms(1) e]
   define ws where \<open>ws = cvar_widths p\<close>
-  define ds where \<open>ds = cdef_widths ws [] (CoreProblem_defs p)\<close>
-  have c: \<open>fst s + length (snd s) < 2 ^ 63\<close> using EC assms(2) by (simp add: ws_def ds_def)
-  have w: \<open>\<forall>w \<in> set ws. w + 2 < 2 ^ 64\<close>
+  define ds where \<open>ds = cdef_widths ws [] (CoreProblemL_defs p)\<close>
+  have c: \<open>fst s + length (snd s) < 2 ^ 56\<close> using EC assms(2) by (simp add: ws_def ds_def)
+  have w: \<open>\<forall>w \<in> set ws. w + 2 < 2 ^ 57\<close>
   proof
     fix w assume \<open>w \<in> set ws\<close>
     then have \<open>w \<le> sum_list ws\<close> by (rule member_le_sum_list; simp)
-    then show \<open>w + 2 < 2 ^ 64\<close> using assms(2) by (simp add: ws_def)
+    then show \<open>w + 2 < 2 ^ 57\<close> using assms(2) by (simp add: ws_def)
   qed
-  have cl: \<open>\<forall>c \<in> set (snd s). length c + 2 < 2 ^ 64\<close> using EC by (auto simp: cl4_def)
-  have tb: \<open>\<forall>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p). tbound ws ds t < 2 ^ 64\<close>
+  have cl: \<open>\<forall>c \<in> set (snd s). length c + 2 < 2 ^ 57\<close> using EC by (auto simp: cl4_def)
+  have tb: \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p). tbound ws ds t < 2 ^ 57\<close>
   proof
-    fix t assume \<open>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p)\<close>
-    then have \<open>tbound ws ds t < 2 ^ 63\<close> using assms(6) by (simp add: ws_def ds_def)
-    then show \<open>tbound ws ds t < 2 ^ 64\<close> by simp
+    fix t assume \<open>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p)\<close>
+    then have \<open>tbound ws ds t < 2 ^ 56\<close> using assms(6) by (simp add: ws_def ds_def)
+    then show \<open>tbound ws ds t < 2 ^ 57\<close> by simp
   qed
-  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), length ws + 2, length (CoreProblem_defs p) + 2,
-           length (CoreProblem_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), 2 * length ws + 2, 2 * length (CoreProblemL_defs p) + 2,
+           2 * length (CoreProblemL_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
           set (map (\<lambda>c. length c + 2) (snd s)) \<union>
-          set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
+          set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
   have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
-  have all: \<open>\<forall>x \<in> X. x < 2 ^ 64\<close>
+  have all: \<open>\<forall>x \<in> X. x \<le> 2 ^ 57\<close>
   proof
     fix x assume \<open>x \<in> X\<close>
     then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
-      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = length ws + 2\<close>
-      | \<open>x = length (CoreProblem_defs p) + 2\<close> | \<open>x = length (CoreProblem_asserts p) + 2\<close>
+      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = 2 * length ws + 2\<close>
+      | \<open>x = 2 * length (CoreProblemL_defs p) + 2\<close> | \<open>x = 2 * length (CoreProblemL_asserts p) + 2\<close>
       | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
-      | \<open>x \<in> set (map (tbound ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
+      | \<open>x \<in> set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
       unfolding X_def by blast
-    then show \<open>x < 2 ^ 64\<close>
+    then show \<open>x \<le> 2 ^ 57\<close>
     proof cases
       case 1 then show ?thesis using c by simp
     next
@@ -1069,10 +1069,10 @@ proof -
     next
       case 8 then show ?thesis using cl by auto
     next
-      case 9 then show ?thesis using tb by auto
+      case 9 then show ?thesis using tb by (auto intro: less_imp_le)
     qed
   qed
-  have M: \<open>Max X < 2 ^ 64\<close> using all by (simp add: Max_less_iff[OF fin ne])
+  have M: \<open>Max X \<le> 2 ^ 57\<close> using all by (simp add: Max_le_iff[OF fin ne])
   have F: \<open>fuel_bound p = Max X\<close>
     unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
   show ?thesis using M F by simp
@@ -1088,35 +1088,35 @@ qed
 
 lemma size_tw: \<open>Suc (size t) \<le> 2 * cterm_weight ws ds t\<close>
 proof (induction t)
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   then show ?case by (simp add: cterm_weight_def)
 next
-  case (CoreTerm_Var i)
+  case (CoreTermL_Var i)
   then show ?case by (simp add: cterm_weight_def)
 next
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?case by (simp add: cterm_weight_def)
 next
-  case (CoreTerm_Not a)
-  have sz: \<open>size (CoreTerm_Not a) \<le> size a + 1\<close> by simp
+  case (CoreTermL_Not a)
+  have sz: \<open>size (CoreTermL_Not a) \<le> size a + 1\<close> by simp
   show ?case
-    using CoreTerm_Not.IH tw_Not[of ws ds a] sq1[of \<open>cwidth ws ds a\<close>] sz by linarith
+    using CoreTermL_Not.IH tw_Not[of ws ds a] sq1[of \<open>cwidth ws ds a\<close>] sz by linarith
 next
-  case (CoreTerm_Bin op a b)
-  have sz: \<open>size (CoreTerm_Bin op a b) \<le> size a + size b + 1\<close> by simp
+  case (CoreTermL_Bin op a b)
+  have sz: \<open>size (CoreTermL_Bin op a b) \<le> size a + size b + 1\<close> by simp
   show ?case
-    using CoreTerm_Bin.IH tw_Bin[of ws ds op a b] sq1[of \<open>cwidth ws ds (CoreTerm_Bin op a b)\<close>] sz by linarith
+    using CoreTermL_Bin.IH tw_Bin[of ws ds op a b] sq1[of \<open>cwidth ws ds (CoreTermL_Bin op a b)\<close>] sz by linarith
 next
-  case (CoreTerm_Extract hi lo a)
-  have sz: \<open>size (CoreTerm_Extract hi lo a) \<le> size a + 1\<close> by simp
+  case (CoreTermL_Extract hi lo a)
+  have sz: \<open>size (CoreTermL_Extract hi lo a) \<le> size a + 1\<close> by simp
   show ?case
-    using CoreTerm_Extract.IH tw_Extract[of ws ds hi lo a] sq1[of \<open>cwidth ws ds (CoreTerm_Extract hi lo a)\<close>] sz
+    using CoreTermL_Extract.IH tw_Extract[of ws ds hi lo a] sq1[of \<open>cwidth ws ds (CoreTermL_Extract hi lo a)\<close>] sz
     by linarith
 next
-  case (CoreTerm_Ite c a b)
-  have sz: \<open>size (CoreTerm_Ite c a b) \<le> size c + size a + size b + 1\<close> by simp
+  case (CoreTermL_Ite c a b)
+  have sz: \<open>size (CoreTermL_Ite c a b) \<le> size c + size a + size b + 1\<close> by simp
   show ?case
-    using CoreTerm_Ite.IH tw_Ite[of ws ds c a b] sq1[of \<open>cwidth ws ds a\<close>] sz by linarith
+    using CoreTermL_Ite.IH tw_Ite[of ws ds c a b] sq1[of \<open>cwidth ws ds a\<close>] sz by linarith
 qed
 
 lemma tbound_le: \<open>tbound ws ds t \<le> 2 * cterm_weight ws ds t\<close>
@@ -1145,23 +1145,23 @@ proof -
   obtain s vs where e: \<open>encode_m p = (s, vs)\<close> by (cases \<open>encode_m p\<close>)
   note EG = encode_grows[OF assms e]
   define ws where \<open>ws = cvar_widths p\<close>
-  define ds where \<open>ds = cdef_widths ws [] (CoreProblem_defs p)\<close>
-  define Y where \<open>Y = sum_list (map (cterm_weight ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
+  define ds where \<open>ds = cdef_widths ws [] (CoreProblemL_defs p)\<close>
+  define Y where \<open>Y = sum_list (map (cterm_weight ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
   define B where \<open>B = csize_bound p\<close>
-  have EG': \<open>fst s + length (snd s) \<le> 2 + sum_list ws + length (CoreProblem_asserts p) + 100 * Y\<close>
+  have EG': \<open>fst s + length (snd s) \<le> 2 + sum_list ws + length (CoreProblemL_asserts p) + 100 * Y\<close>
     using EG by (simp add: ws_def ds_def Y_def)
   have cl: \<open>cl4 s\<close> using EG by simp
-  have Bdef: \<open>B = 1000 * (1 + sum_list ws + length ws + length (CoreProblem_defs p) +
-      length (CoreProblem_asserts p) + Y)\<close>
+  have Bdef: \<open>B = 1000 * (1 + sum_list ws + length ws + length (CoreProblemL_defs p) +
+      length (CoreProblemL_asserts p) + Y)\<close>
     by (simp add: B_def csize_bound_def Let_def ws_def ds_def Y_def)
-  have Bexp: \<open>B = 1000 + 1000 * sum_list ws + 1000 * length ws + 1000 * length (CoreProblem_defs p) +
-      1000 * length (CoreProblem_asserts p) + 1000 * Y\<close> using Bdef by (simp add: algebra_simps)
-  have gen: \<open>\<And>m. m \<le> 2 + sum_list ws + length (CoreProblem_asserts p) + 100 * Y \<Longrightarrow> m + 2 \<le> B\<close>
+  have Bexp: \<open>B = 1000 + 1000 * sum_list ws + 1000 * length ws + 1000 * length (CoreProblemL_defs p) +
+      1000 * length (CoreProblemL_asserts p) + 1000 * Y\<close> using Bdef by (simp add: algebra_simps)
+  have gen: \<open>\<And>m. m \<le> 2 + sum_list ws + length (CoreProblemL_asserts p) + 100 * Y \<Longrightarrow> m + 2 \<le> B\<close>
   proof -
-    fix m assume h: \<open>m \<le> 2 + sum_list ws + length (CoreProblem_asserts p) + 100 * Y\<close>
-    have a: \<open>B = 1000 + 1000 * sum_list ws + 1000 * length ws + 1000 * length (CoreProblem_defs p) +
-      1000 * length (CoreProblem_asserts p) + 1000 * Y\<close> using Bdef by (simp add: algebra_simps)
-    have b1: \<open>sum_list ws \<le> 1000 * sum_list ws\<close> and b2: \<open>length (CoreProblem_asserts p) \<le> 1000 * length (CoreProblem_asserts p)\<close>
+    fix m assume h: \<open>m \<le> 2 + sum_list ws + length (CoreProblemL_asserts p) + 100 * Y\<close>
+    have a: \<open>B = 1000 + 1000 * sum_list ws + 1000 * length ws + 1000 * length (CoreProblemL_defs p) +
+      1000 * length (CoreProblemL_asserts p) + 1000 * Y\<close> using Bdef by (simp add: algebra_simps)
+    have b1: \<open>sum_list ws \<le> 1000 * sum_list ws\<close> and b2: \<open>length (CoreProblemL_asserts p) \<le> 1000 * length (CoreProblemL_asserts p)\<close>
       and b3: \<open>100 * Y \<le> 1000 * Y\<close> by simp_all
     show \<open>m + 2 \<le> B\<close> using a h b1 b2 b3 by linarith
   qed
@@ -1170,17 +1170,17 @@ proof -
   have h2': \<open>2 * (fst s + length (snd s)) \<le> B\<close>
   proof -
     have b1: \<open>2 * sum_list ws \<le> 1000 * sum_list ws\<close>
-      and b2: \<open>2 * length (CoreProblem_asserts p) \<le> 1000 * length (CoreProblem_asserts p)\<close>
+      and b2: \<open>2 * length (CoreProblemL_asserts p) \<le> 1000 * length (CoreProblemL_asserts p)\<close>
       and b3: \<open>200 * Y \<le> 1000 * Y\<close> by simp_all
-    have \<open>2 * (fst s + length (snd s)) \<le> 2 * (2 + sum_list ws + length (CoreProblem_asserts p) + 100 * Y)\<close>
+    have \<open>2 * (fst s + length (snd s)) \<le> 2 * (2 + sum_list ws + length (CoreProblemL_asserts p) + 100 * Y)\<close>
       using EG' by simp
-    then have \<open>2 * (fst s + length (snd s)) \<le> 4 + 2 * sum_list ws + 2 * length (CoreProblem_asserts p) + 200 * Y\<close>
+    then have \<open>2 * (fst s + length (snd s)) \<le> 4 + 2 * sum_list ws + 2 * length (CoreProblemL_asserts p) + 200 * Y\<close>
       by simp
     then show ?thesis using Bexp b1 b2 b3 by linarith
   qed
-  have h3: \<open>length ws + 2 \<le> B\<close> using Bexp by linarith
-  have h4: \<open>length (CoreProblem_defs p) + 2 \<le> B\<close> using Bexp by linarith
-  have h5: \<open>length (CoreProblem_asserts p) + 2 \<le> B\<close> using Bexp by linarith
+  have h3: \<open>2 * length ws + 2 \<le> B\<close> using Bexp by linarith
+  have h4: \<open>2 * length (CoreProblemL_defs p) + 2 \<le> B\<close> using Bexp by linarith
+  have h5: \<open>2 * length (CoreProblemL_asserts p) + 2 \<le> B\<close> using Bexp by linarith
   have h6: \<open>\<forall>w \<in> set ws. w + 2 \<le> B\<close>
   proof
     fix w assume \<open>w \<in> set ws\<close>
@@ -1189,19 +1189,53 @@ proof -
   qed
   have h7: \<open>\<forall>c \<in> set (snd s). length c + 2 \<le> B\<close>
     using cl Bexp by (auto simp: cl4_def)
-  have h8: \<open>\<forall>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p). tbound ws ds t \<le> B\<close>
+  have h8: \<open>\<forall>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p). tbound ws ds t \<le> B\<close>
   proof
-    fix t assume t: \<open>t \<in> set (CoreProblem_defs p @ CoreProblem_asserts p)\<close>
-    have mem: \<open>cterm_weight ws ds t \<in> set (map (cterm_weight ws ds) (CoreProblem_defs p @ CoreProblem_asserts p))\<close>
+    fix t assume t: \<open>t \<in> set (CoreProblemL_defs p @ CoreProblemL_asserts p)\<close>
+    have mem: \<open>cterm_weight ws ds t \<in> set (map (cterm_weight ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
       unfolding set_map by (rule imageI[OF t])
     have \<open>cterm_weight ws ds t \<le> Y\<close>
       unfolding Y_def by (rule member_le_sum_list[OF mem]; simp)
     then show \<open>tbound ws ds t \<le> B\<close> using tbound_le[of ws ds t] Bexp by linarith
   qed
-  have \<open>fuel_bound p \<le> B\<close>
-    unfolding fuel_bound_def
-    apply (simp add: e Let_def ws_def[symmetric] ds_def[symmetric])
-    using h1 h2 h2' h3 h4 h5 h6 h7 h8 by auto
+  define X where \<open>X = {fst s + 2, length (snd s) + 2, 2 * (fst s + length (snd s)), 2 * length ws + 2, 2 * length (CoreProblemL_defs p) + 2,
+           2 * length (CoreProblemL_asserts p) + 2} \<union> set (map (\<lambda>w. w + 2) ws) \<union>
+          set (map (\<lambda>c. length c + 2) (snd s)) \<union>
+          set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
+  have fin: \<open>finite X\<close> and ne: \<open>X \<noteq> {}\<close> by (simp_all add: X_def)
+  have F: \<open>fuel_bound p = Max X\<close>
+    unfolding fuel_bound_def X_def ws_def ds_def by (simp only: Let_def e prod.case)
+  have all: \<open>\<forall>x \<in> X. x \<le> B\<close>
+  proof
+    fix x assume \<open>x \<in> X\<close>
+    then consider \<open>x = fst s + 2\<close> | \<open>x = length (snd s) + 2\<close>
+      | \<open>x = 2 * (fst s + length (snd s))\<close> | \<open>x = 2 * length ws + 2\<close>
+      | \<open>x = 2 * length (CoreProblemL_defs p) + 2\<close> | \<open>x = 2 * length (CoreProblemL_asserts p) + 2\<close>
+      | \<open>x \<in> set (map (\<lambda>w. w + 2) ws)\<close> | \<open>x \<in> set (map (\<lambda>c. length c + 2) (snd s))\<close>
+      | \<open>x \<in> set (map (tbound ws ds) (CoreProblemL_defs p @ CoreProblemL_asserts p))\<close>
+      unfolding X_def by blast
+    then show \<open>x \<le> B\<close>
+    proof cases
+      case 1 then show ?thesis using h1 by simp
+    next
+      case 2 then show ?thesis using h2 by simp
+    next
+      case 3 then show ?thesis using h2' by simp
+    next
+      case 4 then show ?thesis using h3 by simp
+    next
+      case 5 then show ?thesis using h4 by simp
+    next
+      case 6 then show ?thesis using h5 by simp
+    next
+      case 7 then show ?thesis using h6 by auto
+    next
+      case 8 then show ?thesis using h7 by auto
+    next
+      case 9 then show ?thesis using h8 by auto
+    qed
+  qed
+  have \<open>fuel_bound p \<le> B\<close> using all F by (simp add: Max_le_iff[OF fin ne])
   then show ?thesis by (simp add: B_def)
 qed
 

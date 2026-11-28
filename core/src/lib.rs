@@ -512,6 +512,18 @@ fn bv_extract(a: &Vec<Lit>, hi: usize, lo: usize) -> Vec<Lit> {
     r
 }
 
+/// A copy of `a` in a new vector (a clone would keep the capacity of `a`, which the evaluation
+/// then grows).
+fn bits_copy(a: &Vec<bool>) -> Vec<bool> {
+    let mut r = Vec::new();
+    let mut i: usize = 0;
+    while i < a.len() {
+        r.push(a[i]);
+        i += 1;
+    }
+    r
+}
+
 /// The concatenation with `hi` as the high part.
 fn bv_concat(hi: &Vec<Lit>, lo: &Vec<Lit>) -> Vec<Lit> {
     let mut r = lo.clone();
@@ -1539,7 +1551,7 @@ fn eval_bin(op: &BinOp, a: &Vec<bool>, b: &Vec<bool>) -> Vec<bool> {
 /// The value of `t`, given the values `vars` of the variables and `defs` of the definitions.
 pub fn eval_term(vars: &Vec<Vec<bool>>, defs: &Vec<Vec<bool>>, t: &CoreTerm) -> Vec<bool> {
     match t {
-        CoreTerm::Const(bits) => bits.clone(),
+        CoreTerm::Const(bits) => bits_copy(bits),
         CoreTerm::Var(i) => vars[*i].clone(),
         CoreTerm::Ref(i) => defs[*i].clone(),
         CoreTerm::Not(a) => bits_not(&eval_term(vars, defs, a)),
@@ -2453,14 +2465,17 @@ fn tr_model(p: &SmtProblem, m: &Vec<Vec<bool>>) -> SmtModel {
 
 // ---------------------------------------------------------------------------------------------
 // Size checks. The solver of the extended language (`solve`) is verified for problems whose
-// `size_bound` (spec/QFBV_Spec.thy) is below 2^64, and the translation indexes its definitions
-// by `usize`. `check_sat` answers `Unknown` when the translation would add 2^63 definitions or
-// more, or when the translated problem is too large for `solve`. The computations below saturate
-// at 2^63: each returns the exact value if it is below 2^63, and 2^63 otherwise.
+// `ovf_bound` (proof/core_spec/QFBV_CoreSpec.thy) is below 2^56, so that every vector it grows
+// stays below 2^56 elements (a `push` then never exceeds the largest capacity), and the
+// translation indexes its definitions by `usize`. `check_sat` answers `Unknown` when the problem has
+// 2^56 declared symbols, definitions or assertions or more (`tr_size` and `tr_problem` push one
+// element for each), when the translation would add 2^56 definitions or more, or when the
+// translated problem is too large for `solve`. The computations below saturate at 2^56: each
+// returns the exact value if it is below 2^56, and 2^56 otherwise.
 
-/// The bound at which the size computations saturate: 2^63.
+/// The bound at which the size computations saturate: 2^56.
 fn cap() -> usize {
-    9223372036854775808
+    72057594037927936
 }
 
 /// `a + b`, saturated at `cap()`.
@@ -2614,7 +2629,7 @@ fn term_size(ws: &Vec<usize>, ds: &Vec<usize>, t: &Term) -> (usize, usize) {
     (w, sat_add(sat_mul(4, sat_add(w, 1)), g))
 }
 
-/// Whether the `ovf_bound` of `q` is below 2^63 (`sizes_ok` of the specification): then no
+/// Whether the `ovf_bound` of `q` is below 2^56 (`sizes_ok` of `QFBV_CoreSpec`): then no
 /// counter of the solver overflows.
 fn size_ok(q: &Problem) -> bool {
     let mut ds = Vec::new();
@@ -2653,6 +2668,9 @@ fn size_ok(q: &Problem) -> bool {
 /// language and solved.
 pub fn check_sat(p: &SmtProblem) -> SmtAnswer {
     if !in_fragment(p) {
+        return SmtAnswer::Unknown;
+    }
+    if p.funs.len() >= cap() || p.defs.len() >= cap() || p.asserts.len() >= cap() {
         return SmtAnswer::Unknown;
     }
     if tr_size(p) >= cap() {

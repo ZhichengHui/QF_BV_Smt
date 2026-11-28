@@ -14,13 +14,13 @@ lemma tr_asserts_count:
   \<open>length (snd (foldl (tr_asserts_step p dm) (S, acc) ts)) = length acc + length ts\<close>
   by (induction ts arbitrary: S acc) (auto simp: tr_asserts_step_def Let_def)
 
-lemma asserts_length: \<open>length (Problem_asserts (tr_problem_m p)) = length (SmtProblem_asserts p)\<close>
+lemma asserts_length: \<open>length (ProblemL_asserts (tr_problem_m p)) = length (sasserts p)\<close>
   by (simp add: tr_problem_m_def tr_asserts_m_step Let_def tr_asserts_count)
 
-lemma widths_length: \<open>length (Problem_widths (tr_problem_m p)) = length (SmtProblem_funs p)\<close>
+lemma widths_length: \<open>length (ProblemL_widths (tr_problem_m p)) = length (sfuns p)\<close>
   by (simp add: tr_problem_m_def Let_def)
 
-lemma defs_length: \<open>length (Problem_defs (tr_problem_m p)) = tsize p\<close>
+lemma defs_length: \<open>length (ProblemL_defs (tr_problem_m p)) = tsize p\<close>
   using tsize_length[of p] by (simp add: tr_problem_m_def Let_def)
 
 text \<open>A fuel sufficient for every loop and recursion of \<^verbatim>\<open>check_sat\<close> on \<open>p\<close>.\<close>
@@ -30,32 +30,45 @@ definition fuel_top :: \<open>SmtProblem \<Rightarrow> nat\<close> where
 
 lemma tsz_lt:
   fixes x xa :: \<open>64 word\<close>
-  shows \<open>unat x = sat T \<Longrightarrow> unat xa = 9223372036854775808 \<Longrightarrow> \<not> xa \<le> x \<Longrightarrow> T < 2 ^ 63\<close>
+  shows \<open>unat x = sat T \<Longrightarrow> unat xa = 72057594037927936 \<Longrightarrow> \<not> xa \<le> x \<Longrightarrow> T < 2 ^ 56\<close>
   by (simp add: word_le_nat_alt sat_def min_def split: if_splits)
 
 lemma tsz_ge:
   fixes x xa :: \<open>64 word\<close>
-  shows \<open>unat x = sat T \<Longrightarrow> unat xa = 9223372036854775808 \<Longrightarrow> xa \<le> x \<Longrightarrow> \<not> T < 2 ^ 63\<close>
+  shows \<open>unat x = sat T \<Longrightarrow> unat xa = 72057594037927936 \<Longrightarrow> xa \<le> x \<Longrightarrow> \<not> T < 2 ^ 56\<close>
   by (simp add: word_le_nat_alt sat_def min_def split: if_splits)
+
+lemma cap_lt:
+  fixes c :: \<open>64 word\<close>
+  shows \<open>unat c = 72057594037927936 \<Longrightarrow> n < 2 ^ 63 \<Longrightarrow> \<not> c \<le> word_of_nat n \<Longrightarrow> n < 2 ^ 56\<close>
+  by (simp add: word_le_nat_alt unat_of_nat_eq)
+
+lemma cap_ge:
+  fixes c :: \<open>64 word\<close>
+  shows \<open>unat c = 72057594037927936 \<Longrightarrow> n < 2 ^ 63 \<Longrightarrow> c \<le> word_of_nat n \<Longrightarrow> \<not> n < 2 ^ 56\<close>
+  by (simp add: word_le_nat_alt unat_of_nat_eq)
 
 context QFBV_ctx
 begin
 
-text \<open>The contract of \<^verbatim>\<open>solve\<close> with the overflow condition in the precondition, so that it
-  holds for every problem given enough fuel.\<close>
+text \<open>The contract of \<^verbatim>\<open>solve\<close> with the overflow and fuel conditions in the precondition.\<close>
 definition solve_contract_b :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort) function_contract\<close> where
   [crush_contracts]: \<open>solve_contract_b q \<equiv>
-     make_function_contract (can_alloc_reference \<star> \<langle>problem_wt q \<and> sizes_ok q\<rangle>)
+     make_function_contract (can_alloc_reference \<star>
+         \<langle>problem_wt (prob_of q) \<and> sizes_ok (prob_of q) \<and> size_bound (prob_of q) \<le> urust_fuel \<and>
+          dpll_fuel (fst (elim_m (lower_problem_m (prob_of q)))) < urust_fuel\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
-          \<langle>case r of Answer_Sat m \<Rightarrow> is_model q m | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model q m)\<rangle>)\<close>
+          \<langle>case r of Answer_Sat m \<Rightarrow> is_model (prob_of q) (vecs_of m) | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model (prob_of q) m)\<rangle>)\<close>
 
 lemma solve_spec_b:
-  assumes \<open>size_bound q \<le> urust_fuel\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m q))) < urust_fuel\<close>
   shows \<open>\<Gamma>; solve q \<Turnstile>\<^sub>F solve_contract_b q\<close>
-proof (cases \<open>sizes_ok q\<close>)
+proof (cases \<open>sizes_ok (prob_of q) \<and> size_bound (prob_of q) \<le> urust_fuel \<and>
+    dpll_fuel (fst (elim_m (lower_problem_m (prob_of q)))) < urust_fuel\<close>)
   case True
+  then have A: \<open>size_bound (prob_of q) \<le> urust_fuel\<close> \<open>sizes_ok (prob_of q)\<close>
+    \<open>dpll_fuel (fst (elim_m (lower_problem_m (prob_of q)))) < urust_fuel\<close> by simp_all
   show ?thesis
-    apply (rule satisfies_function_contract_weaken[OF solve_spec[OF assms(1) True assms(2)]])
+    apply (rule satisfies_function_contract_weaken[OF solve_spec[OF A]])
       apply (simp_all add: solve_contract_b_def solve_contract_def Let_def)
       apply (crush_base)+
     done
@@ -65,7 +78,7 @@ next
     apply -
     apply (ucincl_discharge\<open>intro satisfies_function_contractI\<close>)
     apply (subst wp_sstriple_iff)
-    apply (simp add: solve_contract_b_def Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
+    apply (auto simp add: solve_contract_b_def Let_def apure_precise_False asepconj_bot_zero2 bot_aentails_all)
     done
 qed
 
@@ -84,42 +97,76 @@ next
   case True
   then have W: \<open>smt_wf p\<close> and R: \<open>smt_repr_ok p\<close> by simp_all
   let ?q = \<open>tr_problem_m p\<close>
-  have NF: \<open>N p \<le> urust_fuel\<close> \<open>fuel_smt p \<le> urust_fuel\<close> \<open>fuel_q ?q \<le> urust_fuel\<close>
+  have NF: \<open>QFBV_SmtRefine.N p \<le> urust_fuel\<close> \<open>fuel_smt p \<le> urust_fuel\<close> \<open>fuel_q ?q \<le> urust_fuel\<close>
     \<open>size_bound ?q \<le> urust_fuel\<close> \<open>dpll_fuel (fst (elim_m (lower_problem_m ?q))) < urust_fuel\<close>
     using F by (simp_all add: fuel_top_def)
-  have IP: \<open>length (SmtProblem_funs p) < 2 ^ 64 \<and> length (SmtProblem_funs p) \<le> urust_fuel \<and>
-            (\<forall>f \<in> set (SmtProblem_funs p). length (SmtFun_args f) < 2 ^ 64)\<close>
+  have IP: \<open>length (sfuns p) < 2 ^ 64 \<and> length (sfuns p) \<le> urust_fuel \<and>
+            (\<forall>f \<in> set (sfuns p). length (fargs f) < 2 ^ 64)\<close>
     using in_fragment_pre[OF R NF(1)] .
-  have TS: \<open>tsize_pre urust_fuel p\<close> using tsize_pre_of_wf[OF W R NF(2)] .
+  have TS: \<open>tsize_pre urust_fuel p\<close> if \<open>length (sdefs p) < 2 ^ 56\<close>
+    using tsize_pre_of_wf[OF W R NF(2) that] .
   have TP: \<open>tr_pre urust_fuel p\<close> using tr_problem_pre[OF W R NF(1)] .
-  have RL: \<open>length (SmtProblem_funs p) < 2 ^ 63\<close> \<open>length (SmtProblem_asserts p) < 2 ^ 63\<close>
+  have RL: \<open>length (sfuns p) < 2 ^ 63\<close> \<open>length (sdefs p) < 2 ^ 63\<close> \<open>length (sasserts p) < 2 ^ 63\<close>
     using R by (simp_all add: smt_repr_ok_def)
-  have L64: \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close> if \<open>tsize p < 2 ^ 63\<close>
+  have TZ: \<open>tr_sizes p\<close> if \<open>length (sfuns p) < 2 ^ 56\<close> \<open>length (sdefs p) < 2 ^ 56\<close>
+    \<open>length (sasserts p) < 2 ^ 56\<close> \<open>tsize p < 2 ^ 56\<close>
+    using that tsize_length[of p] by (simp add: tr_sizes_def)
+  have L64: \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close> if \<open>tsize p < 2 ^ 56\<close>
     using that tsize_length[of p] by simp
-  have PW: \<open>problem_wt ?q\<close> if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 63\<close>
+  have PW: \<open>problem_wt ?q\<close> if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 56\<close>
     using problem_wt_tr[OF W that(1) L64[OF that(2)]] .
-  have SP: \<open>size_pre urust_fuel ?q\<close> if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 63\<close>
+  have SP: \<open>size_pre urust_fuel ?q\<close> if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 56\<close>
     using size_pre_of_wt[OF PW[OF that] cok_problem[OF R]] RL that(2) NF(3)
     by (simp add: widths_length defs_length asserts_length)
-  have MC: \<open>smt_is_model p (tr_model_m p m)\<close>
-    if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 63\<close> \<open>is_model ?q m\<close> for m
-    using tr_model_correct[OF W that(1) L64[OF that(2)] that(3)] .
+  have MC: \<open>smt_is_model p M\<close>
+    if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 56\<close> \<open>is_model ?q m\<close> \<open>tr_model_ok p m M\<close> for m M
+    using tr_model_correct[OF W that(1) L64[OF that(2)] that(3,4)] .
   have UC: \<open>\<not> smt_satisfiable p\<close>
-    if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 63\<close> \<open>\<forall>m. \<not> is_model ?q m\<close>
+    if \<open>smt_fragment p\<close> \<open>tsize p < 2 ^ 56\<close> \<open>\<forall>m. \<not> is_model ?q m\<close>
     using tr_complete[OF W that(1) L64[OF that(2)]] that(3) by blast
-  have B: \<open>tsize p < 2 ^ 63\<close> \<open>sizes_ok ?q\<close> if \<open>smt_fragment p\<close> \<open>smt_in_range p\<close>
+  have B: \<open>tsize p < 2 ^ 56\<close> \<open>sizes_ok ?q\<close> if \<open>smt_fragment p\<close> \<open>smt_in_range p\<close>
     using tr_size_bound[OF W that] by simp_all
+  have IRL: \<open>length (sfuns p) < 2 ^ 56\<close> \<open>length (sdefs p) < 2 ^ 56\<close> \<open>length (sasserts p) < 2 ^ 56\<close>
+    if \<open>smt_in_range p\<close>
+    using in_range_rng(4)[OF that] by (simp_all add: smt_size_def Let_def)
+  have CL: \<open>length (sfuns p) < 2 ^ 56\<close> if \<open>unat c = 72057594037927936\<close> \<open>\<not> c \<le> word_of_nat (length (sfuns p))\<close>
+    for c :: \<open>64 word\<close> using cap_lt[OF that(1) RL(1) that(2)] .
+  have CD: \<open>length (sdefs p) < 2 ^ 56\<close> if \<open>unat c = 72057594037927936\<close> \<open>\<not> c \<le> word_of_nat (length (sdefs p))\<close>
+    for c :: \<open>64 word\<close> using cap_lt[OF that(1) RL(2) that(2)] .
+  have CA: \<open>length (sasserts p) < 2 ^ 56\<close> if \<open>unat c = 72057594037927936\<close> \<open>\<not> c \<le> word_of_nat (length (sasserts p))\<close>
+    for c :: \<open>64 word\<close> using cap_lt[OF that(1) RL(3) that(2)] .
+  have GL: \<open>\<not> smt_in_range p\<close> if \<open>unat c = 72057594037927936\<close>
+    \<open>c \<le> word_of_nat (length (sfuns p)) \<or> c \<le> word_of_nat (length (sdefs p)) \<or> c \<le> word_of_nat (length (sasserts p))\<close>
+    for c :: \<open>64 word\<close> using that cap_ge[OF that(1) RL(1)] cap_ge[OF that(1) RL(2)] cap_ge[OF that(1) RL(3)] IRL by blast
   show ?thesis
     apply (crush_boot f: check_sat_def contract: check_sat_contract_def)
-    apply (crush_base specs add: solve_spec_b[OF NF(4,5)] simp add: IP TS TP W R)
-    subgoal for x xa xb
-      apply (cases xb; crush_base)
-      apply (all \<open>frule tsz_lt, assumption, assumption\<close>)
-      using UC MC tr_model_pre[OF _ R NF(1)] by auto
-    subgoal using PW tsz_lt by blast
-    subgoal using B(2) by simp
-    subgoal using SP tsz_lt by blast
+    apply (crush_base specs add: solve_spec_b simp add: IP TP W R)
+    subgoal for x xa xb xc xd xe xf
+      apply (cases xf; crush_base)
+      apply (all \<open>(frule tsz_lt, assumption, assumption)?\<close>)
+      apply (all \<open>(frule CL, assumption)?\<close>)
+      subgoal using MC by blast
+      subgoal for xg i using tr_model_pre[OF _ R NF(1), of \<open>vecs_of xg\<close>] by blast
+      subgoal for xg using tr_model_pre[OF _ R NF(1), of \<open>vecs_of xg\<close>] by simp
+      subgoal using IP by simp
+      subgoal by simp
+      subgoal using UC by blast
+      done
+    apply (all \<open>(frule tsz_lt, assumption, assumption)?\<close>)
+    apply (all \<open>(frule CL, assumption)?\<close>)
+    apply (all \<open>(frule CD, assumption)?\<close>)
+    apply (all \<open>(frule CA, assumption)?\<close>)
+    subgoal using NF(5) by simp
+    subgoal using NF(4) by simp
+    subgoal using PW by blast
+    subgoal using B(2) by blast
+    subgoal using SP by blast
+    subgoal using TZ by blast
     subgoal using B(1) tsz_ge by blast
+    subgoal using TS by blast
+    subgoal using GL by blast
+    subgoal using GL by blast
+    subgoal using GL by blast
     subgoal using IP by auto
     subgoal using IP by auto
     done

@@ -15,91 +15,91 @@ text \<open>
   and their widths, as natural numbers.
 \<close>
 
-type_synonym lst = \<open>CoreTerm list \<times> nat list\<close>
+type_synonym lst = \<open>CoreTermL list \<times> nat list\<close>
 
-text \<open>The Rust \<^verbatim>\<open>Lower\<close> of a state.\<close>
-definition lower_of :: \<open>lst \<Rightarrow> Lower\<close> where
-  \<open>lower_of L \<equiv> make_Lower (fst L) (map word_of_nat (snd L))\<close>
+text \<open>The state of a Rust \<^verbatim>\<open>Lower\<close>.\<close>
+definition lst_of :: \<open>Lower \<Rightarrow> lst\<close> where
+  \<open>lst_of l \<equiv> (map ct_of (rvec_elems (Lower_defs l)), map unat (rvec_elems (Lower_widths l)))\<close>
 
 subsection \<open>Models of the functions\<close>
 
-definition push_m :: \<open>lst \<Rightarrow> CoreTerm \<Rightarrow> nat \<Rightarrow> lst \<times> nat\<close> where
+definition push_m :: \<open>lst \<Rightarrow> CoreTermL \<Rightarrow> nat \<Rightarrow> lst \<times> nat\<close> where
   \<open>push_m L t w \<equiv> ((fst L @ [t], snd L @ [w]), length (fst L))\<close>
 
 text \<open>A reference to the core definition \<open>k\<close>.\<close>
-definition cr :: \<open>nat \<Rightarrow> CoreTerm\<close> where
-  \<open>cr k \<equiv> CoreTerm_Ref (word_of_nat k)\<close>
+definition cr :: \<open>nat \<Rightarrow> CoreTermL\<close> where
+  \<open>cr k \<equiv> CoreTermL_Ref (word_of_nat k)\<close>
 
 text \<open>The core terms built by \<^verbatim>\<open>cone\<close>, \<^verbatim>\<open>cneg\<close>, \<^verbatim>\<open>cmsb\<close>, \<^verbatim>\<open>cabs\<close>, \<^verbatim>\<open>cslt\<close>, \<^verbatim>\<open>csle\<close>.\<close>
-definition one_t :: \<open>nat \<Rightarrow> CoreTerm\<close> where
-  \<open>one_t w \<equiv> CoreTerm_Bin BinOp_Concat (CoreTerm_Const (replicate (w - 1) False)) (CoreTerm_Const [True])\<close>
+definition one_t :: \<open>nat \<Rightarrow> CoreTermL\<close> where
+  \<open>one_t w \<equiv> CoreTermL_Bin BinOp_Concat (CoreTermL_Const (replicate (w - 1) False)) (CoreTermL_Const [True])\<close>
 
-definition neg_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> CoreTerm\<close> where
-  \<open>neg_t k w \<equiv> CoreTerm_Bin BinOp_Add (CoreTerm_Not (cr k)) (one_t w)\<close>
+definition neg_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> CoreTermL\<close> where
+  \<open>neg_t k w \<equiv> CoreTermL_Bin BinOp_Add (CoreTermL_Not (cr k)) (one_t w)\<close>
 
-definition msb_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> CoreTerm\<close> where
-  \<open>msb_t k w \<equiv> CoreTerm_Extract (word_of_nat (w - 1)) (word_of_nat (w - 1)) (cr k)\<close>
+definition msb_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> CoreTermL\<close> where
+  \<open>msb_t k w \<equiv> CoreTermL_Extract (word_of_nat (w - 1)) (word_of_nat (w - 1)) (cr k)\<close>
 
-definition abs_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> CoreTerm\<close> where
-  \<open>abs_t k w \<equiv> CoreTerm_Ite (msb_t k w) (neg_t k w) (cr k)\<close>
+definition abs_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> CoreTermL\<close> where
+  \<open>abs_t k w \<equiv> CoreTermL_Ite (msb_t k w) (neg_t k w) (cr k)\<close>
 
-definition slt_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> CoreTerm\<close> where
+definition slt_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> CoreTermL\<close> where
   \<open>slt_t ka kb w \<equiv>
-     CoreTerm_Bin BinOp_Or
-       (CoreTerm_Bin BinOp_And (msb_t ka w) (CoreTerm_Not (msb_t kb w)))
-       (CoreTerm_Bin BinOp_And (CoreTerm_Not (CoreTerm_Bin BinOp_Xor (msb_t ka w) (msb_t kb w)))
-          (CoreTerm_Bin BinOp_Ult (cr ka) (cr kb)))\<close>
+     CoreTermL_Bin BinOp_Or
+       (CoreTermL_Bin BinOp_And (msb_t ka w) (CoreTermL_Not (msb_t kb w)))
+       (CoreTermL_Bin BinOp_And (CoreTermL_Not (CoreTermL_Bin BinOp_Xor (msb_t ka w) (msb_t kb w)))
+          (CoreTermL_Bin BinOp_Ult (cr ka) (cr kb)))\<close>
 
-definition sle_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> CoreTerm\<close> where
+definition sle_t :: \<open>nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> CoreTermL\<close> where
   \<open>sle_t ka kb w \<equiv>
-     CoreTerm_Bin BinOp_Or
-       (CoreTerm_Bin BinOp_And (msb_t ka w) (CoreTerm_Not (msb_t kb w)))
-       (CoreTerm_Bin BinOp_And (CoreTerm_Not (CoreTerm_Bin BinOp_Xor (msb_t ka w) (msb_t kb w)))
-          (CoreTerm_Not (CoreTerm_Bin BinOp_Ult (cr kb) (cr ka))))\<close>
+     CoreTermL_Bin BinOp_Or
+       (CoreTermL_Bin BinOp_And (msb_t ka w) (CoreTermL_Not (msb_t kb w)))
+       (CoreTermL_Bin BinOp_And (CoreTermL_Not (CoreTermL_Bin BinOp_Xor (msb_t ka w) (msb_t kb w)))
+          (CoreTermL_Not (CoreTermL_Bin BinOp_Ult (cr kb) (cr ka))))\<close>
 
 text \<open>\<^verbatim>\<open>lower_bin\<close>.\<close>
 definition lower_bin_m :: \<open>lst \<Rightarrow> Op \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> lst \<times> nat\<close> where
   \<open>lower_bin_m L op ka kb \<equiv>
      let w = snd L ! ka in
      case op of
-       Op_And \<Rightarrow> push_m L (CoreTerm_Bin BinOp_And (cr ka) (cr kb)) w
-     | Op_Or \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Or (cr ka) (cr kb)) w
-     | Op_Xor \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Xor (cr ka) (cr kb)) w
-     | Op_Nand \<Rightarrow> push_m L (CoreTerm_Not (CoreTerm_Bin BinOp_And (cr ka) (cr kb))) w
-     | Op_Nor \<Rightarrow> push_m L (CoreTerm_Not (CoreTerm_Bin BinOp_Or (cr ka) (cr kb))) w
-     | Op_Xnor \<Rightarrow> push_m L (CoreTerm_Not (CoreTerm_Bin BinOp_Xor (cr ka) (cr kb))) w
-     | Op_Comp \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Eq (cr ka) (cr kb)) 1
-     | Op_Add \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Add (cr ka) (cr kb)) w
-     | Op_Sub \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Add (cr ka) (neg_t kb w)) w
-     | Op_Mul \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Mul (cr ka) (cr kb)) w
-     | Op_Udiv \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Udiv (cr ka) (cr kb)) w
-     | Op_Urem \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Urem (cr ka) (cr kb)) w
+       Op_And \<Rightarrow> push_m L (CoreTermL_Bin BinOp_And (cr ka) (cr kb)) w
+     | Op_Or \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Or (cr ka) (cr kb)) w
+     | Op_Xor \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Xor (cr ka) (cr kb)) w
+     | Op_Nand \<Rightarrow> push_m L (CoreTermL_Not (CoreTermL_Bin BinOp_And (cr ka) (cr kb))) w
+     | Op_Nor \<Rightarrow> push_m L (CoreTermL_Not (CoreTermL_Bin BinOp_Or (cr ka) (cr kb))) w
+     | Op_Xnor \<Rightarrow> push_m L (CoreTermL_Not (CoreTermL_Bin BinOp_Xor (cr ka) (cr kb))) w
+     | Op_Comp \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Eq (cr ka) (cr kb)) 1
+     | Op_Add \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Add (cr ka) (cr kb)) w
+     | Op_Sub \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Add (cr ka) (neg_t kb w)) w
+     | Op_Mul \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Mul (cr ka) (cr kb)) w
+     | Op_Udiv \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Udiv (cr ka) (cr kb)) w
+     | Op_Urem \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Urem (cr ka) (cr kb)) w
      | Op_Sdiv \<Rightarrow>
-         (let (L1, q) = push_m L (CoreTerm_Bin BinOp_Udiv (abs_t ka w) (abs_t kb w)) w in
-          push_m L1 (CoreTerm_Ite (CoreTerm_Bin BinOp_Xor (msb_t ka w) (msb_t kb w)) (neg_t q w) (cr q)) w)
+         (let (L1, q) = push_m L (CoreTermL_Bin BinOp_Udiv (abs_t ka w) (abs_t kb w)) w in
+          push_m L1 (CoreTermL_Ite (CoreTermL_Bin BinOp_Xor (msb_t ka w) (msb_t kb w)) (neg_t q w) (cr q)) w)
      | Op_Srem \<Rightarrow>
-         (let (L1, r) = push_m L (CoreTerm_Bin BinOp_Urem (abs_t ka w) (abs_t kb w)) w in
-          push_m L1 (CoreTerm_Ite (msb_t ka w) (neg_t r w) (cr r)) w)
+         (let (L1, r) = push_m L (CoreTermL_Bin BinOp_Urem (abs_t ka w) (abs_t kb w)) w in
+          push_m L1 (CoreTermL_Ite (msb_t ka w) (neg_t r w) (cr r)) w)
      | Op_Smod \<Rightarrow>
-         (let (L1, u) = push_m L (CoreTerm_Bin BinOp_Urem (abs_t ka w) (abs_t kb w)) w in
+         (let (L1, u) = push_m L (CoreTermL_Bin BinOp_Urem (abs_t ka w) (abs_t kb w)) w in
           let (L2, nu) = push_m L1 (neg_t u w) w in
-          let zero = CoreTerm_Bin BinOp_Eq (cr u) (CoreTerm_Const (replicate w False)) in
-          let neg_a = CoreTerm_Ite (msb_t kb w) (cr nu) (CoreTerm_Bin BinOp_Add (cr nu) (cr kb)) in
-          let pos_a = CoreTerm_Ite (msb_t kb w) (CoreTerm_Bin BinOp_Add (cr u) (cr kb)) (cr u) in
-          push_m L2 (CoreTerm_Ite zero (cr u) (CoreTerm_Ite (msb_t ka w) neg_a pos_a)) w)
-     | Op_Shl \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Shl (cr ka) (cr kb)) w
-     | Op_Lshr \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Lshr (cr ka) (cr kb)) w
+          let zero = CoreTermL_Bin BinOp_Eq (cr u) (CoreTermL_Const (replicate w False)) in
+          let neg_a = CoreTermL_Ite (msb_t kb w) (cr nu) (CoreTermL_Bin BinOp_Add (cr nu) (cr kb)) in
+          let pos_a = CoreTermL_Ite (msb_t kb w) (CoreTermL_Bin BinOp_Add (cr u) (cr kb)) (cr u) in
+          push_m L2 (CoreTermL_Ite zero (cr u) (CoreTermL_Ite (msb_t ka w) neg_a pos_a)) w)
+     | Op_Shl \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Shl (cr ka) (cr kb)) w
+     | Op_Lshr \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Lshr (cr ka) (cr kb)) w
      | Op_Ashr \<Rightarrow>
-         push_m L (CoreTerm_Ite (msb_t ka w)
-                     (CoreTerm_Not (CoreTerm_Bin BinOp_Lshr (CoreTerm_Not (cr ka)) (cr kb)))
-                     (CoreTerm_Bin BinOp_Lshr (cr ka) (cr kb))) w
-     | Op_Concat \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Concat (cr ka) (cr kb)) (w + snd L ! kb)
-     | Op_Eq \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Eq (cr ka) (cr kb)) 1
-     | Op_Distinct \<Rightarrow> push_m L (CoreTerm_Not (CoreTerm_Bin BinOp_Eq (cr ka) (cr kb))) 1
-     | Op_Ult \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Ult (cr ka) (cr kb)) 1
-     | Op_Ule \<Rightarrow> push_m L (CoreTerm_Not (CoreTerm_Bin BinOp_Ult (cr kb) (cr ka))) 1
-     | Op_Ugt \<Rightarrow> push_m L (CoreTerm_Bin BinOp_Ult (cr kb) (cr ka)) 1
-     | Op_Uge \<Rightarrow> push_m L (CoreTerm_Not (CoreTerm_Bin BinOp_Ult (cr ka) (cr kb))) 1
+         push_m L (CoreTermL_Ite (msb_t ka w)
+                     (CoreTermL_Not (CoreTermL_Bin BinOp_Lshr (CoreTermL_Not (cr ka)) (cr kb)))
+                     (CoreTermL_Bin BinOp_Lshr (cr ka) (cr kb))) w
+     | Op_Concat \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Concat (cr ka) (cr kb)) (w + snd L ! kb)
+     | Op_Eq \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Eq (cr ka) (cr kb)) 1
+     | Op_Distinct \<Rightarrow> push_m L (CoreTermL_Not (CoreTermL_Bin BinOp_Eq (cr ka) (cr kb))) 1
+     | Op_Ult \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Ult (cr ka) (cr kb)) 1
+     | Op_Ule \<Rightarrow> push_m L (CoreTermL_Not (CoreTermL_Bin BinOp_Ult (cr kb) (cr ka))) 1
+     | Op_Ugt \<Rightarrow> push_m L (CoreTermL_Bin BinOp_Ult (cr kb) (cr ka)) 1
+     | Op_Uge \<Rightarrow> push_m L (CoreTermL_Not (CoreTermL_Bin BinOp_Ult (cr ka) (cr kb))) 1
      | Op_Slt \<Rightarrow> push_m L (slt_t ka kb w) 1
      | Op_Sle \<Rightarrow> push_m L (sle_t ka kb w) 1
      | Op_Sgt \<Rightarrow> push_m L (slt_t kb ka w) 1
@@ -109,78 +109,78 @@ text \<open>One iteration of the loop of \<^verbatim>\<open>lower\<close> for \<
   definition of the copies so far and their width.\<close>
 definition repeat_step :: \<open>nat \<Rightarrow> nat \<Rightarrow> lst \<times> nat \<times> nat \<Rightarrow> nat \<Rightarrow> lst \<times> nat \<times> nat\<close> where
   \<open>repeat_step ka w \<equiv> \<lambda>(L, k, acc) j.
-     let (L1, k1) = push_m L (CoreTerm_Bin BinOp_Concat (cr ka) (cr k)) (acc + w) in (L1, k1, acc + w)\<close>
+     let (L1, k1) = push_m L (CoreTermL_Bin BinOp_Concat (cr ka) (cr k)) (acc + w) in (L1, k1, acc + w)\<close>
 
 text \<open>\<^verbatim>\<open>lower\<close>.\<close>
-primrec lower_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> lst \<Rightarrow> Term \<Rightarrow> lst \<times> nat\<close> where
-  \<open>lower_m ws dm L (Term_Const bs) = push_m L (CoreTerm_Const bs) (length bs)\<close>
-| \<open>lower_m ws dm L (Term_Var i) = push_m L (CoreTerm_Var i) (ws ! unat i)\<close>
-| \<open>lower_m ws dm L (Term_Ref j) = (L, dm ! unat j)\<close>
-| \<open>lower_m ws dm L (Term_Not a) =
-     (let (L1, ka) = lower_m ws dm L a in push_m L1 (CoreTerm_Not (cr ka)) (snd L1 ! ka))\<close>
-| \<open>lower_m ws dm L (Term_Neg a) =
+primrec lower_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> lst \<Rightarrow> TermL \<Rightarrow> lst \<times> nat\<close> where
+  \<open>lower_m ws dm L (TermL_Const bs) = push_m L (CoreTermL_Const bs) (length bs)\<close>
+| \<open>lower_m ws dm L (TermL_Var i) = push_m L (CoreTermL_Var i) (ws ! unat i)\<close>
+| \<open>lower_m ws dm L (TermL_Ref j) = (L, dm ! unat j)\<close>
+| \<open>lower_m ws dm L (TermL_Not a) =
+     (let (L1, ka) = lower_m ws dm L a in push_m L1 (CoreTermL_Not (cr ka)) (snd L1 ! ka))\<close>
+| \<open>lower_m ws dm L (TermL_Neg a) =
      (let (L1, ka) = lower_m ws dm L a in push_m L1 (neg_t ka (snd L1 ! ka)) (snd L1 ! ka))\<close>
-| \<open>lower_m ws dm L (Term_Bin op a b) =
+| \<open>lower_m ws dm L (TermL_Bin op a b) =
      (let (L1, ka) = lower_m ws dm L a in
       let (L2, kb) = lower_m ws dm L1 b in
       lower_bin_m L2 op ka kb)\<close>
-| \<open>lower_m ws dm L (Term_Extract hi lo a) =
+| \<open>lower_m ws dm L (TermL_Extract hi lo a) =
      (let (L1, ka) = lower_m ws dm L a in
-      push_m L1 (CoreTerm_Extract hi lo (cr ka)) (unat hi - unat lo + 1))\<close>
-| \<open>lower_m ws dm L (Term_Repeat i a) =
+      push_m L1 (CoreTermL_Extract hi lo (cr ka)) (unat hi - unat lo + 1))\<close>
+| \<open>lower_m ws dm L (TermL_Repeat i a) =
      (let (L1, ka) = lower_m ws dm L a in
       let w = snd L1 ! ka in
-      let (L2, k0) = push_m L1 (CoreTerm_Const []) 0 in
+      let (L2, k0) = push_m L1 (CoreTermL_Const []) 0 in
       let (L3, k3, acc) = foldl (repeat_step ka w) (L2, k0, 0) [0..<unat i] in
       (L3, k3))\<close>
-| \<open>lower_m ws dm L (Term_ZeroExtend i a) =
+| \<open>lower_m ws dm L (TermL_ZeroExtend i a) =
      (let (L1, ka) = lower_m ws dm L a in
       let w = snd L1 ! ka in
-      push_m L1 (CoreTerm_Bin BinOp_Concat (CoreTerm_Const (replicate (unat i) False)) (cr ka)) (w + unat i))\<close>
-| \<open>lower_m ws dm L (Term_SignExtend i a) =
+      push_m L1 (CoreTermL_Bin BinOp_Concat (CoreTermL_Const (replicate (unat i) False)) (cr ka)) (w + unat i))\<close>
+| \<open>lower_m ws dm L (TermL_SignExtend i a) =
      (let (L1, ka) = lower_m ws dm L a in
       let w = snd L1 ! ka in
-      push_m L1 (CoreTerm_Bin BinOp_Concat
-                   (CoreTerm_Ite (msb_t ka w) (CoreTerm_Const (replicate (unat i) True))
-                      (CoreTerm_Const (replicate (unat i) False)))
+      push_m L1 (CoreTermL_Bin BinOp_Concat
+                   (CoreTermL_Ite (msb_t ka w) (CoreTermL_Const (replicate (unat i) True))
+                      (CoreTermL_Const (replicate (unat i) False)))
                    (cr ka)) (w + unat i))\<close>
-| \<open>lower_m ws dm L (Term_RotateLeft i a) =
+| \<open>lower_m ws dm L (TermL_RotateLeft i a) =
      (let (L1, ka) = lower_m ws dm L a in
       let w = snd L1 ! ka in
       let r = unat i mod w in
       if r = 0 then (L1, ka)
-      else push_m L1 (CoreTerm_Bin BinOp_Concat
-                        (CoreTerm_Extract (word_of_nat (w - 1 - r)) 0 (cr ka))
-                        (CoreTerm_Extract (word_of_nat (w - 1)) (word_of_nat (w - r)) (cr ka))) w)\<close>
-| \<open>lower_m ws dm L (Term_RotateRight i a) =
+      else push_m L1 (CoreTermL_Bin BinOp_Concat
+                        (CoreTermL_Extract (word_of_nat (w - 1 - r)) 0 (cr ka))
+                        (CoreTermL_Extract (word_of_nat (w - 1)) (word_of_nat (w - r)) (cr ka))) w)\<close>
+| \<open>lower_m ws dm L (TermL_RotateRight i a) =
      (let (L1, ka) = lower_m ws dm L a in
       let w = snd L1 ! ka in
       let r = unat i mod w in
       if r = 0 then (L1, ka)
-      else push_m L1 (CoreTerm_Bin BinOp_Concat
-                        (CoreTerm_Extract (word_of_nat (r - 1)) 0 (cr ka))
-                        (CoreTerm_Extract (word_of_nat (w - 1)) (word_of_nat r) (cr ka))) w)\<close>
-| \<open>lower_m ws dm L (Term_Ite c a b) =
+      else push_m L1 (CoreTermL_Bin BinOp_Concat
+                        (CoreTermL_Extract (word_of_nat (r - 1)) 0 (cr ka))
+                        (CoreTermL_Extract (word_of_nat (w - 1)) (word_of_nat r) (cr ka))) w)\<close>
+| \<open>lower_m ws dm L (TermL_Ite c a b) =
      (let (L1, kc) = lower_m ws dm L c in
       let (L2, ka) = lower_m ws dm L1 a in
       let (L3, kb) = lower_m ws dm L2 b in
-      push_m L3 (CoreTerm_Ite (cr kc) (cr ka) (cr kb)) (snd L3 ! ka))\<close>
+      push_m L3 (CoreTermL_Ite (cr kc) (cr ka) (cr kb)) (snd L3 ! ka))\<close>
 
 text \<open>The two loops of \<^verbatim>\<open>lower_problem\<close>: rewrite the definitions, recording the core definition of
   each; rewrite the assertions into references.\<close>
-definition ldefs_step :: \<open>Problem \<Rightarrow> lst \<times> nat list \<Rightarrow> nat \<Rightarrow> lst \<times> nat list\<close> where
+definition ldefs_step :: \<open>ProblemL \<Rightarrow> lst \<times> nat list \<Rightarrow> nat \<Rightarrow> lst \<times> nat list\<close> where
   \<open>ldefs_step p \<equiv> \<lambda>(L, dm) j.
-     let (L1, k) = lower_m (var_widths p) dm L (Problem_defs p ! j) in (L1, dm @ [k])\<close>
+     let (L1, k) = lower_m (var_widths p) dm L (ProblemL_defs p ! j) in (L1, dm @ [k])\<close>
 
-definition lasserts_step :: \<open>Problem \<Rightarrow> nat list \<Rightarrow> lst \<times> CoreTerm list \<Rightarrow> nat \<Rightarrow> lst \<times> CoreTerm list\<close> where
+definition lasserts_step :: \<open>ProblemL \<Rightarrow> nat list \<Rightarrow> lst \<times> CoreTermL list \<Rightarrow> nat \<Rightarrow> lst \<times> CoreTermL list\<close> where
   \<open>lasserts_step p dm \<equiv> \<lambda>(L, cs) i.
-     let (L1, k) = lower_m (var_widths p) dm L (Problem_asserts p ! i) in (L1, cs @ [cr k])\<close>
+     let (L1, k) = lower_m (var_widths p) dm L (ProblemL_asserts p ! i) in (L1, cs @ [cr k])\<close>
 
-definition lower_problem_m :: \<open>Problem \<Rightarrow> CoreProblem\<close> where
+definition lower_problem_m :: \<open>ProblemL \<Rightarrow> CoreProblemL\<close> where
   \<open>lower_problem_m p \<equiv>
-     let (L1, dm) = foldl (ldefs_step p) (([], []), []) [0..<length (Problem_defs p)] in
-     let (L2, cs) = foldl (lasserts_step p dm) (L1, []) [0..<length (Problem_asserts p)] in
-     make_CoreProblem (Problem_widths p) (fst L2) cs\<close>
+     let (L1, dm) = foldl (ldefs_step p) (([], []), []) [0..<length (ProblemL_defs p)] in
+     let (L2, cs) = foldl (lasserts_step p dm) (L1, []) [0..<length (ProblemL_asserts p)] in
+     make_CoreProblemL (ProblemL_widths p) (fst L2) cs\<close>
 
 subsection \<open>Values of core terms are bounded by their widths\<close>
 
@@ -252,19 +252,19 @@ lemma ceval_lt:
   shows \<open>ceval ws ds vs dv t < 2 ^ cwidth ws ds t\<close>
   using assms(1)
 proof (induction t)
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   then show ?case by (simp add: bits_nat_lt)
 next
-  case (CoreTerm_Var i)
+  case (CoreTermL_Var i)
   then show ?case using assms(2) by simp
 next
-  case (CoreTerm_Ref j)
+  case (CoreTermL_Ref j)
   then show ?case using assms(3) by simp
 next
-  case (CoreTerm_Not a)
+  case (CoreTermL_Not a)
   then show ?case by simp
 next
-  case (CoreTerm_Bin op a b)
+  case (CoreTermL_Bin op a b)
   then have \<open>ceval ws ds vs dv a < 2 ^ cwidth ws ds a\<close> \<open>ceval ws ds vs dv b < 2 ^ cwidth ws ds b\<close>
     \<open>op \<noteq> BinOp_Concat \<longrightarrow> cwidth ws ds b = cwidth ws ds a\<close> by simp_all
   then have \<open>cbin_sem op (cwidth ws ds a) (ceval ws ds vs dv a) (cwidth ws ds b) (ceval ws ds vs dv b)
@@ -273,10 +273,10 @@ next
     by (rule cbin_sem_lt)
   then show ?case by simp
 next
-  case (CoreTerm_Extract hi lo a)
+  case (CoreTermL_Extract hi lo a)
   then show ?case by simp
 next
-  case (CoreTerm_Ite c a b)
+  case (CoreTermL_Ite c a b)
   then show ?case by simp
 qed
 
@@ -664,30 +664,30 @@ lemma lower_bin_m_pfx:
 proof (cases op)
   case Op_Sdiv
   let ?w = \<open>snd L ! ka\<close>
-  obtain L1 q where p: \<open>push_m L (CoreTerm_Bin BinOp_Udiv (abs_t ka ?w) (abs_t kb ?w)) ?w = (L1, q)\<close>
-    by (cases \<open>push_m L (CoreTerm_Bin BinOp_Udiv (abs_t ka ?w) (abs_t kb ?w)) ?w\<close>)
-  have \<open>push_m L1 (CoreTerm_Ite (CoreTerm_Bin BinOp_Xor (msb_t ka ?w) (msb_t kb ?w)) (neg_t q ?w) (cr q)) ?w = (L', k)\<close>
+  obtain L1 q where p: \<open>push_m L (CoreTermL_Bin BinOp_Udiv (abs_t ka ?w) (abs_t kb ?w)) ?w = (L1, q)\<close>
+    by (cases \<open>push_m L (CoreTermL_Bin BinOp_Udiv (abs_t ka ?w) (abs_t kb ?w)) ?w\<close>)
+  have \<open>push_m L1 (CoreTermL_Ite (CoreTermL_Bin BinOp_Xor (msb_t ka ?w) (msb_t kb ?w)) (neg_t q ?w) (cr q)) ?w = (L', k)\<close>
     using Op_Sdiv R p by (simp add: lower_bin_m_def Let_def)
   then show ?thesis using pfx_push[OF p] pfx_push_trans by blast
 next
   case Op_Srem
   let ?w = \<open>snd L ! ka\<close>
-  obtain L1 r where p: \<open>push_m L (CoreTerm_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w = (L1, r)\<close>
-    by (cases \<open>push_m L (CoreTerm_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w\<close>)
-  have \<open>push_m L1 (CoreTerm_Ite (msb_t ka ?w) (neg_t r ?w) (cr r)) ?w = (L', k)\<close>
+  obtain L1 r where p: \<open>push_m L (CoreTermL_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w = (L1, r)\<close>
+    by (cases \<open>push_m L (CoreTermL_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w\<close>)
+  have \<open>push_m L1 (CoreTermL_Ite (msb_t ka ?w) (neg_t r ?w) (cr r)) ?w = (L', k)\<close>
     using Op_Srem R p by (simp add: lower_bin_m_def Let_def)
   then show ?thesis using pfx_push[OF p] pfx_push_trans by blast
 next
   case Op_Smod
   let ?w = \<open>snd L ! ka\<close>
-  obtain L1 u where p: \<open>push_m L (CoreTerm_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w = (L1, u)\<close>
-    by (cases \<open>push_m L (CoreTerm_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w\<close>)
+  obtain L1 u where p: \<open>push_m L (CoreTermL_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w = (L1, u)\<close>
+    by (cases \<open>push_m L (CoreTermL_Bin BinOp_Urem (abs_t ka ?w) (abs_t kb ?w)) ?w\<close>)
   obtain L2 nu where p2: \<open>push_m L1 (neg_t u ?w) ?w = (L2, nu)\<close>
     by (cases \<open>push_m L1 (neg_t u ?w) ?w\<close>)
-  have \<open>push_m L2 (CoreTerm_Ite (CoreTerm_Bin BinOp_Eq (cr u) (CoreTerm_Const (replicate ?w False))) (cr u)
-          (CoreTerm_Ite (msb_t ka ?w)
-             (CoreTerm_Ite (msb_t kb ?w) (cr nu) (CoreTerm_Bin BinOp_Add (cr nu) (cr kb)))
-             (CoreTerm_Ite (msb_t kb ?w) (CoreTerm_Bin BinOp_Add (cr u) (cr kb)) (cr u)))) ?w = (L', k)\<close>
+  have \<open>push_m L2 (CoreTermL_Ite (CoreTermL_Bin BinOp_Eq (cr u) (CoreTermL_Const (replicate ?w False))) (cr u)
+          (CoreTermL_Ite (msb_t ka ?w)
+             (CoreTermL_Ite (msb_t kb ?w) (cr nu) (CoreTermL_Bin BinOp_Add (cr nu) (cr kb)))
+             (CoreTermL_Ite (msb_t kb ?w) (CoreTermL_Bin BinOp_Add (cr u) (cr kb)) (cr u)))) ?w = (L', k)\<close>
     using Op_Smod R p p2 by (simp add: lower_bin_m_def Let_def)
   then show ?thesis using pfx_push[OF p] pfx_push_trans[OF _ p2] pfx_push_trans by blast
 qed (use R in \<open>auto simp add: lower_bin_m_def Let_def intro: pfx_push\<close>)
@@ -699,8 +699,8 @@ proof (induction js arbitrary: L k acc)
   then show ?case by (simp add: pfx_refl)
 next
   case (Cons j js)
-  obtain L1 k1 where s: \<open>push_m L (CoreTerm_Bin BinOp_Concat (cr ka) (cr k)) (acc + w) = (L1, k1)\<close>
-    by (cases \<open>push_m L (CoreTerm_Bin BinOp_Concat (cr ka) (cr k)) (acc + w)\<close>)
+  obtain L1 k1 where s: \<open>push_m L (CoreTermL_Bin BinOp_Concat (cr ka) (cr k)) (acc + w) = (L1, k1)\<close>
+    by (cases \<open>push_m L (CoreTermL_Bin BinOp_Concat (cr ka) (cr k)) (acc + w)\<close>)
   have \<open>foldl (repeat_step ka w) (L1, k1, acc + w) js = (L', k', acc')\<close>
     using Cons.prems s by (simp add: repeat_step_def)
   then show ?case using Cons.IH pfx_push[OF s] pfx_trans by blast
@@ -708,103 +708,103 @@ qed
 
 lemma lower_m_pfx: \<open>lower_m ws dm L t = (L', k) \<Longrightarrow> pfx L L'\<close>
 proof (induction t arbitrary: L L' k)
-  case (Term_Const bs)
+  case (TermL_Const bs)
   then show ?case by (simp add: pfx_push)
 next
-  case (Term_Var i)
+  case (TermL_Var i)
   then show ?case by (simp add: pfx_push)
 next
-  case (Term_Ref j)
+  case (TermL_Ref j)
   then show ?case by (simp add: pfx_refl)
 next
-  case (Term_Not a)
+  case (TermL_Not a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have \<open>push_m L1 (CoreTerm_Not (cr ka)) (snd L1 ! ka) = (L', k)\<close> using Term_Not.prems a by simp
-  then show ?case using Term_Not.IH[OF a] pfx_push_trans by blast
+  have \<open>push_m L1 (CoreTermL_Not (cr ka)) (snd L1 ! ka) = (L', k)\<close> using TermL_Not.prems a by simp
+  then show ?case using TermL_Not.IH[OF a] pfx_push_trans by blast
 next
-  case (Term_Neg a)
+  case (TermL_Neg a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have \<open>push_m L1 (neg_t ka (snd L1 ! ka)) (snd L1 ! ka) = (L', k)\<close> using Term_Neg.prems a by simp
-  then show ?case using Term_Neg.IH[OF a] pfx_push_trans by blast
+  have \<open>push_m L1 (neg_t ka (snd L1 ! ka)) (snd L1 ! ka) = (L', k)\<close> using TermL_Neg.prems a by simp
+  then show ?case using TermL_Neg.IH[OF a] pfx_push_trans by blast
 next
-  case (Term_Bin op a b)
+  case (TermL_Bin op a b)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   obtain L2 kb where b: \<open>lower_m ws dm L1 b = (L2, kb)\<close> by (cases \<open>lower_m ws dm L1 b\<close>)
-  have \<open>lower_bin_m L2 op ka kb = (L', k)\<close> using Term_Bin.prems a b by simp
-  then show ?case using Term_Bin.IH(1)[OF a] Term_Bin.IH(2)[OF b] lower_bin_m_pfx pfx_trans by blast
+  have \<open>lower_bin_m L2 op ka kb = (L', k)\<close> using TermL_Bin.prems a b by simp
+  then show ?case using TermL_Bin.IH(1)[OF a] TermL_Bin.IH(2)[OF b] lower_bin_m_pfx pfx_trans by blast
 next
-  case (Term_Extract hi lo a)
+  case (TermL_Extract hi lo a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have \<open>push_m L1 (CoreTerm_Extract hi lo (cr ka)) (unat hi - unat lo + 1) = (L', k)\<close>
-    using Term_Extract.prems a by simp
-  then show ?case using Term_Extract.IH[OF a] pfx_push_trans by blast
+  have \<open>push_m L1 (CoreTermL_Extract hi lo (cr ka)) (unat hi - unat lo + 1) = (L', k)\<close>
+    using TermL_Extract.prems a by simp
+  then show ?case using TermL_Extract.IH[OF a] pfx_push_trans by blast
 next
-  case (Term_Repeat i a)
+  case (TermL_Repeat i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  obtain L2 k0 where p: \<open>push_m L1 (CoreTerm_Const []) 0 = (L2, k0)\<close> by (cases \<open>push_m L1 (CoreTerm_Const []) 0\<close>)
+  obtain L2 k0 where p: \<open>push_m L1 (CoreTermL_Const []) 0 = (L2, k0)\<close> by (cases \<open>push_m L1 (CoreTermL_Const []) 0\<close>)
   obtain L3 k3 acc where f: \<open>foldl (repeat_step ka (snd L1 ! ka)) (L2, k0, 0) [0..<unat i] = (L3, k3, acc)\<close>
     by (cases \<open>foldl (repeat_step ka (snd L1 ! ka)) (L2, k0, 0) [0..<unat i]\<close>)
-  have \<open>L' = L3\<close> using Term_Repeat.prems a p f by (simp add: Let_def)
-  then show ?case using Term_Repeat.IH[OF a] pfx_push[OF p] repeat_fold_pfx[OF f] pfx_trans by blast
+  have \<open>L' = L3\<close> using TermL_Repeat.prems a p f by (simp add: Let_def)
+  then show ?case using TermL_Repeat.IH[OF a] pfx_push[OF p] repeat_fold_pfx[OF f] pfx_trans by blast
 next
-  case (Term_ZeroExtend i a)
+  case (TermL_ZeroExtend i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have \<open>push_m L1 (CoreTerm_Bin BinOp_Concat (CoreTerm_Const (replicate (unat i) False)) (cr ka))
+  have \<open>push_m L1 (CoreTermL_Bin BinOp_Concat (CoreTermL_Const (replicate (unat i) False)) (cr ka))
           (snd L1 ! ka + unat i) = (L', k)\<close>
-    using Term_ZeroExtend.prems a by (simp add: Let_def)
-  then show ?case using Term_ZeroExtend.IH[OF a] pfx_push_trans by blast
+    using TermL_ZeroExtend.prems a by (simp add: Let_def)
+  then show ?case using TermL_ZeroExtend.IH[OF a] pfx_push_trans by blast
 next
-  case (Term_SignExtend i a)
+  case (TermL_SignExtend i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have \<open>push_m L1 (CoreTerm_Bin BinOp_Concat
-                   (CoreTerm_Ite (msb_t ka (snd L1 ! ka)) (CoreTerm_Const (replicate (unat i) True))
-                      (CoreTerm_Const (replicate (unat i) False)))
+  have \<open>push_m L1 (CoreTermL_Bin BinOp_Concat
+                   (CoreTermL_Ite (msb_t ka (snd L1 ! ka)) (CoreTermL_Const (replicate (unat i) True))
+                      (CoreTermL_Const (replicate (unat i) False)))
                    (cr ka)) (snd L1 ! ka + unat i) = (L', k)\<close>
-    using Term_SignExtend.prems a by (simp add: Let_def)
-  then show ?case using Term_SignExtend.IH[OF a] pfx_push_trans by blast
+    using TermL_SignExtend.prems a by (simp add: Let_def)
+  then show ?case using TermL_SignExtend.IH[OF a] pfx_push_trans by blast
 next
-  case (Term_RotateLeft i a)
+  case (TermL_RotateLeft i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   let ?w = \<open>snd L1 ! ka\<close> and ?r = \<open>unat i mod snd L1 ! ka\<close>
   show ?case
   proof (cases \<open>?r = 0\<close>)
     case True
-    then have \<open>L' = L1\<close> using Term_RotateLeft.prems a by (simp add: Let_def)
-    then show ?thesis using Term_RotateLeft.IH[OF a] by simp
+    then have \<open>L' = L1\<close> using TermL_RotateLeft.prems a by (simp add: Let_def)
+    then show ?thesis using TermL_RotateLeft.IH[OF a] by simp
   next
     case False
-    then have \<open>push_m L1 (CoreTerm_Bin BinOp_Concat
-                        (CoreTerm_Extract (word_of_nat (?w - 1 - ?r)) 0 (cr ka))
-                        (CoreTerm_Extract (word_of_nat (?w - 1)) (word_of_nat (?w - ?r)) (cr ka))) ?w = (L', k)\<close>
-      using Term_RotateLeft.prems a by (simp add: Let_def)
-    then show ?thesis using Term_RotateLeft.IH[OF a] pfx_push_trans by blast
+    then have \<open>push_m L1 (CoreTermL_Bin BinOp_Concat
+                        (CoreTermL_Extract (word_of_nat (?w - 1 - ?r)) 0 (cr ka))
+                        (CoreTermL_Extract (word_of_nat (?w - 1)) (word_of_nat (?w - ?r)) (cr ka))) ?w = (L', k)\<close>
+      using TermL_RotateLeft.prems a by (simp add: Let_def)
+    then show ?thesis using TermL_RotateLeft.IH[OF a] pfx_push_trans by blast
   qed
 next
-  case (Term_RotateRight i a)
+  case (TermL_RotateRight i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   let ?w = \<open>snd L1 ! ka\<close> and ?r = \<open>unat i mod snd L1 ! ka\<close>
   show ?case
   proof (cases \<open>?r = 0\<close>)
     case True
-    then have \<open>L' = L1\<close> using Term_RotateRight.prems a by (simp add: Let_def)
-    then show ?thesis using Term_RotateRight.IH[OF a] by simp
+    then have \<open>L' = L1\<close> using TermL_RotateRight.prems a by (simp add: Let_def)
+    then show ?thesis using TermL_RotateRight.IH[OF a] by simp
   next
     case False
-    then have \<open>push_m L1 (CoreTerm_Bin BinOp_Concat
-                        (CoreTerm_Extract (word_of_nat (?r - 1)) 0 (cr ka))
-                        (CoreTerm_Extract (word_of_nat (?w - 1)) (word_of_nat ?r) (cr ka))) ?w = (L', k)\<close>
-      using Term_RotateRight.prems a by (simp add: Let_def)
-    then show ?thesis using Term_RotateRight.IH[OF a] pfx_push_trans by blast
+    then have \<open>push_m L1 (CoreTermL_Bin BinOp_Concat
+                        (CoreTermL_Extract (word_of_nat (?r - 1)) 0 (cr ka))
+                        (CoreTermL_Extract (word_of_nat (?w - 1)) (word_of_nat ?r) (cr ka))) ?w = (L', k)\<close>
+      using TermL_RotateRight.prems a by (simp add: Let_def)
+    then show ?thesis using TermL_RotateRight.IH[OF a] pfx_push_trans by blast
   qed
 next
-  case (Term_Ite c a b)
+  case (TermL_Ite c a b)
   obtain L1 kc where c: \<open>lower_m ws dm L c = (L1, kc)\<close> by (cases \<open>lower_m ws dm L c\<close>)
   obtain L2 ka where a: \<open>lower_m ws dm L1 a = (L2, ka)\<close> by (cases \<open>lower_m ws dm L1 a\<close>)
   obtain L3 kb where b: \<open>lower_m ws dm L2 b = (L3, kb)\<close> by (cases \<open>lower_m ws dm L2 b\<close>)
-  have \<open>push_m L3 (CoreTerm_Ite (cr kc) (cr ka) (cr kb)) (snd L3 ! ka) = (L', k)\<close>
-    using Term_Ite.prems c a b by simp
+  have \<open>push_m L3 (CoreTermL_Ite (cr kc) (cr ka) (cr kb)) (snd L3 ! ka) = (L', k)\<close>
+    using TermL_Ite.prems c a b by simp
   then show ?case
-    using Term_Ite.IH(1)[OF c] Term_Ite.IH(2)[OF a] Term_Ite.IH(3)[OF b] pfx_push_trans pfx_trans by blast
+    using TermL_Ite.IH(1)[OF c] TermL_Ite.IH(2)[OF a] TermL_Ite.IH(3)[OF b] pfx_push_trans pfx_trans by blast
 qed
 
 subsection \<open>Pushing a term with a known value\<close>
@@ -847,7 +847,7 @@ definition op_width :: \<open>Op \<Rightarrow> nat \<Rightarrow> nat \<Rightarro
       | Op_Slt \<Rightarrow> 1 | Op_Sle \<Rightarrow> 1 | Op_Sgt \<Rightarrow> 1 | Op_Sge \<Rightarrow> 1
       | _ \<Rightarrow> wa)\<close>
 
-lemma width_Bin_op: \<open>width ws ds (Term_Bin op a b) = op_width op (width ws ds a) (width ws ds b)\<close>
+lemma width_Bin_op: \<open>width ws ds (TermL_Bin op a b) = op_width op (width ws ds a) (width ws ds b)\<close>
   by (cases op) (simp_all add: op_width_def)
 
 subsection \<open>The arithmetic of the rewritten operations\<close>
@@ -1119,7 +1119,7 @@ subsection \<open>The environment of a core definition\<close>
 text \<open>The core definition \<open>k\<close> of the well-formed state \<open>L\<close> has the width \<open>w\<close>, with the bounds the
   built terms need.\<close>
 definition env_ok :: \<open>nat list \<Rightarrow> lst \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool\<close> where
-  \<open>env_ok ws L k w \<equiv> lok ws L \<and> k < length (fst L) \<and> k < 2 ^ 64 \<and> snd L ! k = w \<and> 1 \<le> w \<and> w < 2 ^ 64\<close>
+  \<open>env_ok ws L k w \<equiv> lok ws L \<and> k < length (fst L) \<and> k < 2 ^ 64 \<and> snd L ! k = w \<and> 1 \<le> w \<and> w < 2 ^ 56\<close>
 
 definition vs0 :: \<open>nat list \<Rightarrow> nat list\<close> where
   \<open>vs0 ws \<equiv> map (\<lambda>_. 0) ws\<close>
@@ -1152,7 +1152,7 @@ lemma env_lt:
 
 lemma env_push:
   assumes \<open>lok ws L\<close> \<open>cwt ws (snd L) t\<close> \<open>cwidth ws (snd L) t = w\<close> \<open>push_m L t w = (L', k)\<close>
-    \<open>1 \<le> w\<close> \<open>w < 2 ^ 64\<close> \<open>length (fst L') < 2 ^ 64\<close>
+    \<open>1 \<le> w\<close> \<open>w < 2 ^ 56\<close> \<open>length (fst L') < 2 ^ 64\<close>
   shows \<open>env_ok ws L' k w\<close>
   using push_ok[OF assms(1-4)] lok_length[OF assms(1)] assms(5-7) by (simp add: env_ok_def nth_append)
 
@@ -1225,12 +1225,12 @@ lemma lower_bin_correct:
   assumes EA: \<open>env_ok ws L ka wa\<close> and EB: \<open>env_ok ws L kb wb\<close>
     and eqw: \<open>op \<noteq> Op_Concat \<longrightarrow> wb = wa\<close>
     and R: \<open>lower_bin_m L op ka kb = (L', k)\<close>
-    and B: \<open>length (fst L') < 2 ^ 64\<close>
+    and B: \<open>length (fst L') < 2 ^ 56\<close>
   shows \<open>lext ws L L' \<and> k < length (fst L') \<and> snd L' ! k = op_width op wa wb \<and>
      (\<forall>vs. vs_ok ws vs \<longrightarrow> CV ws vs L' ! k = bin_sem op wa (CV ws vs L ! ka) wb (CV ws vs L ! kb))\<close>
 proof -
   have L: \<open>lok ws L\<close> and wa: \<open>snd L ! ka = wa\<close> and wb: \<open>snd L ! kb = wb\<close> and wa1: \<open>1 \<le> wa\<close>
-    and wa64: \<open>wa < 2 ^ 64\<close>
+    and wa64: \<open>wa < 2 ^ 56\<close>
     using EA EB by (simp_all add: env_ok_def)
   have EBa: \<open>op \<noteq> Op_Concat \<Longrightarrow> env_ok ws L kb wa\<close> using EB eqw by simp
   note A = cr_env[OF EA] neg_t_env[OF EA] msb_t_env[OF EA] abs_t_env[OF EA]
@@ -1242,65 +1242,65 @@ proof -
   show ?thesis
   proof (cases op)
     case Op_And
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_And (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_And (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_And lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Or
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Or (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Or (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Or lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Xor
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Xor (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Xor (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Xor lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Nand
-    show ?thesis by (rule B1[of \<open>CoreTerm_Not (CoreTerm_Bin BinOp_And (cr ka) (cr kb))\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Not (CoreTermL_Bin BinOp_And (cr ka) (cr kb))\<close> wa])
         (simp_all add: Op_Nand lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Nor
-    show ?thesis by (rule B1[of \<open>CoreTerm_Not (CoreTerm_Bin BinOp_Or (cr ka) (cr kb))\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Not (CoreTermL_Bin BinOp_Or (cr ka) (cr kb))\<close> wa])
         (simp_all add: Op_Nor lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Xnor
-    show ?thesis by (rule B1[of \<open>CoreTerm_Not (CoreTerm_Bin BinOp_Xor (cr ka) (cr kb))\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Not (CoreTermL_Bin BinOp_Xor (cr ka) (cr kb))\<close> wa])
         (simp_all add: Op_Xnor lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Comp
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Eq (cr ka) (cr kb)\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Eq (cr ka) (cr kb)\<close> 1])
         (simp_all add: Op_Comp lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Add
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Add (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Add (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Add lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Sub
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Add (cr ka) (neg_t kb wa)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Add (cr ka) (neg_t kb wa)\<close> wa])
         (simp_all add: Op_Sub lower_bin_m_def op_width_def wa wb A eqw sub_arith lta ltb)
   next
     case Op_Mul
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Mul (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Mul (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Mul lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Udiv
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Udiv (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Udiv (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Udiv lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Urem
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Urem (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Urem (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Urem lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Shl
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Shl (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Shl (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Shl lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Lshr
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Lshr (cr ka) (cr kb)\<close> wa])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Lshr (cr ka) (cr kb)\<close> wa])
         (simp_all add: Op_Lshr lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Ashr
-    let ?t = \<open>CoreTerm_Ite (msb_t ka wa)
-          (CoreTerm_Not (CoreTerm_Bin BinOp_Lshr (CoreTerm_Not (cr ka)) (cr kb)))
-          (CoreTerm_Bin BinOp_Lshr (cr ka) (cr kb))\<close>
+    let ?t = \<open>CoreTermL_Ite (msb_t ka wa)
+          (CoreTermL_Not (CoreTermL_Bin BinOp_Lshr (CoreTermL_Not (cr ka)) (cr kb)))
+          (CoreTermL_Bin BinOp_Lshr (cr ka) (cr kb))\<close>
     have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) ?t =
         bin_sem op wa (CV ws vs L ! ka) wb (CV ws vs L ! kb)\<close>
     proof -
@@ -1324,31 +1324,31 @@ proof -
     qed (rule v)
   next
     case Op_Concat
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Concat (cr ka) (cr kb)\<close> \<open>wa + wb\<close>])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Concat (cr ka) (cr kb)\<close> \<open>wa + wb\<close>])
         (simp_all add: Op_Concat lower_bin_m_def op_width_def wa wb A)
   next
     case Op_Eq
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Eq (cr ka) (cr kb)\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Eq (cr ka) (cr kb)\<close> 1])
         (simp_all add: Op_Eq lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Distinct
-    show ?thesis by (rule B1[of \<open>CoreTerm_Not (CoreTerm_Bin BinOp_Eq (cr ka) (cr kb))\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Not (CoreTermL_Bin BinOp_Eq (cr ka) (cr kb))\<close> 1])
         (simp_all add: Op_Distinct lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Ult
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Ult (cr ka) (cr kb)\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Ult (cr ka) (cr kb)\<close> 1])
         (simp_all add: Op_Ult lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Ule
-    show ?thesis by (rule B1[of \<open>CoreTerm_Not (CoreTerm_Bin BinOp_Ult (cr kb) (cr ka))\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Not (CoreTermL_Bin BinOp_Ult (cr kb) (cr ka))\<close> 1])
         (simp_all add: Op_Ule lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Ugt
-    show ?thesis by (rule B1[of \<open>CoreTerm_Bin BinOp_Ult (cr kb) (cr ka)\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Bin BinOp_Ult (cr kb) (cr ka)\<close> 1])
         (simp_all add: Op_Ugt lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Uge
-    show ?thesis by (rule B1[of \<open>CoreTerm_Not (CoreTerm_Bin BinOp_Ult (cr ka) (cr kb))\<close> 1])
+    show ?thesis by (rule B1[of \<open>CoreTermL_Not (CoreTermL_Bin BinOp_Ult (cr ka) (cr kb))\<close> 1])
         (simp_all add: Op_Uge lower_bin_m_def op_width_def wa wb A eqw)
   next
     case Op_Slt
@@ -1371,9 +1371,9 @@ proof -
     have wba: \<open>wb = wa\<close> using eqw Op_Sdiv by simp
     have ne: \<open>op \<noteq> Op_Concat\<close> using Op_Sdiv by simp
     note EB' = EBa[OF ne]
-    let ?t1 = \<open>CoreTerm_Bin BinOp_Udiv (abs_t ka wa) (abs_t kb wa)\<close>
+    let ?t1 = \<open>CoreTermL_Bin BinOp_Udiv (abs_t ka wa) (abs_t kb wa)\<close>
     obtain L1 q where p1: \<open>push_m L ?t1 wa = (L1, q)\<close> by (cases \<open>push_m L ?t1 wa\<close>)
-    let ?t2 = \<open>CoreTerm_Ite (CoreTerm_Bin BinOp_Xor (msb_t ka wa) (msb_t kb wa)) (neg_t q wa) (cr q)\<close>
+    let ?t2 = \<open>CoreTermL_Ite (CoreTermL_Bin BinOp_Xor (msb_t ka wa) (msb_t kb wa)) (neg_t q wa) (cr q)\<close>
     have p2: \<open>push_m L1 ?t2 wa = (L', k)\<close> using R p1 by (simp add: Op_Sdiv lower_bin_m_def wa)
     have t1: \<open>cwt ws (snd L) ?t1\<close> \<open>cwidth ws (snd L) ?t1 = wa\<close>
       using abs_t_env[OF EA] abs_t_env[OF EB'] by simp_all
@@ -1410,9 +1410,9 @@ proof -
     have wba: \<open>wb = wa\<close> using eqw Op_Srem by simp
     have ne: \<open>op \<noteq> Op_Concat\<close> using Op_Srem by simp
     note EB' = EBa[OF ne]
-    let ?t1 = \<open>CoreTerm_Bin BinOp_Urem (abs_t ka wa) (abs_t kb wa)\<close>
+    let ?t1 = \<open>CoreTermL_Bin BinOp_Urem (abs_t ka wa) (abs_t kb wa)\<close>
     obtain L1 r where p1: \<open>push_m L ?t1 wa = (L1, r)\<close> by (cases \<open>push_m L ?t1 wa\<close>)
-    let ?t2 = \<open>CoreTerm_Ite (msb_t ka wa) (neg_t r wa) (cr r)\<close>
+    let ?t2 = \<open>CoreTermL_Ite (msb_t ka wa) (neg_t r wa) (cr r)\<close>
     have p2: \<open>push_m L1 ?t2 wa = (L', k)\<close> using R p1 by (simp add: Op_Srem lower_bin_m_def wa)
     have t1: \<open>cwt ws (snd L) ?t1\<close> \<open>cwidth ws (snd L) ?t1 = wa\<close>
       using abs_t_env[OF EA] abs_t_env[OF EB'] by simp_all
@@ -1448,13 +1448,13 @@ proof -
     have wba: \<open>wb = wa\<close> using eqw Op_Smod by simp
     have ne: \<open>op \<noteq> Op_Concat\<close> using Op_Smod by simp
     note EB' = EBa[OF ne]
-    let ?t1 = \<open>CoreTerm_Bin BinOp_Urem (abs_t ka wa) (abs_t kb wa)\<close>
+    let ?t1 = \<open>CoreTermL_Bin BinOp_Urem (abs_t ka wa) (abs_t kb wa)\<close>
     obtain L1 u where p1: \<open>push_m L ?t1 wa = (L1, u)\<close> by (cases \<open>push_m L ?t1 wa\<close>)
     obtain L2 nu where p2: \<open>push_m L1 (neg_t u wa) wa = (L2, nu)\<close> by (cases \<open>push_m L1 (neg_t u wa) wa\<close>)
-    let ?t3 = \<open>CoreTerm_Ite (CoreTerm_Bin BinOp_Eq (cr u) (CoreTerm_Const (replicate wa False))) (cr u)
-          (CoreTerm_Ite (msb_t ka wa)
-             (CoreTerm_Ite (msb_t kb wa) (cr nu) (CoreTerm_Bin BinOp_Add (cr nu) (cr kb)))
-             (CoreTerm_Ite (msb_t kb wa) (CoreTerm_Bin BinOp_Add (cr u) (cr kb)) (cr u)))\<close>
+    let ?t3 = \<open>CoreTermL_Ite (CoreTermL_Bin BinOp_Eq (cr u) (CoreTermL_Const (replicate wa False))) (cr u)
+          (CoreTermL_Ite (msb_t ka wa)
+             (CoreTermL_Ite (msb_t kb wa) (cr nu) (CoreTermL_Bin BinOp_Add (cr nu) (cr kb)))
+             (CoreTermL_Ite (msb_t kb wa) (CoreTermL_Bin BinOp_Add (cr u) (cr kb)) (cr u)))\<close>
     have p3: \<open>push_m L2 ?t3 wa = (L', k)\<close> using R p1 p2 by (simp add: Op_Smod lower_bin_m_def wa)
     have t1: \<open>cwt ws (snd L) ?t1\<close> \<open>cwidth ws (snd L) ?t1 = wa\<close>
       using abs_t_env[OF EA] abs_t_env[OF EB'] by simp_all
@@ -1509,7 +1509,7 @@ subsection \<open>Terms\<close>
 
 text \<open>The bounds the rewriting of a term needs: every index and every width fits in a word.\<close>
 definition bnd :: \<open>lst \<Rightarrow> bool\<close> where
-  \<open>bnd L \<equiv> length (fst L) < 2 ^ 64 \<and> (\<forall>w \<in> set (snd L). w < 2 ^ 64)\<close>
+  \<open>bnd L \<equiv> length (fst L) < 2 ^ 56 \<and> (\<forall>w \<in> set (snd L). w < 2 ^ 56)\<close>
 
 lemma bnd_pfx: \<open>pfx L L' \<Longrightarrow> bnd L' \<Longrightarrow> bnd L\<close>
   using pfx_length[of L L'] pfx_set[of L L'] by (auto simp add: bnd_def)
@@ -1530,10 +1530,10 @@ lemma dmv_lext: \<open>dm_ok ds dm L \<Longrightarrow> lext ws L L' \<Longrighta
 
 lemma wt_width_pos: \<open>wt ws ds t \<Longrightarrow> 1 \<le> width ws ds t\<close>
 proof (induction t)
-  case (Term_Bin op a b)
+  case (TermL_Bin op a b)
   then show ?case by (cases op) simp_all
 next
-  case (Term_Repeat i a)
+  case (TermL_Repeat i a)
   then show ?case by (simp add: Suc_le_eq)
 qed (simp_all add: Suc_le_eq)
 
@@ -1550,7 +1550,7 @@ proof -
   have L1: \<open>lok ws L1\<close> using IH by (simp add: env_ok_def)
   note P = push_correct[OF L1 t p v]
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[of ws L1 L']] by (intro nth_mem) simp
-  then have w64: \<open>w < 2 ^ 64\<close> using P B by (auto simp add: bnd_def)
+  then have w64: \<open>w < 2 ^ 56\<close> using P B by (auto simp add: bnd_def)
   have E: \<open>env_ok ws L' k w\<close> using env_push[OF L1 t p w1 w64] B by (simp add: bnd_def)
   have X: \<open>lext ws L L'\<close> using IH P lext_trans by blast
   have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = f (ea vs dv)\<close>
@@ -1565,13 +1565,13 @@ qed
 text \<open>The concatenation of two extractions of one definition, as built for the rotations.\<close>
 lemma concat_extract_env:
   assumes \<open>env_ok ws L k w\<close> \<open>la \<le> ha\<close> \<open>ha < w\<close> \<open>lb \<le> hb\<close> \<open>hb < w\<close>
-  shows \<open>cwt ws (snd L) (CoreTerm_Bin BinOp_Concat (CoreTerm_Extract (word_of_nat ha) (word_of_nat la) (cr k))
-            (CoreTerm_Extract (word_of_nat hb) (word_of_nat lb) (cr k))) \<and>
-     cwidth ws (snd L) (CoreTerm_Bin BinOp_Concat (CoreTerm_Extract (word_of_nat ha) (word_of_nat la) (cr k))
-            (CoreTerm_Extract (word_of_nat hb) (word_of_nat lb) (cr k))) = (ha - la + 1) + (hb - lb + 1) \<and>
-     (\<forall>vs. ceval ws (snd L) vs (CV ws vs L) (CoreTerm_Bin BinOp_Concat
-            (CoreTerm_Extract (word_of_nat ha) (word_of_nat la) (cr k))
-            (CoreTerm_Extract (word_of_nat hb) (word_of_nat lb) (cr k))) =
+  shows \<open>cwt ws (snd L) (CoreTermL_Bin BinOp_Concat (CoreTermL_Extract (word_of_nat ha) (word_of_nat la) (cr k))
+            (CoreTermL_Extract (word_of_nat hb) (word_of_nat lb) (cr k))) \<and>
+     cwidth ws (snd L) (CoreTermL_Bin BinOp_Concat (CoreTermL_Extract (word_of_nat ha) (word_of_nat la) (cr k))
+            (CoreTermL_Extract (word_of_nat hb) (word_of_nat lb) (cr k))) = (ha - la + 1) + (hb - lb + 1) \<and>
+     (\<forall>vs. ceval ws (snd L) vs (CV ws vs L) (CoreTermL_Bin BinOp_Concat
+            (CoreTermL_Extract (word_of_nat ha) (word_of_nat la) (cr k))
+            (CoreTermL_Extract (word_of_nat hb) (word_of_nat lb) (cr k))) =
         ((CV ws vs L ! k div 2 ^ la) mod 2 ^ (ha - la + 1)) * 2 ^ (hb - lb + 1) +
         (CV ws vs L ! k div 2 ^ lb) mod 2 ^ (hb - lb + 1))\<close>
 proof -
@@ -1598,7 +1598,7 @@ proof (induction js arbitrary: Lj kj j acc0)
   then show ?case using lext_refl lext_lok by auto
 next
   case (Cons x js)
-  let ?t = \<open>CoreTerm_Bin BinOp_Concat (cr ka) (cr kj)\<close>
+  let ?t = \<open>CoreTermL_Bin BinOp_Concat (cr ka) (cr kj)\<close>
   obtain Lj' kj' where p: \<open>push_m Lj ?t (acc0 + wa) = (Lj', kj')\<close> by (cases \<open>push_m Lj ?t (acc0 + wa)\<close>)
   have f: \<open>foldl (repeat_step ka wa) (Lj', kj', acc0 + wa) js = (L3, k3, acc)\<close>
     using Cons.prems(6) p by (simp add: repeat_step_def)
@@ -1627,65 +1627,65 @@ lemma lower_m_correct:
      (\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv t)\<close>
   using assms
 proof (induction t arbitrary: L L' k)
-  case (Term_Const bs)
-  note L = Term_Const.prems(2)
-  have p: \<open>push_m L (CoreTerm_Const bs) (length bs) = (L', k)\<close> using Term_Const.prems(4) by simp
-  have t: \<open>cwt ws (snd L) (CoreTerm_Const bs)\<close> \<open>cwidth ws (snd L) (CoreTerm_Const bs) = length bs\<close> by simp_all
-  have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) (CoreTerm_Const bs) = bits_nat bs\<close> by simp
+  case (TermL_Const bs)
+  note L = TermL_Const.prems(2)
+  have p: \<open>push_m L (CoreTermL_Const bs) (length bs) = (L', k)\<close> using TermL_Const.prems(4) by simp
+  have t: \<open>cwt ws (snd L) (CoreTermL_Const bs)\<close> \<open>cwidth ws (snd L) (CoreTermL_Const bs) = length bs\<close> by simp_all
+  have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) (CoreTermL_Const bs) = bits_nat bs\<close> by simp
   note P = push_correct[OF L t p v]
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[of ws L L']] by (intro nth_mem) simp
-  then have w64: \<open>length bs < 2 ^ 64\<close> using P Term_Const.prems(5) by (auto simp add: bnd_def)
-  have \<open>1 \<le> length bs\<close> using Term_Const.prems(1) by (simp add: Suc_le_eq)
+  then have w64: \<open>length bs < 2 ^ 56\<close> using P TermL_Const.prems(5) by (auto simp add: bnd_def)
+  have \<open>1 \<le> length bs\<close> using TermL_Const.prems(1) by (simp add: Suc_le_eq)
   then have \<open>env_ok ws L' k (length bs)\<close>
-    using env_push[OF L t p _ w64] Term_Const.prems(5) by (simp add: bnd_def)
+    using env_push[OF L t p _ w64] TermL_Const.prems(5) by (simp add: bnd_def)
   then show ?case using P by simp
 next
-  case (Term_Var i)
-  note L = Term_Var.prems(2)
-  have wt: \<open>unat i < length ws\<close> \<open>1 \<le> ws ! unat i\<close> using Term_Var.prems(1) by simp_all
-  have p: \<open>push_m L (CoreTerm_Var i) (ws ! unat i) = (L', k)\<close> using Term_Var.prems(4) by simp
-  have t: \<open>cwt ws (snd L) (CoreTerm_Var i)\<close> \<open>cwidth ws (snd L) (CoreTerm_Var i) = ws ! unat i\<close> using wt by simp_all
-  have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) (CoreTerm_Var i) = vs ! unat i\<close> by simp
+  case (TermL_Var i)
+  note L = TermL_Var.prems(2)
+  have wt: \<open>unat i < length ws\<close> \<open>1 \<le> ws ! unat i\<close> using TermL_Var.prems(1) by simp_all
+  have p: \<open>push_m L (CoreTermL_Var i) (ws ! unat i) = (L', k)\<close> using TermL_Var.prems(4) by simp
+  have t: \<open>cwt ws (snd L) (CoreTermL_Var i)\<close> \<open>cwidth ws (snd L) (CoreTermL_Var i) = ws ! unat i\<close> using wt by simp_all
+  have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L) vs (CV ws vs L) (CoreTermL_Var i) = vs ! unat i\<close> by simp
   note P = push_correct[OF L t p v]
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[of ws L L']] by (intro nth_mem) simp
-  then have w64: \<open>ws ! unat i < 2 ^ 64\<close> using P Term_Var.prems(5) by (auto simp add: bnd_def)
+  then have w64: \<open>ws ! unat i < 2 ^ 56\<close> using P TermL_Var.prems(5) by (auto simp add: bnd_def)
   have \<open>env_ok ws L' k (ws ! unat i)\<close>
-    using env_push[OF L t p wt(2) w64] Term_Var.prems(5) by (simp add: bnd_def)
+    using env_push[OF L t p wt(2) w64] TermL_Var.prems(5) by (simp add: bnd_def)
   then show ?case using P by simp
 next
-  case (Term_Ref j)
-  have R: \<open>L' = L\<close> \<open>k = dm ! unat j\<close> using Term_Ref.prems(4) by simp_all
-  have wt: \<open>unat j < length ds\<close> \<open>1 \<le> ds ! unat j\<close> using Term_Ref.prems(1) by simp_all
+  case (TermL_Ref j)
+  have R: \<open>L' = L\<close> \<open>k = dm ! unat j\<close> using TermL_Ref.prems(4) by simp_all
+  have wt: \<open>unat j < length ds\<close> \<open>1 \<le> ds ! unat j\<close> using TermL_Ref.prems(1) by simp_all
   have k: \<open>k < length (fst L)\<close> \<open>snd L ! k = ds ! unat j\<close>
-    using Term_Ref.prems(3) wt(1) by (simp_all add: dm_ok_def R)
-  have \<open>snd L ! k \<in> set (snd L)\<close> using k(1) lok_length[OF Term_Ref.prems(2)] by (simp add: nth_mem)
+    using TermL_Ref.prems(3) wt(1) by (simp_all add: dm_ok_def R)
+  have \<open>snd L ! k \<in> set (snd L)\<close> using k(1) lok_length[OF TermL_Ref.prems(2)] by (simp add: nth_mem)
   then have \<open>env_ok ws L' k (ds ! unat j)\<close>
-    using Term_Ref.prems(2,5) k wt(2) by (auto simp add: env_ok_def bnd_def R)
-  then show ?case using lext_refl[OF Term_Ref.prems(2)] k wt(1) by (auto simp add: R dmv_def)
+    using TermL_Ref.prems(2,5) k wt(2) by (auto simp add: env_ok_def bnd_def R)
+  then show ?case using lext_refl[OF TermL_Ref.prems(2)] k wt(1) by (auto simp add: R dmv_def)
 next
-  case (Term_Not a)
+  case (TermL_Not a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have p: \<open>push_m L1 (CoreTerm_Not (cr ka)) (snd L1 ! ka) = (L', k)\<close> using Term_Not.prems(4) a by simp
-  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] Term_Not.prems(5)] .
-  have wta: \<open>wt ws ds a\<close> using Term_Not.prems(1) by simp
-  note IH = Term_Not.IH[OF wta Term_Not.prems(2,3) a B1]
+  have p: \<open>push_m L1 (CoreTermL_Not (cr ka)) (snd L1 ! ka) = (L', k)\<close> using TermL_Not.prems(4) a by simp
+  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] TermL_Not.prems(5)] .
+  have wta: \<open>wt ws ds a\<close> using TermL_Not.prems(1) by simp
+  note IH = TermL_Not.IH[OF wta TermL_Not.prems(2,3) a B1]
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close> using IH by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   note A = cr_env[OF EA]
-  have t: \<open>cwt ws (snd L1) (CoreTerm_Not (cr ka))\<close> \<open>cwidth ws (snd L1) (CoreTerm_Not (cr ka)) = width ws ds a\<close>
+  have t: \<open>cwt ws (snd L1) (CoreTermL_Not (cr ka))\<close> \<open>cwidth ws (snd L1) (CoreTermL_Not (cr ka)) = width ws ds a\<close>
     using A by simp_all
-  have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) (CoreTerm_Not (cr ka)) =
+  have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) (CoreTermL_Not (cr ka)) =
       (\<lambda>x. 2 ^ width ws ds a - 1 - x) (CV ws vs L1 ! ka)\<close> using A by simp
   show ?case
-    using un_push[where f = \<open>\<lambda>x. 2 ^ width ws ds a - 1 - x\<close>, OF IH t p[unfolded wa] v wt_width_pos[OF wta] Term_Not.prems(5)]
+    using un_push[where f = \<open>\<lambda>x. 2 ^ width ws ds a - 1 - x\<close>, OF IH t p[unfolded wa] v wt_width_pos[OF wta] TermL_Not.prems(5)]
     by simp
 next
-  case (Term_Neg a)
+  case (TermL_Neg a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  have p: \<open>push_m L1 (neg_t ka (snd L1 ! ka)) (snd L1 ! ka) = (L', k)\<close> using Term_Neg.prems(4) a by simp
-  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] Term_Neg.prems(5)] .
-  have wta: \<open>wt ws ds a\<close> using Term_Neg.prems(1) by simp
-  note IH = Term_Neg.IH[OF wta Term_Neg.prems(2,3) a B1]
+  have p: \<open>push_m L1 (neg_t ka (snd L1 ! ka)) (snd L1 ! ka) = (L', k)\<close> using TermL_Neg.prems(4) a by simp
+  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] TermL_Neg.prems(5)] .
+  have wta: \<open>wt ws ds a\<close> using TermL_Neg.prems(1) by simp
+  note IH = TermL_Neg.IH[OF wta TermL_Neg.prems(2,3) a B1]
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close> using IH by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   note A = neg_t_env[OF EA]
@@ -1694,105 +1694,105 @@ next
   have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) (neg_t ka (width ws ds a)) =
       negv (width ws ds a) (CV ws vs L1 ! ka)\<close> using A by simp
   show ?case
-    using un_push[where f = \<open>negv (width ws ds a)\<close>, OF IH t p[unfolded wa] v wt_width_pos[OF wta] Term_Neg.prems(5)]
+    using un_push[where f = \<open>negv (width ws ds a)\<close>, OF IH t p[unfolded wa] v wt_width_pos[OF wta] TermL_Neg.prems(5)]
     by (simp add: negv_def)
 next
-  case (Term_Bin op a b)
+  case (TermL_Bin op a b)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   obtain L2 kb where b: \<open>lower_m ws dm L1 b = (L2, kb)\<close> by (cases \<open>lower_m ws dm L1 b\<close>)
-  have R: \<open>lower_bin_m L2 op ka kb = (L', k)\<close> using Term_Bin.prems(4) a b by simp
-  have B2: \<open>bnd L2\<close> using bnd_pfx[OF lower_bin_m_pfx[OF R] Term_Bin.prems(5)] .
+  have R: \<open>lower_bin_m L2 op ka kb = (L', k)\<close> using TermL_Bin.prems(4) a b by simp
+  have B2: \<open>bnd L2\<close> using bnd_pfx[OF lower_bin_m_pfx[OF R] TermL_Bin.prems(5)] .
   have B1: \<open>bnd L1\<close> using bnd_pfx[OF lower_m_pfx[OF b] B2] .
   have wt: \<open>wt ws ds a\<close> \<open>wt ws ds b\<close> \<open>op \<noteq> Op_Concat \<longrightarrow> width ws ds b = width ws ds a\<close>
-    using Term_Bin.prems(1) by simp_all
-  note IHa = Term_Bin.IH(1)[OF wt(1) Term_Bin.prems(2,3) a B1]
+    using TermL_Bin.prems(1) by simp_all
+  note IHa = TermL_Bin.IH(1)[OF wt(1) TermL_Bin.prems(2,3) a B1]
   have L1: \<open>lok ws L1\<close> and X1: \<open>lext ws L L1\<close> using IHa lext_lok by blast+
-  note IHb = Term_Bin.IH(2)[OF wt(2) L1 dm_ok_lext[OF Term_Bin.prems(2,3) X1] b B2]
+  note IHb = TermL_Bin.IH(2)[OF wt(2) L1 dm_ok_lext[OF TermL_Bin.prems(2,3) X1] b B2]
   have X2: \<open>lext ws L1 L2\<close> using IHb by blast
   have EA1: \<open>env_ok ws L1 ka (width ws ds a)\<close> using IHa by blast
   have EA: \<open>env_ok ws L2 ka (width ws ds a)\<close> using env_lext[OF EA1 X2] .
   have EB: \<open>env_ok ws L2 kb (width ws ds b)\<close> using IHb by blast
-  note C = lower_bin_correct[OF EA EB wt(3) R Term_Bin.prems(5)[unfolded bnd_def, THEN conjunct1]]
+  note C = lower_bin_correct[OF EA EB wt(3) R TermL_Bin.prems(5)[unfolded bnd_def, THEN conjunct1]]
   have X3: \<open>lext ws L2 L'\<close> using C by blast
-  have wk: \<open>snd L' ! k = width ws ds (Term_Bin op a b)\<close> using C by (simp add: width_Bin_op op_width_def)
+  have wk: \<open>snd L' ! k = width ws ds (TermL_Bin op a b)\<close> using C by (simp add: width_Bin_op op_width_def)
   have \<open>snd L' ! k \<in> set (snd L')\<close> using C lok_length[OF lext_lok[OF X3]] by (intro nth_mem) simp
-  then have E: \<open>env_ok ws L' k (width ws ds (Term_Bin op a b))\<close>
-    using C wk Term_Bin.prems(5) wt_width_pos[OF Term_Bin.prems(1)] lext_lok[OF X3]
+  then have E: \<open>env_ok ws L' k (width ws ds (TermL_Bin op a b))\<close>
+    using C wk TermL_Bin.prems(5) wt_width_pos[OF TermL_Bin.prems(1)] lext_lok[OF X3]
     by (auto simp add: env_ok_def bnd_def)
   have X: \<open>lext ws L L'\<close> using X1 X2 X3 lext_trans by blast
-  have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (Term_Bin op a b)\<close>
+  have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (TermL_Bin op a b)\<close>
   proof (intro allI impI)
     fix vs dv assume H: \<open>vs_ok ws vs \<and> dmv ws ds dm L vs dv\<close>
     have a1: \<open>CV ws vs L1 ! ka = eval ws ds vs dv a\<close> using IHa H by blast
     have ca: \<open>CV ws vs L2 ! ka = eval ws ds vs dv a\<close> using a1 env_CV[OF EA1 X2] by simp
     have cb: \<open>CV ws vs L2 ! kb = eval ws ds vs dv b\<close>
-      using IHb H dmv_lext[OF Term_Bin.prems(3) X1] by blast
-    show \<open>CV ws vs L' ! k = eval ws ds vs dv (Term_Bin op a b)\<close> using C H ca cb by simp
+      using IHb H dmv_lext[OF TermL_Bin.prems(3) X1] by blast
+    show \<open>CV ws vs L' ! k = eval ws ds vs dv (TermL_Bin op a b)\<close> using C H ca cb by simp
   qed
   show ?case using E X V by simp
 next
-  case (Term_Extract hi lo a)
+  case (TermL_Extract hi lo a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  let ?t = \<open>CoreTerm_Extract hi lo (cr ka)\<close> and ?w = \<open>unat hi - unat lo + 1\<close>
-  have p: \<open>push_m L1 ?t ?w = (L', k)\<close> using Term_Extract.prems(4) a by simp
-  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] Term_Extract.prems(5)] .
-  have wt: \<open>wt ws ds a\<close> \<open>unat lo \<le> unat hi\<close> \<open>unat hi < width ws ds a\<close> using Term_Extract.prems(1) by simp_all
-  note IH = Term_Extract.IH[OF wt(1) Term_Extract.prems(2,3) a B1]
+  let ?t = \<open>CoreTermL_Extract hi lo (cr ka)\<close> and ?w = \<open>unat hi - unat lo + 1\<close>
+  have p: \<open>push_m L1 ?t ?w = (L', k)\<close> using TermL_Extract.prems(4) a by simp
+  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] TermL_Extract.prems(5)] .
+  have wt: \<open>wt ws ds a\<close> \<open>unat lo \<le> unat hi\<close> \<open>unat hi < width ws ds a\<close> using TermL_Extract.prems(1) by simp_all
+  note IH = TermL_Extract.IH[OF wt(1) TermL_Extract.prems(2,3) a B1]
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close> using IH by simp
   note A = cr_env[OF EA]
   have t: \<open>cwt ws (snd L1) ?t\<close> \<open>cwidth ws (snd L1) ?t = ?w\<close> using A wt(2,3) by simp_all
   have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) ?t =
       (\<lambda>x. (x div 2 ^ unat lo) mod 2 ^ ?w) (CV ws vs L1 ! ka)\<close> using A by simp
   show ?case
-    using un_push[where f = \<open>\<lambda>x. (x div 2 ^ unat lo) mod 2 ^ ?w\<close>, OF IH t p v _ Term_Extract.prems(5)] by simp
+    using un_push[where f = \<open>\<lambda>x. (x div 2 ^ unat lo) mod 2 ^ ?w\<close>, OF IH t p v _ TermL_Extract.prems(5)] by simp
 next
-  case (Term_Repeat i a)
+  case (TermL_Repeat i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   let ?wa = \<open>snd L1 ! ka\<close>
-  obtain L2 k0 where p: \<open>push_m L1 (CoreTerm_Const []) 0 = (L2, k0)\<close> by (cases \<open>push_m L1 (CoreTerm_Const []) 0\<close>)
+  obtain L2 k0 where p: \<open>push_m L1 (CoreTermL_Const []) 0 = (L2, k0)\<close> by (cases \<open>push_m L1 (CoreTermL_Const []) 0\<close>)
   obtain L3 k3 acc where f: \<open>foldl (repeat_step ka ?wa) (L2, k0, 0) [0..<unat i] = (L3, k3, acc)\<close>
     by (cases \<open>foldl (repeat_step ka ?wa) (L2, k0, 0) [0..<unat i]\<close>)
-  have R: \<open>L' = L3\<close> \<open>k = k3\<close> using Term_Repeat.prems(4) a p f by (simp_all add: Let_def)
-  have B2: \<open>bnd L2\<close> using bnd_pfx[OF repeat_fold_pfx[OF f] Term_Repeat.prems(5)[unfolded R]] .
+  have R: \<open>L' = L3\<close> \<open>k = k3\<close> using TermL_Repeat.prems(4) a p f by (simp_all add: Let_def)
+  have B2: \<open>bnd L2\<close> using bnd_pfx[OF repeat_fold_pfx[OF f] TermL_Repeat.prems(5)[unfolded R]] .
   have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] B2] .
-  have wt: \<open>wt ws ds a\<close> \<open>1 \<le> unat i\<close> using Term_Repeat.prems(1) by simp_all
-  note IH = Term_Repeat.IH[OF wt(1) Term_Repeat.prems(2,3) a B1]
+  have wt: \<open>wt ws ds a\<close> \<open>1 \<le> unat i\<close> using TermL_Repeat.prems(1) by simp_all
+  note IH = TermL_Repeat.IH[OF wt(1) TermL_Repeat.prems(2,3) a B1]
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close> and X1: \<open>lext ws L L1\<close> using IH by simp_all
   have wa: \<open>?wa = width ws ds a\<close> using EA by (simp add: env_ok_def)
   have L1: \<open>lok ws L1\<close> using EA by (simp add: env_ok_def)
-  have t0: \<open>cwt ws (snd L1) (CoreTerm_Const [])\<close> \<open>cwidth ws (snd L1) (CoreTerm_Const []) = 0\<close> by simp_all
-  have v0: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) (CoreTerm_Const []) = 0\<close> by simp
+  have t0: \<open>cwt ws (snd L1) (CoreTermL_Const [])\<close> \<open>cwidth ws (snd L1) (CoreTermL_Const []) = 0\<close> by simp_all
+  have v0: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) (CoreTermL_Const []) = 0\<close> by simp
   note P0 = push_correct[OF L1 t0 p v0]
   have X2: \<open>lext ws L1 L2\<close> using P0 by simp
   have inv: \<open>\<forall>vs. vs_ok ws vs \<longrightarrow> CV ws vs L2 ! k0 = repeat_val ?wa 0 (CV ws vs L1 ! ka)\<close> using P0 by simp
   have EA': \<open>env_ok ws L1 ka ?wa\<close> using EA wa by simp
   have k0: \<open>k0 < length (fst L2)\<close> \<open>snd L2 ! k0 = 0\<close> using P0 by simp_all
   have acc: \<open>(0 :: nat) = ?wa * 0\<close> by simp
-  note LP = repeat_loop[OF EA' X2 k0 acc inv f Term_Repeat.prems(5)[unfolded R]]
+  note LP = repeat_loop[OF EA' X2 k0 acc inv f TermL_Repeat.prems(5)[unfolded R]]
   have X3: \<open>lext ws L2 L3\<close> and k3: \<open>k3 < length (fst L3)\<close> and w3: \<open>snd L3 ! k3 = ?wa * unat i\<close>
     and V3: \<open>\<forall>vs. vs_ok ws vs \<longrightarrow> CV ws vs L3 ! k3 = repeat_val ?wa (unat i) (CV ws vs L1 ! ka)\<close>
     using LP P0 by simp_all
-  have wk: \<open>snd L' ! k = width ws ds (Term_Repeat i a)\<close> using w3 wa R by (simp add: mult.commute)
+  have wk: \<open>snd L' ! k = width ws ds (TermL_Repeat i a)\<close> using w3 wa R by (simp add: mult.commute)
   have \<open>snd L3 ! k3 \<in> set (snd L3)\<close> using k3 lok_length[OF lext_lok[OF X3]] by (intro nth_mem) simp
-  then have E: \<open>env_ok ws L' k (width ws ds (Term_Repeat i a))\<close>
-    using wk k3 Term_Repeat.prems(5) wt_width_pos[OF Term_Repeat.prems(1)] lext_lok[OF X3]
+  then have E: \<open>env_ok ws L' k (width ws ds (TermL_Repeat i a))\<close>
+    using wk k3 TermL_Repeat.prems(5) wt_width_pos[OF TermL_Repeat.prems(1)] lext_lok[OF X3]
     by (auto simp add: env_ok_def bnd_def R)
   have X: \<open>lext ws L L'\<close> using X1 X2 X3 lext_trans R by blast
-  have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (Term_Repeat i a)\<close>
+  have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (TermL_Repeat i a)\<close>
   proof (intro allI impI)
     fix vs dv assume H: \<open>vs_ok ws vs \<and> dmv ws ds dm L vs dv\<close>
     have \<open>CV ws vs L1 ! ka = eval ws ds vs dv a\<close> using IH H by blast
-    then show \<open>CV ws vs L' ! k = eval ws ds vs dv (Term_Repeat i a)\<close> using V3 H wa R by simp
+    then show \<open>CV ws vs L' ! k = eval ws ds vs dv (TermL_Repeat i a)\<close> using V3 H wa R by simp
   qed
   show ?case using E X V by simp
 next
-  case (Term_ZeroExtend i a)
+  case (TermL_ZeroExtend i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  let ?t = \<open>CoreTerm_Bin BinOp_Concat (CoreTerm_Const (replicate (unat i) False)) (cr ka)\<close>
-  have p: \<open>push_m L1 ?t (snd L1 ! ka + unat i) = (L', k)\<close> using Term_ZeroExtend.prems(4) a by (simp add: Let_def)
-  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] Term_ZeroExtend.prems(5)] .
-  have wta: \<open>wt ws ds a\<close> using Term_ZeroExtend.prems(1) by simp
-  note IH = Term_ZeroExtend.IH[OF wta Term_ZeroExtend.prems(2,3) a B1]
+  let ?t = \<open>CoreTermL_Bin BinOp_Concat (CoreTermL_Const (replicate (unat i) False)) (cr ka)\<close>
+  have p: \<open>push_m L1 ?t (snd L1 ! ka + unat i) = (L', k)\<close> using TermL_ZeroExtend.prems(4) a by (simp add: Let_def)
+  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p] TermL_ZeroExtend.prems(5)] .
+  have wta: \<open>wt ws ds a\<close> using TermL_ZeroExtend.prems(1) by simp
+  note IH = TermL_ZeroExtend.IH[OF wta TermL_ZeroExtend.prems(2,3) a B1]
   have EA: \<open>env_ok ws L1 ka (width ws ds a)\<close> using IH by simp
   have wa: \<open>snd L1 ! ka = width ws ds a\<close> using EA by (simp add: env_ok_def)
   note A = cr_env[OF EA]
@@ -1800,21 +1800,21 @@ next
   have v: \<open>\<And>vs. vs_ok ws vs \<Longrightarrow> ceval ws (snd L1) vs (CV ws vs L1) ?t = (\<lambda>x. x) (CV ws vs L1 ! ka)\<close>
     using A by (simp add: bits_nat_replicate_False)
   show ?case
-    using un_push[where f = \<open>\<lambda>x. x\<close>, OF IH t p[unfolded wa] v _ Term_ZeroExtend.prems(5)] wt_width_pos[OF wta] by simp
+    using un_push[where f = \<open>\<lambda>x. x\<close>, OF IH t p[unfolded wa] v _ TermL_ZeroExtend.prems(5)] wt_width_pos[OF wta] by simp
 next
-  case (Term_SignExtend i a)
+  case (TermL_SignExtend i a)
   let ?wa = \<open>width ws ds a\<close>
-  have wta: \<open>wt ws ds a\<close> using Term_SignExtend.prems(1) by simp
+  have wta: \<open>wt ws ds a\<close> using TermL_SignExtend.prems(1) by simp
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
-  let ?t = \<open>CoreTerm_Bin BinOp_Concat
-             (CoreTerm_Ite (msb_t ka ?wa) (CoreTerm_Const (replicate (unat i) True)) (CoreTerm_Const (replicate (unat i) False)))
+  let ?t = \<open>CoreTermL_Bin BinOp_Concat
+             (CoreTermL_Ite (msb_t ka ?wa) (CoreTermL_Const (replicate (unat i) True)) (CoreTermL_Const (replicate (unat i) False)))
              (cr ka)\<close>
-  have p0: \<open>push_m L1 (CoreTerm_Bin BinOp_Concat
-             (CoreTerm_Ite (msb_t ka (snd L1 ! ka)) (CoreTerm_Const (replicate (unat i) True)) (CoreTerm_Const (replicate (unat i) False)))
+  have p0: \<open>push_m L1 (CoreTermL_Bin BinOp_Concat
+             (CoreTermL_Ite (msb_t ka (snd L1 ! ka)) (CoreTermL_Const (replicate (unat i) True)) (CoreTermL_Const (replicate (unat i) False)))
              (cr ka)) (snd L1 ! ka + unat i) = (L', k)\<close>
-    using Term_SignExtend.prems(4) a by (simp add: Let_def)
-  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p0] Term_SignExtend.prems(5)] .
-  note IH = Term_SignExtend.IH[OF wta Term_SignExtend.prems(2,3) a B1]
+    using TermL_SignExtend.prems(4) a by (simp add: Let_def)
+  have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p0] TermL_SignExtend.prems(5)] .
+  note IH = TermL_SignExtend.IH[OF wta TermL_SignExtend.prems(2,3) a B1]
   have EA: \<open>env_ok ws L1 ka ?wa\<close> using IH by simp
   have wa: \<open>snd L1 ! ka = ?wa\<close> using EA by (simp add: env_ok_def)
   have p: \<open>push_m L1 ?t (?wa + unat i) = (L', k)\<close> using p0 unfolding wa .
@@ -1833,40 +1833,40 @@ next
       by simp
   qed
   show ?case
-    using un_push[where f = \<open>\<lambda>x. to_bv (?wa + unat i) (sint ?wa x)\<close>, OF IH t p v _ Term_SignExtend.prems(5)]
+    using un_push[where f = \<open>\<lambda>x. to_bv (?wa + unat i) (sint ?wa x)\<close>, OF IH t p v _ TermL_SignExtend.prems(5)]
       wt_width_pos[OF wta] by simp
 next
-  case (Term_RotateLeft i a)
+  case (TermL_RotateLeft i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   let ?wa = \<open>width ws ds a\<close> and ?r = \<open>unat i mod width ws ds a\<close>
-  have wta: \<open>wt ws ds a\<close> using Term_RotateLeft.prems(1) by simp
+  have wta: \<open>wt ws ds a\<close> using TermL_RotateLeft.prems(1) by simp
   show ?case
   proof (cases \<open>unat i mod snd L1 ! ka = 0\<close>)
     case True
-    have R: \<open>L' = L1\<close> \<open>k = ka\<close> using Term_RotateLeft.prems(4) a True by (simp_all add: Let_def)
-    note IH = Term_RotateLeft.IH[OF wta Term_RotateLeft.prems(2,3) a Term_RotateLeft.prems(5)[unfolded R]]
+    have R: \<open>L' = L1\<close> \<open>k = ka\<close> using TermL_RotateLeft.prems(4) a True by (simp_all add: Let_def)
+    note IH = TermL_RotateLeft.IH[OF wta TermL_RotateLeft.prems(2,3) a TermL_RotateLeft.prems(5)[unfolded R]]
     have EA: \<open>env_ok ws L1 ka ?wa\<close> using IH by simp
     have r0: \<open>?r = 0\<close> using True EA by (simp add: env_ok_def)
-    have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (Term_RotateLeft i a)\<close>
+    have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (TermL_RotateLeft i a)\<close>
     proof (intro allI impI)
       fix vs dv assume H: \<open>vs_ok ws vs \<and> dmv ws ds dm L vs dv\<close>
       have e: \<open>CV ws vs L1 ! ka = eval ws ds vs dv a\<close> using IH H by blast
       have \<open>eval ws ds vs dv a < 2 ^ ?wa\<close> using env_lt[OF EA conjunct1[OF H]] e by simp
-      then show \<open>CV ws vs L' ! k = eval ws ds vs dv (Term_RotateLeft i a)\<close> using e by (simp add: R r0 Let_def)
+      then show \<open>CV ws vs L' ! k = eval ws ds vs dv (TermL_RotateLeft i a)\<close> using e by (simp add: R r0 Let_def)
     qed
     show ?thesis using IH V by (simp add: R)
   next
     case False
-    let ?t = \<open>CoreTerm_Bin BinOp_Concat
-               (CoreTerm_Extract (word_of_nat (?wa - 1 - ?r)) 0 (cr ka))
-               (CoreTerm_Extract (word_of_nat (?wa - 1)) (word_of_nat (?wa - ?r)) (cr ka))\<close>
-    have p0: \<open>push_m L1 (CoreTerm_Bin BinOp_Concat
-               (CoreTerm_Extract (word_of_nat (snd L1 ! ka - 1 - unat i mod snd L1 ! ka)) 0 (cr ka))
-               (CoreTerm_Extract (word_of_nat (snd L1 ! ka - 1)) (word_of_nat (snd L1 ! ka - unat i mod snd L1 ! ka)) (cr ka)))
+    let ?t = \<open>CoreTermL_Bin BinOp_Concat
+               (CoreTermL_Extract (word_of_nat (?wa - 1 - ?r)) 0 (cr ka))
+               (CoreTermL_Extract (word_of_nat (?wa - 1)) (word_of_nat (?wa - ?r)) (cr ka))\<close>
+    have p0: \<open>push_m L1 (CoreTermL_Bin BinOp_Concat
+               (CoreTermL_Extract (word_of_nat (snd L1 ! ka - 1 - unat i mod snd L1 ! ka)) 0 (cr ka))
+               (CoreTermL_Extract (word_of_nat (snd L1 ! ka - 1)) (word_of_nat (snd L1 ! ka - unat i mod snd L1 ! ka)) (cr ka)))
                (snd L1 ! ka) = (L', k)\<close>
-      using Term_RotateLeft.prems(4) a False by (simp add: Let_def)
-    have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p0] Term_RotateLeft.prems(5)] .
-    note IH = Term_RotateLeft.IH[OF wta Term_RotateLeft.prems(2,3) a B1]
+      using TermL_RotateLeft.prems(4) a False by (simp add: Let_def)
+    have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p0] TermL_RotateLeft.prems(5)] .
+    note IH = TermL_RotateLeft.IH[OF wta TermL_RotateLeft.prems(2,3) a B1]
     have EA: \<open>env_ok ws L1 ka ?wa\<close> using IH by simp
     have wa: \<open>snd L1 ! ka = ?wa\<close> and wa1: \<open>1 \<le> ?wa\<close> using EA by (simp_all add: env_ok_def)
     have p: \<open>push_m L1 ?t ?wa = (L', k)\<close> using p0 unfolding wa .
@@ -1889,41 +1889,41 @@ next
         by (subst F3) (simp add: rotl_arith[OF r(2) env_lt[OF EA V]])
     qed
     show ?thesis
-      using un_push[where f = \<open>\<lambda>x. (x mod 2 ^ (?wa - ?r)) * 2 ^ ?r + x div 2 ^ (?wa - ?r)\<close>, OF IH F1 t2 p v wa1 Term_RotateLeft.prems(5)]
+      using un_push[where f = \<open>\<lambda>x. (x mod 2 ^ (?wa - ?r)) * 2 ^ ?r + x div 2 ^ (?wa - ?r)\<close>, OF IH F1 t2 p v wa1 TermL_RotateLeft.prems(5)]
       by (simp add: Let_def)
   qed
 next
-  case (Term_RotateRight i a)
+  case (TermL_RotateRight i a)
   obtain L1 ka where a: \<open>lower_m ws dm L a = (L1, ka)\<close> by (cases \<open>lower_m ws dm L a\<close>)
   let ?wa = \<open>width ws ds a\<close> and ?r = \<open>unat i mod width ws ds a\<close>
-  have wta: \<open>wt ws ds a\<close> using Term_RotateRight.prems(1) by simp
+  have wta: \<open>wt ws ds a\<close> using TermL_RotateRight.prems(1) by simp
   show ?case
   proof (cases \<open>unat i mod snd L1 ! ka = 0\<close>)
     case True
-    have R: \<open>L' = L1\<close> \<open>k = ka\<close> using Term_RotateRight.prems(4) a True by (simp_all add: Let_def)
-    note IH = Term_RotateRight.IH[OF wta Term_RotateRight.prems(2,3) a Term_RotateRight.prems(5)[unfolded R]]
+    have R: \<open>L' = L1\<close> \<open>k = ka\<close> using TermL_RotateRight.prems(4) a True by (simp_all add: Let_def)
+    note IH = TermL_RotateRight.IH[OF wta TermL_RotateRight.prems(2,3) a TermL_RotateRight.prems(5)[unfolded R]]
     have EA: \<open>env_ok ws L1 ka ?wa\<close> using IH by simp
     have r0: \<open>?r = 0\<close> using True EA by (simp add: env_ok_def)
-    have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (Term_RotateRight i a)\<close>
+    have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (TermL_RotateRight i a)\<close>
     proof (intro allI impI)
       fix vs dv assume H: \<open>vs_ok ws vs \<and> dmv ws ds dm L vs dv\<close>
       have e: \<open>CV ws vs L1 ! ka = eval ws ds vs dv a\<close> using IH H by blast
       have \<open>eval ws ds vs dv a < 2 ^ ?wa\<close> using env_lt[OF EA conjunct1[OF H]] e by simp
-      then show \<open>CV ws vs L' ! k = eval ws ds vs dv (Term_RotateRight i a)\<close> using e by (simp add: R r0 Let_def)
+      then show \<open>CV ws vs L' ! k = eval ws ds vs dv (TermL_RotateRight i a)\<close> using e by (simp add: R r0 Let_def)
     qed
     show ?thesis using IH V by (simp add: R)
   next
     case False
-    let ?t = \<open>CoreTerm_Bin BinOp_Concat
-               (CoreTerm_Extract (word_of_nat (?r - 1)) 0 (cr ka))
-               (CoreTerm_Extract (word_of_nat (?wa - 1)) (word_of_nat ?r) (cr ka))\<close>
-    have p0: \<open>push_m L1 (CoreTerm_Bin BinOp_Concat
-               (CoreTerm_Extract (word_of_nat (unat i mod snd L1 ! ka - 1)) 0 (cr ka))
-               (CoreTerm_Extract (word_of_nat (snd L1 ! ka - 1)) (word_of_nat (unat i mod snd L1 ! ka)) (cr ka)))
+    let ?t = \<open>CoreTermL_Bin BinOp_Concat
+               (CoreTermL_Extract (word_of_nat (?r - 1)) 0 (cr ka))
+               (CoreTermL_Extract (word_of_nat (?wa - 1)) (word_of_nat ?r) (cr ka))\<close>
+    have p0: \<open>push_m L1 (CoreTermL_Bin BinOp_Concat
+               (CoreTermL_Extract (word_of_nat (unat i mod snd L1 ! ka - 1)) 0 (cr ka))
+               (CoreTermL_Extract (word_of_nat (snd L1 ! ka - 1)) (word_of_nat (unat i mod snd L1 ! ka)) (cr ka)))
                (snd L1 ! ka) = (L', k)\<close>
-      using Term_RotateRight.prems(4) a False by (simp add: Let_def)
-    have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p0] Term_RotateRight.prems(5)] .
-    note IH = Term_RotateRight.IH[OF wta Term_RotateRight.prems(2,3) a B1]
+      using TermL_RotateRight.prems(4) a False by (simp add: Let_def)
+    have B1: \<open>bnd L1\<close> using bnd_pfx[OF pfx_push[OF p0] TermL_RotateRight.prems(5)] .
+    note IH = TermL_RotateRight.IH[OF wta TermL_RotateRight.prems(2,3) a B1]
     have EA: \<open>env_ok ws L1 ka ?wa\<close> using IH by simp
     have wa: \<open>snd L1 ! ka = ?wa\<close> and wa1: \<open>1 \<le> ?wa\<close> using EA by (simp_all add: env_ok_def)
     have p: \<open>push_m L1 ?t ?wa = (L', k)\<close> using p0 unfolding wa .
@@ -1946,26 +1946,26 @@ next
         by (subst F3) (simp add: rotr_arith[OF r(2) env_lt[OF EA V]])
     qed
     show ?thesis
-      using un_push[where f = \<open>\<lambda>x. (x mod 2 ^ ?r) * 2 ^ (?wa - ?r) + x div 2 ^ ?r\<close>, OF IH F1 t2 p v wa1 Term_RotateRight.prems(5)]
+      using un_push[where f = \<open>\<lambda>x. (x mod 2 ^ ?r) * 2 ^ (?wa - ?r) + x div 2 ^ ?r\<close>, OF IH F1 t2 p v wa1 TermL_RotateRight.prems(5)]
       by (simp add: Let_def)
   qed
 next
-  case (Term_Ite c a b)
+  case (TermL_Ite c a b)
   obtain L1 kc where c: \<open>lower_m ws dm L c = (L1, kc)\<close> by (cases \<open>lower_m ws dm L c\<close>)
   obtain L2 ka where a: \<open>lower_m ws dm L1 a = (L2, ka)\<close> by (cases \<open>lower_m ws dm L1 a\<close>)
   obtain L3 kb where b: \<open>lower_m ws dm L2 b = (L3, kb)\<close> by (cases \<open>lower_m ws dm L2 b\<close>)
-  let ?t = \<open>CoreTerm_Ite (cr kc) (cr ka) (cr kb)\<close>
-  have p: \<open>push_m L3 ?t (snd L3 ! ka) = (L', k)\<close> using Term_Ite.prems(4) c a b by simp
-  have B3: \<open>bnd L3\<close> using bnd_pfx[OF pfx_push[OF p] Term_Ite.prems(5)] .
+  let ?t = \<open>CoreTermL_Ite (cr kc) (cr ka) (cr kb)\<close>
+  have p: \<open>push_m L3 ?t (snd L3 ! ka) = (L', k)\<close> using TermL_Ite.prems(4) c a b by simp
+  have B3: \<open>bnd L3\<close> using bnd_pfx[OF pfx_push[OF p] TermL_Ite.prems(5)] .
   have B2: \<open>bnd L2\<close> using bnd_pfx[OF lower_m_pfx[OF b] B3] .
   have B1: \<open>bnd L1\<close> using bnd_pfx[OF lower_m_pfx[OF a] B2] .
   have wt: \<open>wt ws ds c\<close> \<open>wt ws ds a\<close> \<open>wt ws ds b\<close> \<open>width ws ds c = 1\<close> \<open>width ws ds a = width ws ds b\<close>
-    using Term_Ite.prems(1) by simp_all
-  note IHc = Term_Ite.IH(1)[OF wt(1) Term_Ite.prems(2,3) c B1]
+    using TermL_Ite.prems(1) by simp_all
+  note IHc = TermL_Ite.IH(1)[OF wt(1) TermL_Ite.prems(2,3) c B1]
   have L1: \<open>lok ws L1\<close> and X1: \<open>lext ws L L1\<close> using IHc lext_lok by blast+
-  note IHa = Term_Ite.IH(2)[OF wt(2) L1 dm_ok_lext[OF Term_Ite.prems(2,3) X1] a B2]
+  note IHa = TermL_Ite.IH(2)[OF wt(2) L1 dm_ok_lext[OF TermL_Ite.prems(2,3) X1] a B2]
   have L2: \<open>lok ws L2\<close> and X2: \<open>lext ws L1 L2\<close> using IHa lext_lok by blast+
-  note IHb = Term_Ite.IH(3)[OF wt(3) L2 dm_ok_lext[OF L1 dm_ok_lext[OF Term_Ite.prems(2,3) X1] X2] b B3]
+  note IHb = TermL_Ite.IH(3)[OF wt(3) L2 dm_ok_lext[OF L1 dm_ok_lext[OF TermL_Ite.prems(2,3) X1] X2] b B3]
   have L3: \<open>lok ws L3\<close> and X3: \<open>lext ws L2 L3\<close> using IHb lext_lok by blast+
   have EC1: \<open>env_ok ws L1 kc 1\<close> using IHc wt(4) by simp
   have EC2: \<open>env_ok ws L2 kc 1\<close> using env_lext[OF EC1 X2] .
@@ -1981,20 +1981,20 @@ next
   note P = push_correct[OF L3 t p[unfolded wa] v]
   have X4: \<open>lext ws L3 L'\<close> using P by simp
   have \<open>snd L' ! k \<in> set (snd L')\<close> using P lok_length[OF lext_lok[OF X4]] by (intro nth_mem) simp
-  then have E: \<open>env_ok ws L' k (width ws ds (Term_Ite c a b))\<close>
-    using P Term_Ite.prems(5) wt_width_pos[OF wt(2)] lext_lok[OF X4] by (auto simp add: env_ok_def bnd_def)
+  then have E: \<open>env_ok ws L' k (width ws ds (TermL_Ite c a b))\<close>
+    using P TermL_Ite.prems(5) wt_width_pos[OF wt(2)] lext_lok[OF X4] by (auto simp add: env_ok_def bnd_def)
   have X: \<open>lext ws L L'\<close> using X1 X2 X3 X4 lext_trans by blast
-  have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (Term_Ite c a b)\<close>
+  have V: \<open>\<forall>vs dv. vs_ok ws vs \<and> dmv ws ds dm L vs dv \<longrightarrow> CV ws vs L' ! k = eval ws ds vs dv (TermL_Ite c a b)\<close>
   proof (intro allI impI)
     fix vs dv assume H: \<open>vs_ok ws vs \<and> dmv ws ds dm L vs dv\<close>
     have c1: \<open>CV ws vs L1 ! kc = eval ws ds vs dv c\<close> using IHc H by blast
     have cc: \<open>CV ws vs L3 ! kc = eval ws ds vs dv c\<close> using c1 env_CV[OF EC1 X2] env_CV[OF EC2 X3] by simp
-    have H1: \<open>dmv ws ds dm L1 vs dv\<close> using dmv_lext[OF Term_Ite.prems(3) X1] H by blast
+    have H1: \<open>dmv ws ds dm L1 vs dv\<close> using dmv_lext[OF TermL_Ite.prems(3) X1] H by blast
     have a2: \<open>CV ws vs L2 ! ka = eval ws ds vs dv a\<close> using IHa H H1 by blast
     have ca: \<open>CV ws vs L3 ! ka = eval ws ds vs dv a\<close> using a2 env_CV[OF EA2 X3] by simp
-    have H2: \<open>dmv ws ds dm L2 vs dv\<close> using dmv_lext[OF dm_ok_lext[OF Term_Ite.prems(2,3) X1] X2 H1] .
+    have H2: \<open>dmv ws ds dm L2 vs dv\<close> using dmv_lext[OF dm_ok_lext[OF TermL_Ite.prems(2,3) X1] X2 H1] .
     have cb: \<open>CV ws vs L3 ! kb = eval ws ds vs dv b\<close> using IHb H H2 by blast
-    show \<open>CV ws vs L' ! k = eval ws ds vs dv (Term_Ite c a b)\<close> using P H cc ca cb by simp
+    show \<open>CV ws vs L' ! k = eval ws ds vs dv (TermL_Ite c a b)\<close> using P H cc ca cb by simp
   qed
   show ?case using E X V by simp
 qed
@@ -2056,7 +2056,7 @@ qed
 text \<open>A well-sorted term keeps its width and value when later definitions are appended.\<close>
 lemma wt_width_append: \<open>wt ws ds t \<Longrightarrow> width ws (ds @ e) t = width ws ds t\<close>
 proof (induction t)
-  case (Term_Bin op a b)
+  case (TermL_Bin op a b)
   then show ?case by (cases op) simp_all
 qed (simp_all add: nth_append)
 
@@ -2069,9 +2069,9 @@ lemma wt_append: \<open>wt ws ds t \<Longrightarrow> wt ws (ds @ e) t\<close>
 
 text \<open>The loop of \<^verbatim>\<open>lower_problem\<close> over the definitions: after \<open>j\<close> iterations, \<open>dm\<close> maps the first \<open>j\<close>
   definitions to core definitions of their widths and values.\<close>
-definition ldefs_inv :: \<open>Problem \<Rightarrow> nat \<Rightarrow> lst \<times> nat list \<Rightarrow> bool\<close> where
+definition ldefs_inv :: \<open>ProblemL \<Rightarrow> nat \<Rightarrow> lst \<times> nat list \<Rightarrow> bool\<close> where
   \<open>ldefs_inv p j X \<equiv>
-     let ws = var_widths p; D = Problem_defs p in
+     let ws = var_widths p; D = ProblemL_defs p in
      lok ws (fst X) \<and> dm_ok (def_widths ws [] (take j D)) (snd X) (fst X) \<and>
      (\<forall>vs. vs_ok ws vs \<longrightarrow> dmv ws (def_widths ws [] (take j D)) (snd X) (fst X) vs (def_values ws [] vs [] (take j D)))\<close>
 
@@ -2081,14 +2081,14 @@ proof (induction js arbitrary: L dm)
   then show ?case by (simp add: pfx_refl)
 next
   case (Cons j js)
-  obtain L1 k where a: \<open>lower_m (var_widths p) dm L (Problem_defs p ! j) = (L1, k)\<close>
-    by (cases \<open>lower_m (var_widths p) dm L (Problem_defs p ! j)\<close>)
+  obtain L1 k where a: \<open>lower_m (var_widths p) dm L (ProblemL_defs p ! j) = (L1, k)\<close>
+    by (cases \<open>lower_m (var_widths p) dm L (ProblemL_defs p ! j)\<close>)
   have \<open>foldl (ldefs_step p) (L1, dm @ [k]) js = (L', dm')\<close> using Cons.prems a by (simp add: ldefs_step_def)
   then show ?case using Cons.IH lower_m_pfx[OF a] pfx_trans by blast
 qed
 
 lemma ldefs_loop:
-  assumes \<open>defs_wt (var_widths p) [] (Problem_defs p)\<close> \<open>j \<le> length (Problem_defs p)\<close>
+  assumes \<open>defs_wt (var_widths p) [] (ProblemL_defs p)\<close> \<open>j \<le> length (ProblemL_defs p)\<close>
   shows \<open>foldl (ldefs_step p) (([], []), []) [0..<j] = (L', dm') \<Longrightarrow> bnd L' \<Longrightarrow> ldefs_inv p j (L', dm')\<close>
   using assms(2)
 proof (induction j arbitrary: L' dm')
@@ -2097,7 +2097,7 @@ proof (induction j arbitrary: L' dm')
   show ?case by (simp add: R0 ldefs_inv_def lok_def dm_ok_def dmv_def)
 next
   case (Suc j)
-  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close>
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>ProblemL_defs p\<close>
   obtain L dm where f: \<open>foldl (ldefs_step p) (([], []), []) [0..<j] = (L, dm)\<close>
     by (cases \<open>foldl (ldefs_step p) (([], []), []) [0..<j]\<close>)
   obtain L1 k where a: \<open>lower_m ?ws dm L (?D ! j) = (L1, k)\<close> by (cases \<open>lower_m ?ws dm L (?D ! j)\<close>)
@@ -2131,9 +2131,9 @@ qed
 
 text \<open>The loop over the assertions: each core assertion is a reference to a core definition of width 1
   whose value is the value of the assertion.\<close>
-definition lasserts_inv :: \<open>Problem \<Rightarrow> nat list \<Rightarrow> lst \<Rightarrow> nat \<Rightarrow> lst \<times> CoreTerm list \<Rightarrow> bool\<close> where
+definition lasserts_inv :: \<open>ProblemL \<Rightarrow> nat list \<Rightarrow> lst \<Rightarrow> nat \<Rightarrow> lst \<times> CoreTermL list \<Rightarrow> bool\<close> where
   \<open>lasserts_inv p dm L1 i X \<equiv>
-     let ws = var_widths p; D = Problem_defs p; A = Problem_asserts p;
+     let ws = var_widths p; D = ProblemL_defs p; A = ProblemL_asserts p;
          ds = def_widths ws [] D in
      lext ws L1 (fst X) \<and> length (snd X) = i \<and>
      (\<forall>n < i. \<exists>k. snd X ! n = cr k \<and> env_ok ws (fst X) k 1 \<and>
@@ -2145,15 +2145,15 @@ proof (induction js arbitrary: L cs)
   then show ?case by (simp add: pfx_refl)
 next
   case (Cons j js)
-  obtain L1 k where a: \<open>lower_m (var_widths p) dm L (Problem_asserts p ! j) = (L1, k)\<close>
-    by (cases \<open>lower_m (var_widths p) dm L (Problem_asserts p ! j)\<close>)
+  obtain L1 k where a: \<open>lower_m (var_widths p) dm L (ProblemL_asserts p ! j) = (L1, k)\<close>
+    by (cases \<open>lower_m (var_widths p) dm L (ProblemL_asserts p ! j)\<close>)
   have \<open>foldl (lasserts_step p dm) (L1, cs @ [cr k]) js = (L', cs')\<close> using Cons.prems a by (simp add: lasserts_step_def)
   then show ?case using Cons.IH lower_m_pfx[OF a] pfx_trans by blast
 qed
 
 lemma lasserts_loop:
-  assumes \<open>problem_wt p\<close> \<open>i \<le> length (Problem_asserts p)\<close>
-    and I1: \<open>ldefs_inv p (length (Problem_defs p)) (L1, dm)\<close>
+  assumes \<open>problem_wt p\<close> \<open>i \<le> length (ProblemL_asserts p)\<close>
+    and I1: \<open>ldefs_inv p (length (ProblemL_defs p)) (L1, dm)\<close>
   shows \<open>foldl (lasserts_step p dm) (L1, []) [0..<i] = (L', cs') \<Longrightarrow> bnd L' \<Longrightarrow> lasserts_inv p dm L1 i (L', cs')\<close>
   using assms(2)
 proof (induction i arbitrary: L' cs')
@@ -2162,7 +2162,7 @@ proof (induction i arbitrary: L' cs')
   show ?case using I1 lext_refl by (simp add: R0 lasserts_inv_def ldefs_inv_def Let_def)
 next
   case (Suc i)
-  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>ProblemL_defs p\<close> and ?A = \<open>ProblemL_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
   obtain L cs where f: \<open>foldl (lasserts_step p dm) (L1, []) [0..<i] = (L, cs)\<close>
     by (cases \<open>foldl (lasserts_step p dm) (L1, []) [0..<i]\<close>)
@@ -2203,14 +2203,14 @@ next
 qed
 
 text \<open>The result of \<^verbatim>\<open>lower_problem\<close> as the results of its two loops.\<close>
-definition ldefs_res :: \<open>Problem \<Rightarrow> lst \<times> nat list\<close> where
-  \<open>ldefs_res p \<equiv> foldl (ldefs_step p) (([], []), []) [0..<length (Problem_defs p)]\<close>
+definition ldefs_res :: \<open>ProblemL \<Rightarrow> lst \<times> nat list\<close> where
+  \<open>ldefs_res p \<equiv> foldl (ldefs_step p) (([], []), []) [0..<length (ProblemL_defs p)]\<close>
 
-definition lasserts_res :: \<open>Problem \<Rightarrow> lst \<times> CoreTerm list\<close> where
-  \<open>lasserts_res p \<equiv> foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<length (Problem_asserts p)]\<close>
+definition lasserts_res :: \<open>ProblemL \<Rightarrow> lst \<times> CoreTermL list\<close> where
+  \<open>lasserts_res p \<equiv> foldl (lasserts_step p (snd (ldefs_res p))) (fst (ldefs_res p), []) [0..<length (ProblemL_asserts p)]\<close>
 
 lemma lower_problem_m_eq:
-  \<open>lower_problem_m p = make_CoreProblem (Problem_widths p) (fst (fst (lasserts_res p))) (snd (lasserts_res p))\<close>
+  \<open>lower_problem_m p = make_CoreProblemL (ProblemL_widths p) (fst (fst (lasserts_res p))) (snd (lasserts_res p))\<close>
   by (simp add: lower_problem_m_def ldefs_res_def lasserts_res_def split_def Let_def)
 
 lemma ldefs_res_pfx: \<open>pfx (fst (ldefs_res p)) (fst (lasserts_res p))\<close>
@@ -2228,7 +2228,7 @@ theorem lower_problem_correct:
   assumes \<open>problem_wt p\<close> \<open>bnd (fst (lasserts_res p))\<close>
   shows \<open>cproblem_wt (lower_problem_m p)\<close> \<open>cis_model (lower_problem_m p) m = is_model p m\<close>
 proof -
-  let ?ws = \<open>var_widths p\<close> and ?D = \<open>Problem_defs p\<close> and ?A = \<open>Problem_asserts p\<close>
+  let ?ws = \<open>var_widths p\<close> and ?D = \<open>ProblemL_defs p\<close> and ?A = \<open>ProblemL_asserts p\<close>
   let ?ds = \<open>def_widths ?ws [] ?D\<close>
   obtain L1 dm where d: \<open>ldefs_res p = (L1, dm)\<close> by (cases \<open>ldefs_res p\<close>)
   obtain L2 cs where a: \<open>lasserts_res p = (L2, cs)\<close> by (cases \<open>lasserts_res p\<close>)
@@ -2240,7 +2240,7 @@ proof -
     using lasserts_loop[OF assms(1) _ I1 _ B2] a d by (simp add: lasserts_res_def)
   have X12: \<open>lext ?ws L1 L2\<close> using I2 by (simp add: lasserts_inv_def Let_def)
   have L2: \<open>lok ?ws L2\<close> using lext_lok[OF X12] .
-  have q: \<open>lower_problem_m p = make_CoreProblem (Problem_widths p) (fst L2) cs\<close>
+  have q: \<open>lower_problem_m p = make_CoreProblemL (ProblemL_widths p) (fst L2) cs\<close>
     using lower_problem_m_eq a by simp
   have cws: \<open>cvar_widths (lower_problem_m p) = ?ws\<close> by (simp add: q cvar_widths_def var_widths_def)
   have cds: \<open>cdef_widths ?ws [] (fst L2) = snd L2\<close> using L2 by (simp add: lok_def)

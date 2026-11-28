@@ -33,7 +33,7 @@ subsection \<open>The fragment\<close>
 
 text \<open>The fragment of this solver: no uninterpreted sort, and every declared symbol a constant.\<close>
 definition smt_fragment :: \<open>SmtProblem \<Rightarrow> bool\<close> where
-  \<open>smt_fragment p \<equiv> unat (SmtProblem_num_sorts p) = 0 \<and> (\<forall>f \<in> set (SmtProblem_funs p). SmtFun_args f = [])\<close>
+  \<open>smt_fragment p \<equiv> unat (SmtProblem_num_sorts p) = 0 \<and> (\<forall>f \<in> set (rvec_elems (SmtProblem_funs p)). rvec_elems (SmtFun_args f) = [])\<close>
 
 
 subsection \<open>The input range\<close>
@@ -44,15 +44,18 @@ text \<open>The problems on which this solver promises an answer other than \<^v
   how the solver works. A change of the solver must keep answering every problem of the range.
   The range of this solver: \<^const>\<open>smt_size\<close> at most \<open>2^30\<close> (about \<open>1.07 \<cdot> 10^9\<close>), every
   bit-vector width at most \<open>2^18\<close>, every multiplication, division and remainder of width at most
-  \<open>2^12\<close> (\<^const>\<open>smt_max_mul_width\<close>), and every \<open>distinct\<close> with at most \<open>2^8\<close> arguments
-  (\<^const>\<open>smt_max_distinct\<close>). The QF\_BV problems of the SMT-LIB 2025 release have size at most
+  \<open>2^12\<close> (\<^const>\<open>smt_max_mul_width\<close>), every \<open>distinct\<close> with at most \<open>2^8\<close> arguments
+  (\<^const>\<open>smt_max_distinct\<close>), and \<^const>\<open>smt_cost\<close> (the nodes weighted by their widths, by the
+  square of the width for a multiplication, division or remainder) at most \<open>2^43\<close> (about
+  \<open>8.8 \<cdot> 10^12\<close>). The QF\_BV problems of the SMT-LIB 2025 release have size at most
   about \<open>1.5 \<cdot> 10^8\<close>, widths at most \<open>2^15\<close>, multiplications, divisions and remainders of width
-  at most \<open>2^11\<close>, and \<open>distinct\<close> with at most 10 arguments; the benchmarks of Kov\'asznai,
-  Fr\"ohlich and Biere (\<^url>\<open>https://fmv.jku.at/smtbench\<close>) have widths at most \<open>29980\<close>.\<close>
+  at most \<open>2^11\<close>, \<open>distinct\<close> with at most 10 arguments, and cost at most about
+  \<open>2.5 \<cdot> 10^9\<close>; the benchmarks of Kov\'asznai, Fr\"ohlich and Biere
+  (\<^url>\<open>https://fmv.jku.at/smtbench\<close>) have widths at most \<open>29980\<close>.\<close>
 definition smt_in_range :: \<open>SmtProblem \<Rightarrow> bool\<close> where
   \<open>smt_in_range p \<equiv>
      smt_size p \<le> 2 ^ 30 \<and> smt_max_width p \<le> 2 ^ 18 \<and> smt_max_mul_width p \<le> 2 ^ 12 \<and>
-     smt_max_distinct p \<le> 2 ^ 8\<close>
+     smt_max_distinct p \<le> 2 ^ 8 \<and> smt_cost p \<le> 2 ^ 43\<close>
 
 subsection \<open>The contract\<close>
 
@@ -70,7 +73,7 @@ definition check_sat_contract :: \<open>SmtProblem \<Rightarrow> ('s, SmtAnswer,
      make_function_contract pre post\<close>
 
 text \<open>\<^const>\<open>check_sat_contract\<close> \<open>p\<close>:
-  \<^item> Precondition: \<open>p\<close> is well-sorted (\<^const>\<open>smt_wf\<close>), and every list in it has fewer than
+  \<^item> Precondition: \<open>p\<close> is well-sorted (\<^const>\<open>smt_wf\<close>), and every vector in it has fewer than
     \<open>2^63\<close> elements (\<^const>\<open>smt_repr_ok\<close>, which holds for every value of a Rust program).
   \<^item> \<^verbatim>\<open>Sat(m)\<close>: \<open>m\<close> is a model of \<open>p\<close>. \<^verbatim>\<open>Unsat\<close>: \<open>p\<close> has no model. \<^verbatim>\<open>Unknown\<close>: \<open>p\<close> is not in
     the fragment of this solver, or not in its range (\<^const>\<open>smt_in_range\<close>). For a problem in
@@ -97,41 +100,41 @@ text \<open>The translation bounds every loop without an iteration bound and eve
 
 locale QFBV_heap =
   reference reference_types
-  + ref_1: reference_allocatable reference_types _ _ _ _ _ _ _ prism_1 \<comment> \<open>(Lit list) list\<close>
-  + ref_2: reference_allocatable reference_types _ _ _ _ _ _ _ prism_2 \<comment> \<open>Lit list\<close>
+  + ref_1: reference_allocatable reference_types _ _ _ _ _ _ _ prism_1 \<comment> \<open>(Lit rvec) rvec\<close>
+  + ref_2: reference_allocatable reference_types _ _ _ _ _ _ _ prism_2 \<comment> \<open>Lit rvec\<close>
   + ref_3: reference_allocatable reference_types _ _ _ _ _ _ _ prism_3 \<comment> \<open>64 word\<close>
   + ref_4: reference_allocatable reference_types _ _ _ _ _ _ _ prism_4 \<comment> \<open>Cnf\<close>
   + ref_5: reference_allocatable reference_types _ _ _ _ _ _ _ prism_5 \<comment> \<open>Lit\<close>
-  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>Lit option\<close>
-  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>bool\<close>
-  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>(bool option) list\<close>
-  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>bool list\<close>
-  + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool list) list\<close>
-  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>(64 word) list\<close>
-  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>CoreTerm list\<close>
+  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>bool rvec\<close>
+  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>Lit option\<close>
+  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>bool\<close>
+  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>(bool option) rvec\<close>
+  + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool rvec) rvec\<close>
+  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>(64 word) rvec\<close>
+  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>CoreTerm rvec\<close>
   + ref_13: reference_allocatable reference_types _ _ _ _ _ _ _ prism_13 \<comment> \<open>Lower\<close>
-  + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term list\<close>
+  + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term rvec\<close>
   + ref_15: reference_allocatable reference_types _ _ _ _ _ _ _ prism_15 \<comment> \<open>Term\<close>
   + ref_16: reference_allocatable reference_types _ _ _ _ _ _ _ prism_16 \<comment> \<open>Tr\<close>
-  + ref_17: reference_allocatable reference_types _ _ _ _ _ _ _ prism_17 \<comment> \<open>SmtInterp list\<close>
+  + ref_17: reference_allocatable reference_types _ _ _ _ _ _ _ prism_17 \<comment> \<open>SmtInterp rvec\<close>
   for reference_types :: \<open>'s::{sepalg} \<Rightarrow> 'addr \<Rightarrow> 'gv \<Rightarrow> 'abort \<Rightarrow> 'i prompt \<Rightarrow> 'o prompt_output \<Rightarrow> unit\<close>
-  and prism_1 :: \<open>('gv, (Lit list) list) prism\<close>
-  and prism_2 :: \<open>('gv, Lit list) prism\<close>
+  and prism_1 :: \<open>('gv, (Lit rvec) rvec) prism\<close>
+  and prism_2 :: \<open>('gv, Lit rvec) prism\<close>
   and prism_3 :: \<open>('gv, 64 word) prism\<close>
   and prism_4 :: \<open>('gv, Cnf) prism\<close>
   and prism_5 :: \<open>('gv, Lit) prism\<close>
-  and prism_6 :: \<open>('gv, Lit option) prism\<close>
-  and prism_7 :: \<open>('gv, bool) prism\<close>
-  and prism_8 :: \<open>('gv, (bool option) list) prism\<close>
-  and prism_9 :: \<open>('gv, bool list) prism\<close>
-  and prism_10 :: \<open>('gv, (bool list) list) prism\<close>
-  and prism_11 :: \<open>('gv, (64 word) list) prism\<close>
-  and prism_12 :: \<open>('gv, CoreTerm list) prism\<close>
+  and prism_6 :: \<open>('gv, bool rvec) prism\<close>
+  and prism_7 :: \<open>('gv, Lit option) prism\<close>
+  and prism_8 :: \<open>('gv, bool) prism\<close>
+  and prism_9 :: \<open>('gv, (bool option) rvec) prism\<close>
+  and prism_10 :: \<open>('gv, (bool rvec) rvec) prism\<close>
+  and prism_11 :: \<open>('gv, (64 word) rvec) prism\<close>
+  and prism_12 :: \<open>('gv, CoreTerm rvec) prism\<close>
   and prism_13 :: \<open>('gv, Lower) prism\<close>
-  and prism_14 :: \<open>('gv, Term list) prism\<close>
+  and prism_14 :: \<open>('gv, Term rvec) prism\<close>
   and prism_15 :: \<open>('gv, Term) prism\<close>
   and prism_16 :: \<open>('gv, Tr) prism\<close>
-  and prism_17 :: \<open>('gv, SmtInterp list) prism\<close>
+  and prism_17 :: \<open>('gv, SmtInterp rvec) prism\<close>
 begin
 
 abbreviation check_sat :: \<open>nat \<Rightarrow> SmtProblem \<Rightarrow> ('s, SmtAnswer, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where

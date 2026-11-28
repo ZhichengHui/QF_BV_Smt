@@ -9,41 +9,41 @@ Loops without an iteration bound and recursive functions use the fuel \<^verbati
 
 locale QFBV_ctx =
   reference reference_types
-  + ref_1: reference_allocatable reference_types _ _ _ _ _ _ _ prism_1 \<comment> \<open>(Lit list) list\<close>
-  + ref_2: reference_allocatable reference_types _ _ _ _ _ _ _ prism_2 \<comment> \<open>Lit list\<close>
+  + ref_1: reference_allocatable reference_types _ _ _ _ _ _ _ prism_1 \<comment> \<open>(Lit rvec) rvec\<close>
+  + ref_2: reference_allocatable reference_types _ _ _ _ _ _ _ prism_2 \<comment> \<open>Lit rvec\<close>
   + ref_3: reference_allocatable reference_types _ _ _ _ _ _ _ prism_3 \<comment> \<open>64 word\<close>
   + ref_4: reference_allocatable reference_types _ _ _ _ _ _ _ prism_4 \<comment> \<open>Cnf\<close>
   + ref_5: reference_allocatable reference_types _ _ _ _ _ _ _ prism_5 \<comment> \<open>Lit\<close>
-  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>Lit option\<close>
-  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>bool\<close>
-  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>(bool option) list\<close>
-  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>bool list\<close>
-  + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool list) list\<close>
-  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>(64 word) list\<close>
-  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>CoreTerm list\<close>
+  + ref_6: reference_allocatable reference_types _ _ _ _ _ _ _ prism_6 \<comment> \<open>bool rvec\<close>
+  + ref_7: reference_allocatable reference_types _ _ _ _ _ _ _ prism_7 \<comment> \<open>Lit option\<close>
+  + ref_8: reference_allocatable reference_types _ _ _ _ _ _ _ prism_8 \<comment> \<open>bool\<close>
+  + ref_9: reference_allocatable reference_types _ _ _ _ _ _ _ prism_9 \<comment> \<open>(bool option) rvec\<close>
+  + ref_10: reference_allocatable reference_types _ _ _ _ _ _ _ prism_10 \<comment> \<open>(bool rvec) rvec\<close>
+  + ref_11: reference_allocatable reference_types _ _ _ _ _ _ _ prism_11 \<comment> \<open>(64 word) rvec\<close>
+  + ref_12: reference_allocatable reference_types _ _ _ _ _ _ _ prism_12 \<comment> \<open>CoreTerm rvec\<close>
   + ref_13: reference_allocatable reference_types _ _ _ _ _ _ _ prism_13 \<comment> \<open>Lower\<close>
-  + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term list\<close>
+  + ref_14: reference_allocatable reference_types _ _ _ _ _ _ _ prism_14 \<comment> \<open>Term rvec\<close>
   + ref_15: reference_allocatable reference_types _ _ _ _ _ _ _ prism_15 \<comment> \<open>Term\<close>
   + ref_16: reference_allocatable reference_types _ _ _ _ _ _ _ prism_16 \<comment> \<open>Tr\<close>
-  + ref_17: reference_allocatable reference_types _ _ _ _ _ _ _ prism_17 \<comment> \<open>SmtInterp list\<close>
+  + ref_17: reference_allocatable reference_types _ _ _ _ _ _ _ prism_17 \<comment> \<open>SmtInterp rvec\<close>
   for reference_types :: \<open>'s::{sepalg} \<Rightarrow> 'addr \<Rightarrow> 'gv \<Rightarrow> 'abort \<Rightarrow> 'i prompt \<Rightarrow> 'o prompt_output \<Rightarrow> unit\<close>
-  and prism_1 :: \<open>('gv, (Lit list) list) prism\<close>
-  and prism_2 :: \<open>('gv, Lit list) prism\<close>
+  and prism_1 :: \<open>('gv, (Lit rvec) rvec) prism\<close>
+  and prism_2 :: \<open>('gv, Lit rvec) prism\<close>
   and prism_3 :: \<open>('gv, 64 word) prism\<close>
   and prism_4 :: \<open>('gv, Cnf) prism\<close>
   and prism_5 :: \<open>('gv, Lit) prism\<close>
-  and prism_6 :: \<open>('gv, Lit option) prism\<close>
-  and prism_7 :: \<open>('gv, bool) prism\<close>
-  and prism_8 :: \<open>('gv, (bool option) list) prism\<close>
-  and prism_9 :: \<open>('gv, bool list) prism\<close>
-  and prism_10 :: \<open>('gv, (bool list) list) prism\<close>
-  and prism_11 :: \<open>('gv, (64 word) list) prism\<close>
-  and prism_12 :: \<open>('gv, CoreTerm list) prism\<close>
+  and prism_6 :: \<open>('gv, bool rvec) prism\<close>
+  and prism_7 :: \<open>('gv, Lit option) prism\<close>
+  and prism_8 :: \<open>('gv, bool) prism\<close>
+  and prism_9 :: \<open>('gv, (bool option) rvec) prism\<close>
+  and prism_10 :: \<open>('gv, (bool rvec) rvec) prism\<close>
+  and prism_11 :: \<open>('gv, (64 word) rvec) prism\<close>
+  and prism_12 :: \<open>('gv, CoreTerm rvec) prism\<close>
   and prism_13 :: \<open>('gv, Lower) prism\<close>
-  and prism_14 :: \<open>('gv, Term list) prism\<close>
+  and prism_14 :: \<open>('gv, Term rvec) prism\<close>
   and prism_15 :: \<open>('gv, Term) prism\<close>
   and prism_16 :: \<open>('gv, Tr) prism\<close>
-  and prism_17 :: \<open>('gv, SmtInterp list) prism\<close>
+  and prism_17 :: \<open>('gv, SmtInterp rvec) prism\<close>
   + fixes urust_fuel :: nat
 begin
 

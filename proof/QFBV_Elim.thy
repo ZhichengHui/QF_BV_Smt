@@ -20,34 +20,34 @@ subsection \<open>Functional models\<close>
 definition bump_m :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat list\<close> where
   \<open>bump_m c i \<equiv> if c ! i < 2 then c[i := Suc (c ! i)] else c\<close>
 
-primrec count_occ_m :: \<open>nat list \<times> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>count_occ_m vr (CoreTerm_Const bs) = vr\<close>
-| \<open>count_occ_m vr (CoreTerm_Var i) = (bump_m (fst vr) (unat i), snd vr)\<close>
-| \<open>count_occ_m vr (CoreTerm_Ref i) = (fst vr, bump_m (snd vr) (unat i))\<close>
-| \<open>count_occ_m vr (CoreTerm_Not a) = count_occ_m vr a\<close>
-| \<open>count_occ_m vr (CoreTerm_Bin op a b) = count_occ_m (count_occ_m vr a) b\<close>
-| \<open>count_occ_m vr (CoreTerm_Extract hi lo a) = count_occ_m vr a\<close>
-| \<open>count_occ_m vr (CoreTerm_Ite c a b) = count_occ_m (count_occ_m (count_occ_m vr c) a) b\<close>
+primrec count_occ_m :: \<open>nat list \<times> nat list \<Rightarrow> CoreTermL \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>count_occ_m vr (CoreTermL_Const bs) = vr\<close>
+| \<open>count_occ_m vr (CoreTermL_Var i) = (bump_m (fst vr) (unat i), snd vr)\<close>
+| \<open>count_occ_m vr (CoreTermL_Ref i) = (fst vr, bump_m (snd vr) (unat i))\<close>
+| \<open>count_occ_m vr (CoreTermL_Not a) = count_occ_m vr a\<close>
+| \<open>count_occ_m vr (CoreTermL_Bin op a b) = count_occ_m (count_occ_m vr a) b\<close>
+| \<open>count_occ_m vr (CoreTermL_Extract hi lo a) = count_occ_m vr a\<close>
+| \<open>count_occ_m vr (CoreTermL_Ite c a b) = count_occ_m (count_occ_m (count_occ_m vr c) a) b\<close>
 
-definition ref_index_m :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> nat\<close> where
-  \<open>ref_index_m t n \<equiv> (case t of CoreTerm_Ref i \<Rightarrow> unat i | _ \<Rightarrow> n)\<close>
+definition ref_index_m :: \<open>CoreTermL \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>ref_index_m t n \<equiv> (case t of CoreTermL_Ref i \<Rightarrow> unat i | _ \<Rightarrow> n)\<close>
 
-definition bit_const_m :: \<open>CoreTerm \<Rightarrow> nat\<close> where
+definition bit_const_m :: \<open>CoreTermL \<Rightarrow> nat\<close> where
   \<open>bit_const_m t \<equiv> (case t of
-     CoreTerm_Const bs \<Rightarrow> if length bs = 1 then (if bs ! 0 then 1 else 0) else 2
+     CoreTermL_Const bs \<Rightarrow> if length bs = 1 then (if bs ! 0 then 1 else 0) else 2
    | _ \<Rightarrow> 2)\<close>
 
 definition free_once_m :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> bool\<close> where
   \<open>free_once_m kind rc i \<equiv> i < length kind \<and> kind ! i \<noteq> 0 \<and> rc ! i = 1\<close>
 
-definition free_kind_m :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> CoreTerm \<Rightarrow> nat\<close> where
+definition free_kind_m :: \<open>CoreTermL list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> CoreTermL \<Rightarrow> nat\<close> where
   \<open>free_kind_m defs dw vc rc kind t \<equiv>
      let n = length kind in
      (case t of
-        CoreTerm_Var i \<Rightarrow> if vc ! unat i = 1 then 1 else 0
-      | CoreTerm_Not a \<Rightarrow> if free_once_m kind rc (ref_index_m a n) then 2 else 0
-      | CoreTerm_Extract hi lo a \<Rightarrow> if free_once_m kind rc (ref_index_m a n) then 2 else 0
-      | CoreTerm_Bin op a b \<Rightarrow>
+        CoreTermL_Var i \<Rightarrow> if vc ! unat i = 1 then 1 else 0
+      | CoreTermL_Not a \<Rightarrow> if free_once_m kind rc (ref_index_m a n) then 2 else 0
+      | CoreTermL_Extract hi lo a \<Rightarrow> if free_once_m kind rc (ref_index_m a n) then 2 else 0
+      | CoreTermL_Bin op a b \<Rightarrow>
           (let ia = ref_index_m a n; ib = ref_index_m b n in
            case op of
              BinOp_Add \<Rightarrow> if free_once_m kind rc ia then 2 else if free_once_m kind rc ib then 3 else 0
@@ -57,7 +57,7 @@ definition free_kind_m :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarr
            | BinOp_Mul \<Rightarrow> if free_once_m kind rc ia \<and> free_once_m kind rc ib \<and> ia \<noteq> ib then 4 else 0
            | BinOp_Udiv \<Rightarrow> if free_once_m kind rc ia \<and> free_once_m kind rc ib \<and> ia \<noteq> ib then 4 else 0
            | _ \<Rightarrow> 0)
-      | CoreTerm_Ite c a b \<Rightarrow>
+      | CoreTermL_Ite c a b \<Rightarrow>
           (let ic = ref_index_m c n; ia = ref_index_m a n; ib = ref_index_m b n in
            if free_once_m kind rc ic \<and> ia < n \<and> ib < n then
              (let x = bit_const_m (defs ! ia); y = bit_const_m (defs ! ib) in
@@ -65,36 +65,36 @@ definition free_kind_m :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarr
            else 0)
       | _ \<Rightarrow> 0)\<close>
 
-definition consumed_m :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
+definition consumed_m :: \<open>CoreTermL \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat\<close> where
   \<open>consumed_m t k n \<equiv> (case t of
-     CoreTerm_Not a \<Rightarrow> ref_index_m a n
-   | CoreTerm_Extract hi lo a \<Rightarrow> ref_index_m a n
-   | CoreTerm_Bin op a b \<Rightarrow> if k = 3 then ref_index_m b n else ref_index_m a n
-   | CoreTerm_Ite c a b \<Rightarrow> ref_index_m c n
+     CoreTermL_Not a \<Rightarrow> ref_index_m a n
+   | CoreTermL_Extract hi lo a \<Rightarrow> ref_index_m a n
+   | CoreTermL_Bin op a b \<Rightarrow> if k = 3 then ref_index_m b n else ref_index_m a n
+   | CoreTermL_Ite c a b \<Rightarrow> ref_index_m c n
    | _ \<Rightarrow> n)\<close>
 
-definition second_m :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> nat\<close> where
-  \<open>second_m t n \<equiv> (case t of CoreTerm_Bin op a b \<Rightarrow> ref_index_m b n | _ \<Rightarrow> n)\<close>
+definition second_m :: \<open>CoreTermL \<Rightarrow> nat \<Rightarrow> nat\<close> where
+  \<open>second_m t n \<equiv> (case t of CoreTermL_Bin op a b \<Rightarrow> ref_index_m b n | _ \<Rightarrow> n)\<close>
 
-primrec mark_live_m :: \<open>bool list \<Rightarrow> CoreTerm \<Rightarrow> bool list\<close> where
-  \<open>mark_live_m live (CoreTerm_Const bs) = live\<close>
-| \<open>mark_live_m live (CoreTerm_Var i) = live\<close>
-| \<open>mark_live_m live (CoreTerm_Ref i) = live[unat i := True]\<close>
-| \<open>mark_live_m live (CoreTerm_Not a) = mark_live_m live a\<close>
-| \<open>mark_live_m live (CoreTerm_Bin op a b) = mark_live_m (mark_live_m live a) b\<close>
-| \<open>mark_live_m live (CoreTerm_Extract hi lo a) = mark_live_m live a\<close>
-| \<open>mark_live_m live (CoreTerm_Ite c a b) = mark_live_m (mark_live_m (mark_live_m live c) a) b\<close>
+primrec mark_live_m :: \<open>bool list \<Rightarrow> CoreTermL \<Rightarrow> bool list\<close> where
+  \<open>mark_live_m live (CoreTermL_Const bs) = live\<close>
+| \<open>mark_live_m live (CoreTermL_Var i) = live\<close>
+| \<open>mark_live_m live (CoreTermL_Ref i) = live[unat i := True]\<close>
+| \<open>mark_live_m live (CoreTermL_Not a) = mark_live_m live a\<close>
+| \<open>mark_live_m live (CoreTermL_Bin op a b) = mark_live_m (mark_live_m live a) b\<close>
+| \<open>mark_live_m live (CoreTermL_Extract hi lo a) = mark_live_m live a\<close>
+| \<open>mark_live_m live (CoreTermL_Ite c a b) = mark_live_m (mark_live_m (mark_live_m live c) a) b\<close>
 
 text \<open>The rewritten definition: the consumed operand \<open>a\<close>, or its low bits.\<close>
-definition rewrite_m :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> CoreTerm\<close> where
+definition rewrite_m :: \<open>nat list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> CoreTermL\<close> where
   \<open>rewrite_m dw a w \<equiv>
-     if dw ! a = w then CoreTerm_Ref (word_of_nat a)
-     else CoreTerm_Extract (word_of_nat (w - 1)) 0 (CoreTerm_Ref (word_of_nat a))\<close>
+     if dw ! a = w then CoreTermL_Ref (word_of_nat a)
+     else CoreTermL_Extract (word_of_nat (w - 1)) 0 (CoreTermL_Ref (word_of_nat a))\<close>
 
 text \<open>One step of the analysis loop: the width, the kind and the rewritten term of definition \<open>k\<close>,
   and the marks of its operands.\<close>
-definition elim_step :: \<open>nat list \<Rightarrow> CoreTerm list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow>
-    nat list \<times> nat list \<times> nat list \<times> CoreTerm list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat list \<times> CoreTerm list\<close> where
+definition elim_step :: \<open>nat list \<Rightarrow> CoreTermL list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow>
+    nat list \<times> nat list \<times> nat list \<times> CoreTermL list \<Rightarrow> nat \<Rightarrow> nat list \<times> nat list \<times> nat list \<times> CoreTermL list\<close> where
   \<open>elim_step ws D vc rc st k \<equiv>
      (case st of (dw, kind, mark, defs) \<Rightarrow>
        let n = length D; t = D ! k; w = cwidth ws dw t; c = free_kind_m D dw vc rc kind t in
@@ -107,45 +107,45 @@ definition elim_step :: \<open>nat list \<Rightarrow> CoreTerm list \<Rightarrow
 
 text \<open>One step of the backward loop: a live definition marks its operands live, any other one
   becomes the constant zero of its width.\<close>
-definition dce_step :: \<open>nat list \<Rightarrow> bool list \<times> CoreTerm list \<Rightarrow> nat \<Rightarrow> bool list \<times> CoreTerm list\<close> where
+definition dce_step :: \<open>nat list \<Rightarrow> bool list \<times> CoreTermL list \<Rightarrow> nat \<Rightarrow> bool list \<times> CoreTermL list\<close> where
   \<open>dce_step dw st d \<equiv>
      (case st of (live, defs) \<Rightarrow>
        if live ! d then (mark_live_m live (defs ! d), defs)
-       else (live, defs[d := CoreTerm_Const (replicate (dw ! d) False)]))\<close>
+       else (live, defs[d := CoreTermL_Const (replicate (dw ! d) False)]))\<close>
 
-definition occ_res :: \<open>CoreProblem \<Rightarrow> nat list \<times> nat list\<close> where
-  \<open>occ_res q \<equiv> foldl count_occ_m (replicate (length (CoreProblem_widths q)) 0, replicate (length (CoreProblem_defs q)) 0)
-     (CoreProblem_defs q @ CoreProblem_asserts q)\<close>
+definition occ_res :: \<open>CoreProblemL \<Rightarrow> nat list \<times> nat list\<close> where
+  \<open>occ_res q \<equiv> foldl count_occ_m (replicate (length (CoreProblemL_widths q)) 0, replicate (length (CoreProblemL_defs q)) 0)
+     (CoreProblemL_defs q @ CoreProblemL_asserts q)\<close>
 
-definition ana_res :: \<open>CoreProblem \<Rightarrow> nat list \<times> nat list \<times> nat list \<times> CoreTerm list\<close> where
+definition ana_res :: \<open>CoreProblemL \<Rightarrow> nat list \<times> nat list \<times> nat list \<times> CoreTermL list\<close> where
   \<open>ana_res q \<equiv>
-     let D = CoreProblem_defs q in
+     let D = CoreProblemL_defs q in
      foldl (elim_step (cvar_widths q) D (fst (occ_res q)) (snd (occ_res q)))
        ([], [], replicate (length D) 0, []) [0..<length D]\<close>
 
-definition dce_res :: \<open>CoreProblem \<Rightarrow> bool list \<times> CoreTerm list\<close> where
+definition dce_res :: \<open>CoreProblemL \<Rightarrow> bool list \<times> CoreTermL list\<close> where
   \<open>dce_res q \<equiv>
-     let D = CoreProblem_defs q; (dw, kind, mark, defs) = ana_res q in
-     foldl (dce_step dw) (foldl mark_live_m (replicate (length D) False) (CoreProblem_asserts q), defs)
+     let D = CoreProblemL_defs q; (dw, kind, mark, defs) = ana_res q in
+     foldl (dce_step dw) (foldl mark_live_m (replicate (length D) False) (CoreProblemL_asserts q), defs)
        (rev [0..<length D])\<close>
 
-definition elim_m :: \<open>CoreProblem \<Rightarrow> CoreProblem \<times> nat list \<times> nat list\<close> where
+definition elim_m :: \<open>CoreProblemL \<Rightarrow> CoreProblemL \<times> nat list \<times> nat list\<close> where
   \<open>elim_m q \<equiv>
-     (make_CoreProblem (CoreProblem_widths q) (snd (dce_res q)) (CoreProblem_asserts q),
+     (make_CoreProblemL (CoreProblemL_widths q) (snd (dce_res q)) (CoreProblemL_asserts q),
       fst (snd (ana_res q)), fst (snd (snd (ana_res q))))\<close>
 
 definition bits_one_m :: \<open>nat \<Rightarrow> bool list\<close> where
   \<open>bits_one_m w \<equiv> if 0 < w then (replicate w False)[0 := True] else replicate w False\<close>
 
-definition invert_m :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> bool list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> nat \<times> bool list\<close> where
+definition invert_m :: \<open>CoreTermL \<Rightarrow> nat \<Rightarrow> bool list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow> nat \<times> bool list\<close> where
   \<open>invert_m t k v m dv dv2 \<equiv>
      let n = length dv2 in
      (case t of
-        CoreTerm_Not a \<Rightarrow> (ref_index_m a n, bnot_m v)
-      | CoreTerm_Extract hi lo a \<Rightarrow>
+        CoreTermL_Not a \<Rightarrow> (ref_index_m a n, bnot_m v)
+      | CoreTermL_Extract hi lo a \<Rightarrow>
           (let ia = ref_index_m a n; w = length (dv2 ! ia) in
            (ia, bconcat_m (replicate (w - 1 - unat hi) False) (bconcat_m v (replicate (unat lo) False))))
-      | CoreTerm_Bin op a b \<Rightarrow>
+      | CoreTermL_Bin op a b \<Rightarrow>
           (let ic = (if k = 3 then ref_index_m b n else ref_index_m a n);
                ov = (if k = 3 then eval_m m dv a else eval_m m dv b) in
            case op of
@@ -153,14 +153,14 @@ definition invert_m :: \<open>CoreTerm \<Rightarrow> nat \<Rightarrow> bool list
            | BinOp_Xor \<Rightarrow> (ic, bbitw_m op v ov)
            | BinOp_Eq \<Rightarrow> (ic, if v ! 0 then ov else bnot_m ov)
            | _ \<Rightarrow> (ic, v))
-      | CoreTerm_Ite c a b \<Rightarrow> (ref_index_m c n, [beq_m v (dv ! ref_index_m a n)])
+      | CoreTermL_Ite c a b \<Rightarrow> (ref_index_m c n, [beq_m v (dv ! ref_index_m a n)])
       | _ \<Rightarrow> (n, v))\<close>
 
-definition var_index_m :: \<open>CoreTerm \<Rightarrow> nat\<close> where
-  \<open>var_index_m t \<equiv> (case t of CoreTerm_Var i \<Rightarrow> unat i | _ \<Rightarrow> 0)\<close>
+definition var_index_m :: \<open>CoreTermL \<Rightarrow> nat\<close> where
+  \<open>var_index_m t \<equiv> (case t of CoreTermL_Var i \<Rightarrow> unat i | _ \<Rightarrow> 0)\<close>
 
 text \<open>The loop of \<^verbatim>\<open>settle\<close>, with at most \<open>f\<close> iterations left.\<close>
-fun settle_m :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> nat \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
+fun settle_m :: \<open>CoreTermL list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow> nat \<Rightarrow> bool list list \<Rightarrow> bool list list \<Rightarrow>
     nat \<Rightarrow> bool list \<Rightarrow> bool list list \<times> bool list list\<close> where
   \<open>settle_m D kind dv2 0 dv m j v = (dv, m)\<close>
 | \<open>settle_m D kind dv2 (Suc f) dv m j v =
@@ -168,7 +168,7 @@ fun settle_m :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarrow> bool l
       if kind ! j = 1 then (dv', m[var_index_m (D ! j) := v])
       else (case invert_m (D ! j) (kind ! j) v m dv' dv2 of (a, va) \<Rightarrow> settle_m D kind dv2 f dv' m a va))\<close>
 
-definition recon_step :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow>
+definition recon_step :: \<open>CoreTermL list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> bool list list \<Rightarrow>
     bool list list \<times> bool list list \<Rightarrow> nat \<Rightarrow> bool list list \<times> bool list list\<close> where
   \<open>recon_step D kind mark dv2 st k \<equiv>
      (case st of (dv, m) \<Rightarrow>
@@ -177,23 +177,23 @@ definition recon_step :: \<open>CoreTerm list \<Rightarrow> nat list \<Rightarro
        else settle_m D kind dv2 (Suc k) (dv @ [[]]) m k
               (if mark ! k = 2 then bits_one_m (length (dv2 ! k)) else dv2 ! k))\<close>
 
-definition reconstruct_m :: \<open>CoreProblem \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> CoreProblem \<Rightarrow> bool list list \<Rightarrow> bool list list\<close> where
+definition reconstruct_m :: \<open>CoreProblemL \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> CoreProblemL \<Rightarrow> bool list list \<Rightarrow> bool list list\<close> where
   \<open>reconstruct_m q kind mark q2 m2 \<equiv>
-     snd (foldl (recon_step (CoreProblem_defs q) kind mark (eval_defs_m q2 m2)) ([], m2) [0..<length (CoreProblem_defs q)])\<close>
+     snd (foldl (recon_step (CoreProblemL_defs q) kind mark (eval_defs_m q2 m2)) ([], m2) [0..<length (CoreProblemL_defs q)])\<close>
 
 subsection \<open>Occurrence counts\<close>
 
-definition is_var :: \<open>nat \<Rightarrow> CoreTerm \<Rightarrow> bool\<close> where
-  \<open>is_var x u \<equiv> (case u of CoreTerm_Var i \<Rightarrow> unat i = x | _ \<Rightarrow> False)\<close>
+definition is_var :: \<open>nat \<Rightarrow> CoreTermL \<Rightarrow> bool\<close> where
+  \<open>is_var x u \<equiv> (case u of CoreTermL_Var i \<Rightarrow> unat i = x | _ \<Rightarrow> False)\<close>
 
-definition is_ref :: \<open>nat \<Rightarrow> CoreTerm \<Rightarrow> bool\<close> where
-  \<open>is_ref x u \<equiv> (case u of CoreTerm_Ref i \<Rightarrow> unat i = x | _ \<Rightarrow> False)\<close>
+definition is_ref :: \<open>nat \<Rightarrow> CoreTermL \<Rightarrow> bool\<close> where
+  \<open>is_ref x u \<equiv> (case u of CoreTermL_Ref i \<Rightarrow> unat i = x | _ \<Rightarrow> False)\<close>
 
 text \<open>The numbers of occurrences of variable \<open>x\<close> and of definition \<open>x\<close> in the terms \<open>ts\<close>.\<close>
-definition vcnt :: \<open>CoreTerm list \<Rightarrow> nat \<Rightarrow> nat\<close> where
+definition vcnt :: \<open>CoreTermL list \<Rightarrow> nat \<Rightarrow> nat\<close> where
   \<open>vcnt ts x \<equiv> length (filter (is_var x) (concat (map csubterms ts)))\<close>
 
-definition rcnt :: \<open>CoreTerm list \<Rightarrow> nat \<Rightarrow> nat\<close> where
+definition rcnt :: \<open>CoreTermL list \<Rightarrow> nat \<Rightarrow> nat\<close> where
   \<open>rcnt ts x \<equiv> length (filter (is_ref x) (concat (map csubterms ts)))\<close>
 
 lemma vcnt_simps [simp]:
@@ -222,18 +222,18 @@ lemma count_occ_fst:
   shows \<open>fst (count_occ_m vr t) ! x = min 2 (fst vr ! x + vcnt [t] x)\<close>
   using assms
 proof (induction t arbitrary: vr)
-  case (CoreTerm_Var i)
+  case (CoreTermL_Var i)
   then show ?case by (auto simp add: bump_m_def vcnt_def is_var_def nth_list_update)
 next
-  case (CoreTerm_Bin op a b)
-  have \<open>fst (count_occ_m vr a) ! x \<le> 2\<close> using CoreTerm_Bin.IH(1)[OF CoreTerm_Bin.prems] by simp
-  then show ?case using CoreTerm_Bin by (simp add: vcnt_def is_var_def)
+  case (CoreTermL_Bin op a b)
+  have \<open>fst (count_occ_m vr a) ! x \<le> 2\<close> using CoreTermL_Bin.IH(1)[OF CoreTermL_Bin.prems] by simp
+  then show ?case using CoreTermL_Bin by (simp add: vcnt_def is_var_def)
 next
-  case (CoreTerm_Ite c a b)
-  have \<open>fst (count_occ_m vr c) ! x \<le> 2\<close> using CoreTerm_Ite.IH(1)[OF CoreTerm_Ite.prems] by simp
+  case (CoreTermL_Ite c a b)
+  have \<open>fst (count_occ_m vr c) ! x \<le> 2\<close> using CoreTermL_Ite.IH(1)[OF CoreTermL_Ite.prems] by simp
   moreover have \<open>fst (count_occ_m (count_occ_m vr c) a) ! x \<le> 2\<close>
-    using CoreTerm_Ite.IH(2)[OF _ calculation] CoreTerm_Ite.prems by simp
-  ultimately show ?case using CoreTerm_Ite by (simp add: vcnt_def is_var_def)
+    using CoreTermL_Ite.IH(2)[OF _ calculation] CoreTermL_Ite.prems by simp
+  ultimately show ?case using CoreTermL_Ite by (simp add: vcnt_def is_var_def)
 qed (simp_all add: vcnt_def is_var_def)
 
 lemma count_occ_snd:
@@ -241,18 +241,18 @@ lemma count_occ_snd:
   shows \<open>snd (count_occ_m vr t) ! x = min 2 (snd vr ! x + rcnt [t] x)\<close>
   using assms
 proof (induction t arbitrary: vr)
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?case by (auto simp add: bump_m_def rcnt_def is_ref_def nth_list_update)
 next
-  case (CoreTerm_Bin op a b)
-  have \<open>snd (count_occ_m vr a) ! x \<le> 2\<close> using CoreTerm_Bin.IH(1)[OF CoreTerm_Bin.prems] by simp
-  then show ?case using CoreTerm_Bin by (simp add: rcnt_def is_ref_def)
+  case (CoreTermL_Bin op a b)
+  have \<open>snd (count_occ_m vr a) ! x \<le> 2\<close> using CoreTermL_Bin.IH(1)[OF CoreTermL_Bin.prems] by simp
+  then show ?case using CoreTermL_Bin by (simp add: rcnt_def is_ref_def)
 next
-  case (CoreTerm_Ite c a b)
-  have \<open>snd (count_occ_m vr c) ! x \<le> 2\<close> using CoreTerm_Ite.IH(1)[OF CoreTerm_Ite.prems] by simp
+  case (CoreTermL_Ite c a b)
+  have \<open>snd (count_occ_m vr c) ! x \<le> 2\<close> using CoreTermL_Ite.IH(1)[OF CoreTermL_Ite.prems] by simp
   moreover have \<open>snd (count_occ_m (count_occ_m vr c) a) ! x \<le> 2\<close>
-    using CoreTerm_Ite.IH(2)[OF _ calculation] CoreTerm_Ite.prems by simp
-  ultimately show ?case using CoreTerm_Ite by (simp add: rcnt_def is_ref_def)
+    using CoreTermL_Ite.IH(2)[OF _ calculation] CoreTermL_Ite.prems by simp
+  ultimately show ?case using CoreTermL_Ite by (simp add: rcnt_def is_ref_def)
 qed (simp_all add: rcnt_def is_ref_def)
 
 lemma count_occ_fold:
@@ -269,11 +269,11 @@ next
 qed
 
 lemma occ_res:
-  shows \<open>length (fst (occ_res q)) = length (CoreProblem_widths q)\<close> \<open>length (snd (occ_res q)) = length (CoreProblem_defs q)\<close>
-    \<open>x < length (CoreProblem_widths q) \<Longrightarrow> fst (occ_res q) ! x = min 2 (vcnt (CoreProblem_defs q @ CoreProblem_asserts q) x)\<close>
-    \<open>j < length (CoreProblem_defs q) \<Longrightarrow> snd (occ_res q) ! j = min 2 (rcnt (CoreProblem_defs q @ CoreProblem_asserts q) j)\<close>
-  using count_occ_fold[of \<open>(replicate (length (CoreProblem_widths q)) 0, replicate (length (CoreProblem_defs q)) 0)\<close>
-      \<open>CoreProblem_defs q @ CoreProblem_asserts q\<close>]
+  shows \<open>length (fst (occ_res q)) = length (CoreProblemL_widths q)\<close> \<open>length (snd (occ_res q)) = length (CoreProblemL_defs q)\<close>
+    \<open>x < length (CoreProblemL_widths q) \<Longrightarrow> fst (occ_res q) ! x = min 2 (vcnt (CoreProblemL_defs q @ CoreProblemL_asserts q) x)\<close>
+    \<open>j < length (CoreProblemL_defs q) \<Longrightarrow> snd (occ_res q) ! j = min 2 (rcnt (CoreProblemL_defs q @ CoreProblemL_asserts q) j)\<close>
+  using count_occ_fold[of \<open>(replicate (length (CoreProblemL_widths q)) 0, replicate (length (CoreProblemL_defs q)) 0)\<close>
+      \<open>CoreProblemL_defs q @ CoreProblemL_asserts q\<close>]
   by (simp_all add: occ_res_def del: vcnt_simps rcnt_simps)
 
 subsection \<open>The analysis loop\<close>
@@ -331,7 +331,7 @@ qed
 
 lemma fo_ref:
   assumes \<open>free_once_m kind rc (ref_index_m a (length kind))\<close>
-  shows \<open>\<exists>i. a = CoreTerm_Ref i \<and> free_once_m kind rc (unat i)\<close>
+  shows \<open>\<exists>i. a = CoreTermL_Ref i \<and> free_once_m kind rc (unat i)\<close>
   using assms by (cases a) (simp_all add: ref_index_m_def free_once_m_def)
 
 lemma fo_ref_eq: \<open>free_once_m kind rc (ref_index_m a (length kind)) \<Longrightarrow> length kind \<le> N \<Longrightarrow>
@@ -342,14 +342,14 @@ lemma free_kind_le: \<open>free_kind_m D dw vc rc kind t \<le> 4\<close>
   unfolding free_kind_m_def Let_def by (cases t) (auto split: BinOp_split)
 
 lemma free_kind_simps:
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Const bs) = 0\<close>
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Var i) = (if vc ! unat i = 1 then 1 else 0)\<close>
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Ref i) = 0\<close>
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Not a) =
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Const bs) = 0\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Var i) = (if vc ! unat i = 1 then 1 else 0)\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Ref i) = 0\<close>
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Not a) =
      (if free_once_m kind rc (ref_index_m a (length kind)) then 2 else 0)\<close>
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Extract hi lo a) =
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Extract hi lo a) =
      (if free_once_m kind rc (ref_index_m a (length kind)) then 2 else 0)\<close>
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Ite x a b) =
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Ite x a b) =
      (if free_once_m kind rc (ref_index_m x (length kind)) \<and> ref_index_m a (length kind) < length kind \<and>
          ref_index_m b (length kind) < length kind \<and>
          bit_const_m (D ! ref_index_m a (length kind)) < 2 \<and> bit_const_m (D ! ref_index_m b (length kind)) < 2 \<and>
@@ -358,7 +358,7 @@ lemma free_kind_simps:
   by (simp_all add: free_kind_m_def Let_def)
 
 lemma free_kind_Bin:
-  \<open>free_kind_m D dw vc rc kind (CoreTerm_Bin op a b) =
+  \<open>free_kind_m D dw vc rc kind (CoreTermL_Bin op a b) =
      (let ia = ref_index_m a (length kind); ib = ref_index_m b (length kind); fo = free_once_m kind rc in
       if op = BinOp_Add \<or> op = BinOp_Xor then (if fo ia then 2 else if fo ib then 3 else 0)
       else if op = BinOp_Eq then (if fo ia \<and> 0 < dw ! ia then 2 else if fo ib \<and> 0 < dw ! ib then 3 else 0)
@@ -368,88 +368,88 @@ lemma free_kind_Bin:
 
 lemma free_kind_1:
   assumes h: \<open>free_kind_m D dw vc rc kind t = 1\<close>
-  shows \<open>\<exists>i. t = CoreTerm_Var i \<and> vc ! unat i = 1\<close>
+  shows \<open>\<exists>i. t = CoreTermL_Var i \<and> vc ! unat i = 1\<close>
 proof (cases t)
-  case (CoreTerm_Bin op a b)
-  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2, 3, 4}\<close> unfolding CoreTerm_Bin free_kind_Bin Let_def by simp
+  case (CoreTermL_Bin op a b)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2, 3, 4}\<close> unfolding CoreTermL_Bin free_kind_Bin Let_def by simp
   then show ?thesis using h by simp
 next
-  case (CoreTerm_Ite x a b)
-  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTerm_Ite free_kind_simps by simp
+  case (CoreTermL_Ite x a b)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTermL_Ite free_kind_simps by simp
   then show ?thesis using h by simp
 next
-  case (CoreTerm_Not a)
-  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTerm_Not free_kind_simps by simp
+  case (CoreTermL_Not a)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTermL_Not free_kind_simps by simp
   then show ?thesis using h by simp
 next
-  case (CoreTerm_Extract hi lo a)
-  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTerm_Extract free_kind_simps by simp
+  case (CoreTermL_Extract hi lo a)
+  have \<open>free_kind_m D dw vc rc kind t \<in> {0, 2}\<close> unfolding CoreTermL_Extract free_kind_simps by simp
   then show ?thesis using h by simp
 next
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   then show ?thesis using h by (simp only: free_kind_simps)
 next
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?thesis using h by (simp only: free_kind_simps)
 next
-  case (CoreTerm_Var i)
-  have \<open>(if vc ! unat i = 1 then 1 else 0) = (1::nat)\<close> using h free_kind_simps(2)[of D dw vc rc kind i] CoreTerm_Var by simp
+  case (CoreTermL_Var i)
+  have \<open>(if vc ! unat i = 1 then 1 else 0) = (1::nat)\<close> using h free_kind_simps(2)[of D dw vc rc kind i] CoreTermL_Var by simp
   then have \<open>vc ! unat i = 1\<close> by (cases \<open>vc ! unat i = 1\<close>) simp_all
-  then show ?thesis using CoreTerm_Var by blast
+  then show ?thesis using CoreTermL_Var by blast
 qed
 
 text \<open>The free definitions of kind 2 to 4, by their shapes.\<close>
 lemma free_kind_shape:
   assumes \<open>c = free_kind_m D dw vc rc kind t\<close> \<open>2 \<le> c\<close>
-  shows \<open>(\<exists>a. t = CoreTerm_Not (CoreTerm_Ref a) \<and> c = 2 \<and> free_once_m kind rc (unat a))
-    \<or> (\<exists>hi lo a. t = CoreTerm_Extract hi lo (CoreTerm_Ref a) \<and> c = 2 \<and> free_once_m kind rc (unat a))
-    \<or> (\<exists>op a b. t = CoreTerm_Bin op a b \<and> (op = BinOp_Add \<or> op = BinOp_Xor) \<and>
-         (c = 2 \<and> (\<exists>i. a = CoreTerm_Ref i \<and> free_once_m kind rc (unat i)) \<or>
-          c = 3 \<and> (\<exists>i. b = CoreTerm_Ref i \<and> free_once_m kind rc (unat i))))
-    \<or> (\<exists>a b. t = CoreTerm_Bin BinOp_Eq a b \<and>
-         (c = 2 \<and> (\<exists>i. a = CoreTerm_Ref i \<and> free_once_m kind rc (unat i) \<and> 0 < dw ! unat i) \<or>
-          c = 3 \<and> (\<exists>i. b = CoreTerm_Ref i \<and> free_once_m kind rc (unat i) \<and> 0 < dw ! unat i)))
-    \<or> (\<exists>op a b. t = CoreTerm_Bin op (CoreTerm_Ref a) (CoreTerm_Ref b) \<and> (op = BinOp_Mul \<or> op = BinOp_Udiv) \<and> c = 4 \<and>
+  shows \<open>(\<exists>a. t = CoreTermL_Not (CoreTermL_Ref a) \<and> c = 2 \<and> free_once_m kind rc (unat a))
+    \<or> (\<exists>hi lo a. t = CoreTermL_Extract hi lo (CoreTermL_Ref a) \<and> c = 2 \<and> free_once_m kind rc (unat a))
+    \<or> (\<exists>op a b. t = CoreTermL_Bin op a b \<and> (op = BinOp_Add \<or> op = BinOp_Xor) \<and>
+         (c = 2 \<and> (\<exists>i. a = CoreTermL_Ref i \<and> free_once_m kind rc (unat i)) \<or>
+          c = 3 \<and> (\<exists>i. b = CoreTermL_Ref i \<and> free_once_m kind rc (unat i))))
+    \<or> (\<exists>a b. t = CoreTermL_Bin BinOp_Eq a b \<and>
+         (c = 2 \<and> (\<exists>i. a = CoreTermL_Ref i \<and> free_once_m kind rc (unat i) \<and> 0 < dw ! unat i) \<or>
+          c = 3 \<and> (\<exists>i. b = CoreTermL_Ref i \<and> free_once_m kind rc (unat i) \<and> 0 < dw ! unat i)))
+    \<or> (\<exists>op a b. t = CoreTermL_Bin op (CoreTermL_Ref a) (CoreTermL_Ref b) \<and> (op = BinOp_Mul \<or> op = BinOp_Udiv) \<and> c = 4 \<and>
          free_once_m kind rc (unat a) \<and> free_once_m kind rc (unat b) \<and> unat a \<noteq> unat b)
-    \<or> (\<exists>x a b. t = CoreTerm_Ite (CoreTerm_Ref x) (CoreTerm_Ref a) (CoreTerm_Ref b) \<and> c = 2 \<and>
+    \<or> (\<exists>x a b. t = CoreTermL_Ite (CoreTermL_Ref x) (CoreTermL_Ref a) (CoreTermL_Ref b) \<and> c = 2 \<and>
          free_once_m kind rc (unat x) \<and> unat a < length kind \<and> unat b < length kind \<and>
          bit_const_m (D ! unat a) < 2 \<and> bit_const_m (D ! unat b) < 2 \<and> bit_const_m (D ! unat a) \<noteq> bit_const_m (D ! unat b))\<close>
 proof -
   let ?fo = \<open>free_once_m kind rc\<close> and ?n = \<open>length kind\<close>
-  have ri: \<open>ref_index_m a ?n < ?n \<Longrightarrow> \<exists>i. a = CoreTerm_Ref i \<and> unat i = ref_index_m a ?n\<close> for a
+  have ri: \<open>ref_index_m a ?n < ?n \<Longrightarrow> \<exists>i. a = CoreTermL_Ref i \<and> unat i = ref_index_m a ?n\<close> for a
     by (cases a) (simp_all add: ref_index_m_def)
   show ?thesis
   proof (cases t)
-    case (CoreTerm_Not a)
+    case (CoreTermL_Not a)
     then have fo: \<open>?fo (ref_index_m a ?n)\<close> and c: \<open>c = 2\<close>
-      using assms unfolding CoreTerm_Not free_kind_simps by (simp_all split: if_splits)
-    obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF fo] by blast
-    show ?thesis using CoreTerm_Not i c by simp
+      using assms unfolding CoreTermL_Not free_kind_simps by (simp_all split: if_splits)
+    obtain i where i: \<open>a = CoreTermL_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF fo] by blast
+    show ?thesis using CoreTermL_Not i c by simp
   next
-    case (CoreTerm_Extract hi lo a)
+    case (CoreTermL_Extract hi lo a)
     then have fo: \<open>?fo (ref_index_m a ?n)\<close> and c: \<open>c = 2\<close>
-      using assms unfolding CoreTerm_Extract free_kind_simps by (simp_all split: if_splits)
-    obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF fo] by blast
-    show ?thesis using CoreTerm_Extract i c by simp
+      using assms unfolding CoreTermL_Extract free_kind_simps by (simp_all split: if_splits)
+    obtain i where i: \<open>a = CoreTermL_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF fo] by blast
+    show ?thesis using CoreTermL_Extract i c by simp
   next
-    case (CoreTerm_Ite x a b)
+    case (CoreTermL_Ite x a b)
     then have fo: \<open>?fo (ref_index_m x ?n)\<close> and c: \<open>c = 2\<close>
       and ia: \<open>ref_index_m a ?n < ?n\<close> and ib: \<open>ref_index_m b ?n < ?n\<close>
       and bc: \<open>bit_const_m (D ! ref_index_m a ?n) < 2\<close> \<open>bit_const_m (D ! ref_index_m b ?n) < 2\<close>
         \<open>bit_const_m (D ! ref_index_m a ?n) \<noteq> bit_const_m (D ! ref_index_m b ?n)\<close>
-      using assms unfolding CoreTerm_Ite free_kind_simps by (simp_all split: if_splits)
-    obtain ix where x: \<open>x = CoreTerm_Ref ix\<close> \<open>?fo (unat ix)\<close> using fo_ref[OF fo] by blast
-    obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>unat i = ref_index_m a ?n\<close> using ri[OF ia] by blast
-    obtain j where j: \<open>b = CoreTerm_Ref j\<close> \<open>unat j = ref_index_m b ?n\<close> using ri[OF ib] by blast
-    show ?thesis using CoreTerm_Ite x i j c ia ib bc by auto
+      using assms unfolding CoreTermL_Ite free_kind_simps by (simp_all split: if_splits)
+    obtain ix where x: \<open>x = CoreTermL_Ref ix\<close> \<open>?fo (unat ix)\<close> using fo_ref[OF fo] by blast
+    obtain i where i: \<open>a = CoreTermL_Ref i\<close> \<open>unat i = ref_index_m a ?n\<close> using ri[OF ia] by blast
+    obtain j where j: \<open>b = CoreTermL_Ref j\<close> \<open>unat j = ref_index_m b ?n\<close> using ri[OF ib] by blast
+    show ?thesis using CoreTermL_Ite x i j c ia ib bc by auto
   next
-    case (CoreTerm_Bin op a b)
+    case (CoreTermL_Bin op a b)
     let ?ia = \<open>ref_index_m a ?n\<close> and ?ib = \<open>ref_index_m b ?n\<close>
     have cv: \<open>c = (if op = BinOp_Add \<or> op = BinOp_Xor then (if ?fo ?ia then 2 else if ?fo ?ib then 3 else 0)
       else if op = BinOp_Eq then (if ?fo ?ia \<and> 0 < dw ! ?ia then 2 else if ?fo ?ib \<and> 0 < dw ! ?ib then 3 else 0)
       else if op = BinOp_Mul \<or> op = BinOp_Udiv then (if ?fo ?ia \<and> ?fo ?ib \<and> ?ia \<noteq> ?ib then 4 else 0)
       else 0)\<close>
-      using assms(1) unfolding CoreTerm_Bin free_kind_Bin Let_def .
+      using assms(1) unfolding CoreTermL_Bin free_kind_Bin Let_def .
     consider (ax) \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> | (eq) \<open>op = BinOp_Eq\<close> | (md) \<open>op = BinOp_Mul \<or> op = BinOp_Udiv\<close>
       | (other) \<open>\<not> (op = BinOp_Add \<or> op = BinOp_Xor)\<close> \<open>op \<noteq> BinOp_Eq\<close> \<open>\<not> (op = BinOp_Mul \<or> op = BinOp_Udiv)\<close>
       by blast
@@ -459,42 +459,42 @@ proof -
       show ?thesis
       proof (cases \<open>?fo ?ia\<close>)
         case True
-        then show ?thesis using cv ax fo_ref[OF True] CoreTerm_Bin by auto
+        then show ?thesis using cv ax fo_ref[OF True] CoreTermL_Bin by auto
       next
         case False
         then have \<open>?fo ?ib\<close> using cv ax assms(2) by (auto split: if_splits)
-        then show ?thesis using cv ax False fo_ref[of kind rc b] CoreTerm_Bin by auto
+        then show ?thesis using cv ax False fo_ref[of kind rc b] CoreTermL_Bin by auto
       qed
     next
       case eq
       show ?thesis
       proof (cases \<open>?fo ?ia \<and> 0 < dw ! ?ia\<close>)
         case True
-        then show ?thesis using cv eq fo_ref[of kind rc a] CoreTerm_Bin by (auto simp: ref_index_m_def)
+        then show ?thesis using cv eq fo_ref[of kind rc a] CoreTermL_Bin by (auto simp: ref_index_m_def)
       next
         case False
         then have \<open>?fo ?ib \<and> 0 < dw ! ?ib\<close> using cv eq assms(2) by (auto split: if_splits)
-        then show ?thesis using cv eq False fo_ref[of kind rc b] CoreTerm_Bin by (auto simp: ref_index_m_def)
+        then show ?thesis using cv eq False fo_ref[of kind rc b] CoreTermL_Bin by (auto simp: ref_index_m_def)
       qed
     next
       case md
       then have f: \<open>?fo ?ia\<close> \<open>?fo ?ib\<close> \<open>?ia \<noteq> ?ib\<close> and c: \<open>c = 4\<close> using cv assms(2) by (auto split: if_splits)
-      obtain i where i: \<open>a = CoreTerm_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF f(1)] by blast
-      obtain j where j: \<open>b = CoreTerm_Ref j\<close> \<open>?fo (unat j)\<close> using fo_ref[OF f(2)] by blast
-      show ?thesis using CoreTerm_Bin md i j c f(3) by (auto simp: ref_index_m_def)
+      obtain i where i: \<open>a = CoreTermL_Ref i\<close> \<open>?fo (unat i)\<close> using fo_ref[OF f(1)] by blast
+      obtain j where j: \<open>b = CoreTermL_Ref j\<close> \<open>?fo (unat j)\<close> using fo_ref[OF f(2)] by blast
+      show ?thesis using CoreTermL_Bin md i j c f(3) by (auto simp: ref_index_m_def)
     next
       case other
       then show ?thesis using cv assms(2) by simp
     qed
   next
-    case (CoreTerm_Const bs)
-    then show ?thesis using assms unfolding CoreTerm_Const free_kind_simps by simp
+    case (CoreTermL_Const bs)
+    then show ?thesis using assms unfolding CoreTermL_Const free_kind_simps by simp
   next
-    case (CoreTerm_Ref i)
-    then show ?thesis using assms unfolding CoreTerm_Ref free_kind_simps by simp
+    case (CoreTermL_Ref i)
+    then show ?thesis using assms unfolding CoreTermL_Ref free_kind_simps by simp
   next
-    case (CoreTerm_Var i)
-    then show ?thesis using assms unfolding CoreTerm_Var free_kind_simps by (simp split: if_splits)
+    case (CoreTermL_Var i)
+    then show ?thesis using assms unfolding CoreTermL_Var free_kind_simps by (simp split: if_splits)
   qed
 qed
 
@@ -525,24 +525,24 @@ proof (rule ccontr)
   ultimately show False using ne assms(1) by simp
 qed
 
-lemma rcnt_Bin: \<open>rcnt [CoreTerm_Bin op a b] x = rcnt [a] x + rcnt [b] x\<close>
+lemma rcnt_Bin: \<open>rcnt [CoreTermL_Bin op a b] x = rcnt [a] x + rcnt [b] x\<close>
   by (simp add: rcnt_def is_ref_def)
 
-lemma rcnt_Ref: \<open>rcnt [CoreTerm_Ref i] x = (if unat i = x then 1 else 0)\<close>
+lemma rcnt_Ref: \<open>rcnt [CoreTermL_Ref i] x = (if unat i = x then 1 else 0)\<close>
   by (simp add: rcnt_def is_ref_def)
 
-lemma rcnt_Ite: \<open>rcnt [CoreTerm_Ite c a b] x = rcnt [c] x + rcnt [a] x + rcnt [b] x\<close>
+lemma rcnt_Ite: \<open>rcnt [CoreTermL_Ite c a b] x = rcnt [c] x + rcnt [a] x + rcnt [b] x\<close>
   by (simp add: rcnt_def is_ref_def)
 
 subsection \<open>The analysis of a problem\<close>
 
 locale elim_prob =
-  fixes q :: CoreProblem
-  assumes wt: \<open>cproblem_wt q\<close> and nlt: \<open>length (CoreProblem_defs q) < 2 ^ 64\<close>
+  fixes q :: CoreProblemL
+  assumes wt: \<open>cproblem_wt q\<close> and nlt: \<open>length (CoreProblemL_defs q) < 2 ^ 64\<close>
 begin
 
-definition \<open>eD = CoreProblem_defs q\<close>
-definition \<open>eA = CoreProblem_asserts q\<close>
+definition \<open>eD = CoreProblemL_defs q\<close>
+definition \<open>eA = CoreProblemL_asserts q\<close>
 definition \<open>ews = cvar_widths q\<close>
 definition \<open>eds = cdef_widths ews [] eD\<close>
 definition \<open>en = length eD\<close>
@@ -645,14 +645,14 @@ begin
 lemma kd_le: \<open>k < en \<Longrightarrow> kd ! k \<le> 4\<close>
   using ana(5) free_kind_le by metis
 
-lemma lws: \<open>length (CoreProblem_widths q) = length ews\<close>
+lemma lws: \<open>length (CoreProblemL_widths q) = length ews\<close>
   by (simp add: ews_def cvar_widths_def)
 
 lemma kd_1:
   assumes \<open>k < en\<close> \<open>kd ! k = 1\<close>
-  shows \<open>\<exists>i. eD ! k = CoreTerm_Var i \<and> unat i < length ews \<and> vcnt (eD @ eA) (unat i) = 1\<close>
+  shows \<open>\<exists>i. eD ! k = CoreTermL_Var i \<and> unat i < length ews \<and> vcnt (eD @ eA) (unat i) = 1\<close>
 proof -
-  obtain i where i: \<open>eD ! k = CoreTerm_Var i\<close> \<open>evc ! unat i = 1\<close>
+  obtain i where i: \<open>eD ! k = CoreTermL_Var i\<close> \<open>evc ! unat i = 1\<close>
     using free_kind_1[of eD \<open>take k eds\<close> evc erc \<open>take k kd\<close> \<open>eD ! k\<close>] ana(5)[OF assms(1)] assms(2) by metis
   have l: \<open>unat i < length ews\<close> using wt_D[OF assms(1)] i(1) by simp
   have \<open>min 2 (vcnt (eD @ eA) (unat i)) = 1\<close>
@@ -905,14 +905,14 @@ proof -
   have E: \<open>eds ! k = cwidth ews (take k eds) (eD ! k)\<close> using eds_nth[OF k] .
   have lk: \<open>length (take k eds) = k\<close> using k len_eds by simp
   have fl: \<open>free_once_m (take k kd) erc x \<Longrightarrow> x < k\<close> for x using fo_take k by blast
-  have ec: \<open>i < en \<Longrightarrow> eD ! i = CoreTerm_Const bs \<Longrightarrow> eds ! i = length bs\<close> for i bs
+  have ec: \<open>i < en \<Longrightarrow> eD ! i = CoreTermL_Const bs \<Longrightarrow> eds ! i = length bs\<close> for i bs
     using eds_nth[of i] by simp
   have u64: \<open>unat (w :: 64 word) - y < 18446744073709551616\<close> for w y
     using unat_lt2p[of w] by simp
   show ?thesis
     using sh
   proof (elim disjE exE conjE)
-  qed (use W E lk fl k ec in \<open>auto simp: cons_def consumed_m_def ref_index_m_def bit_const_m_def u64 split: CoreTerm.splits if_splits\<close>)
+  qed (use W E lk fl k ec in \<open>auto simp: cons_def consumed_m_def ref_index_m_def bit_const_m_def u64 split: CoreTermL.splits if_splits\<close>)
 qed
 
 end
@@ -923,7 +923,7 @@ lemma length_mark_live [simp]: \<open>length (mark_live_m L t) = length L\<close
 lemma mark_live_nth:
   \<open>x < length L \<Longrightarrow> mark_live_m L t ! x \<longleftrightarrow> L ! x \<or> (\<exists>u \<in> set (csubterms t). is_ref x u)\<close>
 proof (induction t arbitrary: L)
-  case (CoreTerm_Ref i)
+  case (CoreTermL_Ref i)
   then show ?case by (cases \<open>unat i < length L\<close>) (auto simp: nth_list_update is_ref_def)
 qed (auto simp: is_ref_def)
 
@@ -995,9 +995,9 @@ lemma d1_refs: \<open>j < en \<Longrightarrow> u \<in> set (csubterms (d1 ! j)) 
 definition \<open>L0 = foldl mark_live_m (replicate en False) eA\<close>
 definition \<open>DS d = foldl (dce_step eds) (L0, d1) (rev [d..<en])\<close>
 
-definition dinv :: \<open>nat \<Rightarrow> bool list \<Rightarrow> CoreTerm list \<Rightarrow> bool\<close> where
+definition dinv :: \<open>nat \<Rightarrow> bool list \<Rightarrow> CoreTermL list \<Rightarrow> bool\<close> where
   \<open>dinv d L Ds \<equiv> length L = en \<and> length Ds = en \<and> (\<forall>j<d. Ds ! j = d1 ! j) \<and>
-     (\<forall>j. d \<le> j \<longrightarrow> j < en \<longrightarrow> Ds ! j = (if L ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))) \<and>
+     (\<forall>j. d \<le> j \<longrightarrow> j < en \<longrightarrow> Ds ! j = (if L ! j then d1 ! j else CoreTermL_Const (replicate (eds ! j) False))) \<and>
      (\<forall>j. d \<le> j \<longrightarrow> j < en \<longrightarrow> L ! j \<longrightarrow> (\<forall>u \<in> set (csubterms (d1 ! j)). \<forall>x. is_ref x u \<longrightarrow> L ! x)) \<and>
      (\<forall>t \<in> set eA. \<forall>u \<in> set (csubterms t). \<forall>x. is_ref x u \<longrightarrow> L ! x)\<close>
 
@@ -1029,7 +1029,7 @@ proof (cases \<open>L ! d\<close>)
     fix j assume \<open>j < d\<close> then show \<open>Ds ! j = d1 ! j\<close> using assms(2) by (simp add: dinv_def)
   next
     fix j assume j: \<open>d \<le> j\<close> \<open>j < en\<close>
-    show \<open>Ds ! j = (if ?L ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))\<close>
+    show \<open>Ds ! j = (if ?L ! j then d1 ! j else CoreTermL_Const (replicate (eds ! j) False))\<close>
     proof (cases \<open>j = d\<close>)
       case True
       then show ?thesis using I hi[of d] \<open>L ! d\<close> assms(1) by simp
@@ -1058,7 +1058,7 @@ proof (cases \<open>L ! d\<close>)
   then show ?thesis using st by simp
 next
   case False
-  let ?Ds = \<open>Ds[d := CoreTerm_Const (replicate (eds ! d) False)]\<close>
+  let ?Ds = \<open>Ds[d := CoreTermL_Const (replicate (eds ! d) False)]\<close>
   have st: \<open>dce_step eds (L, Ds) d = (L, ?Ds)\<close> using False by (simp add: dce_step_def)
   have I: \<open>length L = en\<close> \<open>length Ds = en\<close> using assms by (simp_all add: dinv_def)
   have \<open>dinv d L ?Ds\<close>
@@ -1069,7 +1069,7 @@ next
     fix j assume \<open>j < d\<close> then show \<open>?Ds ! j = d1 ! j\<close> using assms(2) by (simp add: dinv_def)
   next
     fix j assume j: \<open>d \<le> j\<close> \<open>j < en\<close>
-    show \<open>?Ds ! j = (if L ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))\<close>
+    show \<open>?Ds ! j = (if L ! j then d1 ! j else CoreTermL_Const (replicate (eds ! j) False))\<close>
     proof (cases \<open>j = d\<close>)
       case True
       then show ?thesis using I False j by simp
@@ -1115,7 +1115,7 @@ lemma dinv_final: \<open>dinv 0 live D2\<close>
 
 lemma D2:
   shows \<open>length D2 = en\<close> \<open>length live = en\<close>
-    \<open>j < en \<Longrightarrow> D2 ! j = (if live ! j then d1 ! j else CoreTerm_Const (replicate (eds ! j) False))\<close>
+    \<open>j < en \<Longrightarrow> D2 ! j = (if live ! j then d1 ! j else CoreTermL_Const (replicate (eds ! j) False))\<close>
     \<open>j < en \<Longrightarrow> live ! j \<Longrightarrow> u \<in> set (csubterms (d1 ! j)) \<Longrightarrow> is_ref x u \<Longrightarrow> live ! x\<close>
     \<open>t \<in> set eA \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> is_ref x u \<Longrightarrow> live ! x\<close>
   using dinv_final unfolding dinv_def by blast+
@@ -1153,8 +1153,8 @@ lemma tbound_size: \<open>Suc (size t) \<le> tbound ws ds t\<close>
 lemma size_pos: \<open>u \<in> set (csubterms t) \<Longrightarrow> u \<noteq> t \<Longrightarrow> 1 \<le> size t\<close>
   by (cases t) simp_all
 
-lemma ccount_atom: \<open>ccount ws ds (CoreTerm_Ref i) = 0\<close> \<open>ccount ws ds (CoreTerm_Const bs) = 0\<close>
-  \<open>ccount ws ds (CoreTerm_Extract hi lo (CoreTerm_Ref i)) = 0\<close>
+lemma ccount_atom: \<open>ccount ws ds (CoreTermL_Ref i) = 0\<close> \<open>ccount ws ds (CoreTermL_Const bs) = 0\<close>
+  \<open>ccount ws ds (CoreTermL_Extract hi lo (CoreTermL_Ref i)) = 0\<close>
   by (simp_all add: ccount_def ncost_def)
 
 lemma sum_list_map_nth_le:
@@ -1172,7 +1172,7 @@ begin
 
 definition \<open>q2 = fst (elim_m q)\<close>
 
-lemma q2_parts: \<open>CoreProblem_widths q2 = CoreProblem_widths q\<close> \<open>CoreProblem_defs q2 = D2\<close> \<open>CoreProblem_asserts q2 = eA\<close>
+lemma q2_parts: \<open>CoreProblemL_widths q2 = CoreProblemL_widths q\<close> \<open>CoreProblemL_defs q2 = D2\<close> \<open>CoreProblemL_asserts q2 = eA\<close>
   by (simp_all add: q2_def elim_m_def D2_def eA_def)
 
 lemma q2_ws: \<open>cvar_widths q2 = ews\<close>
@@ -1201,12 +1201,12 @@ qed
 text \<open>The consumed operand occurs as a proper subterm.\<close>
 lemma cons_sub:
   assumes \<open>j < en\<close> \<open>2 \<le> kd ! j\<close>
-  shows \<open>CoreTerm_Ref (word_of_nat (cons j)) \<in> set (csubterms (eD ! j)) \<and> CoreTerm_Ref (word_of_nat (cons j)) \<noteq> eD ! j\<close>
+  shows \<open>CoreTermL_Ref (word_of_nat (cons j)) \<in> set (csubterms (eD ! j)) \<and> CoreTermL_Ref (word_of_nat (cons j)) \<noteq> eD ! j\<close>
 proof -
   obtain u where u: \<open>u \<in> set (csubterms (eD ! j))\<close> \<open>is_ref (cons j) u\<close> using kd_cons[OF assms] by blast
-  obtain i where i: \<open>u = CoreTerm_Ref i\<close> \<open>unat i = cons j\<close> using u(2) by (cases u) (auto simp: is_ref_def)
+  obtain i where i: \<open>u = CoreTermL_Ref i\<close> \<open>unat i = cons j\<close> using u(2) by (cases u) (auto simp: is_ref_def)
   have \<open>word_of_nat (cons j) = i\<close> using i(2) by (metis word_unat.Rep_inverse)
-  moreover have \<open>eD ! j \<noteq> CoreTerm_Ref i\<close>
+  moreover have \<open>eD ! j \<noteq> CoreTermL_Ref i\<close>
     using assms ana(5)[OF assms(1)] free_kind_simps(3)[of eD \<open>take j eds\<close> evc erc \<open>take j kd\<close> i] by auto
   ultimately show ?thesis using u i by auto
 qed
@@ -1222,7 +1222,7 @@ proof -
   then show ?thesis
   proof cases
     case dead
-    then have e: \<open>D2 ! j = CoreTerm_Const (replicate (eds ! j) False)\<close> using D2(3)[OF j] by simp
+    then have e: \<open>D2 ! j = CoreTermL_Const (replicate (eds ! j) False)\<close> using D2(3)[OF j] by simp
     show ?thesis
       using weight_mem[OF self, of ews eds] tbound_mem[OF self, of ews eds] tbound_size[of \<open>eD ! j\<close> ews eds] w
       unfolding e by (simp add: cterm_weight_def ccount_atom tbound_def)
@@ -1232,7 +1232,7 @@ proof -
   next
     case rw
     let ?c = \<open>cons j\<close>
-    let ?r = \<open>CoreTerm_Ref (word_of_nat ?c) :: CoreTerm\<close>
+    let ?r = \<open>CoreTermL_Ref (word_of_nat ?c) :: CoreTermL\<close>
     note cs = cons_sub[OF j rw(2)]
     have c: \<open>?c < j\<close> using cons_lt[OF j rw(2)] .
     have cu: \<open>unat (word_of_nat ?c :: 64 word) = ?c\<close> using unat_nat c j by simp
@@ -1255,7 +1255,7 @@ proof -
     next
       case False
       obtain hi :: \<open>64 word\<close> where hi: \<open>hi = word_of_nat (eds ! j - 1)\<close> by blast
-      then have e: \<open>D2 ! j = CoreTerm_Extract hi 0 ?r\<close> using d tk False by (simp add: rewrite_m_def)
+      then have e: \<open>D2 ! j = CoreTermL_Extract hi 0 ?r\<close> using d tk False by (simp add: rewrite_m_def)
       have hu: \<open>unat hi = eds ! j - 1\<close>
         unfolding hi by (rule unat_of_nat_eq) (use W False in simp)
       have w1: \<open>1 \<le> eds ! j\<close> using W False by simp
@@ -1274,39 +1274,39 @@ proof -
 qed
 
 theorem elim_fuel_lt:
-  assumes \<open>2 + sum_list (cvar_widths q) + length (CoreProblem_asserts q) +
-     sum_list (map (ccount (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblem_defs q)))
-                   (CoreProblem_defs q @ CoreProblem_asserts q)) < 2 ^ 63\<close>
-    \<open>length (cvar_widths q) < 2 ^ 63\<close> \<open>length (CoreProblem_defs q) < 2 ^ 63\<close>
-    \<open>length (CoreProblem_asserts q) < 2 ^ 63\<close>
-    \<open>\<forall>t \<in> set (CoreProblem_defs q @ CoreProblem_asserts q).
-       tbound (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblem_defs q)) t < 2 ^ 63\<close>
-  shows \<open>fuel_bound q2 < 2 ^ 64\<close>
+  assumes \<open>2 + sum_list (cvar_widths q) + length (CoreProblemL_asserts q) +
+     sum_list (map (ccount (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblemL_defs q)))
+                   (CoreProblemL_defs q @ CoreProblemL_asserts q)) < 2 ^ 56\<close>
+    \<open>length (cvar_widths q) < 2 ^ 56\<close> \<open>length (CoreProblemL_defs q) < 2 ^ 56\<close>
+    \<open>length (CoreProblemL_asserts q) < 2 ^ 56\<close>
+    \<open>\<forall>t \<in> set (CoreProblemL_defs q @ CoreProblemL_asserts q).
+       tbound (cvar_widths q) (cdef_widths (cvar_widths q) [] (CoreProblemL_defs q)) t < 2 ^ 56\<close>
+  shows \<open>fuel_bound q2 \<le> 2 ^ 57\<close>
 proof (rule fuel_bound_lt)
   have cc: \<open>sum_list (map (ccount ews eds) D2) \<le> sum_list (map (ccount ews eds) eD)\<close>
     by (rule sum_list_map_nth_le) (simp_all add: D2(1) en_def D2_size)
   show \<open>cproblem_wt q2\<close> by (rule q2_wt)
-  show \<open>2 + sum_list (cvar_widths q2) + length (CoreProblem_asserts q2) +
-     sum_list (map (ccount (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblem_defs q2)))
-                   (CoreProblem_defs q2 @ CoreProblem_asserts q2)) < 2 ^ 63\<close>
+  show \<open>2 + sum_list (cvar_widths q2) + length (CoreProblemL_asserts q2) +
+     sum_list (map (ccount (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)))
+                   (CoreProblemL_defs q2 @ CoreProblemL_asserts q2)) < 2 ^ 56\<close>
     using assms(1) cc D2_defs by (simp add: q2_ws q2_parts ews_def eds_def eD_def eA_def)
-  show \<open>length (cvar_widths q2) < 2 ^ 63\<close> using assms(2) by (simp add: q2_ws ews_def)
-  show \<open>length (CoreProblem_defs q2) < 2 ^ 63\<close> using assms(3) D2(1) by (simp add: q2_parts en_def eD_def)
-  show \<open>length (CoreProblem_asserts q2) < 2 ^ 63\<close> using assms(4) by (simp add: q2_parts eA_def)
-  show \<open>\<forall>t \<in> set (CoreProblem_defs q2 @ CoreProblem_asserts q2).
-       tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblem_defs q2)) t < 2 ^ 63\<close>
+  show \<open>length (cvar_widths q2) < 2 ^ 56\<close> using assms(2) by (simp add: q2_ws ews_def)
+  show \<open>length (CoreProblemL_defs q2) < 2 ^ 56\<close> using assms(3) D2(1) by (simp add: q2_parts en_def eD_def)
+  show \<open>length (CoreProblemL_asserts q2) < 2 ^ 56\<close> using assms(4) by (simp add: q2_parts eA_def)
+  show \<open>\<forall>t \<in> set (CoreProblemL_defs q2 @ CoreProblemL_asserts q2).
+       tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)) t < 2 ^ 56\<close>
   proof
-    fix t assume t: \<open>t \<in> set (CoreProblem_defs q2 @ CoreProblem_asserts q2)\<close>
-    have T: \<open>\<forall>t \<in> set (eD @ eA). tbound ews eds t < 2 ^ 63\<close>
+    fix t assume t: \<open>t \<in> set (CoreProblemL_defs q2 @ CoreProblemL_asserts q2)\<close>
+    have T: \<open>\<forall>t \<in> set (eD @ eA). tbound ews eds t < 2 ^ 56\<close>
       using assms(5) by (simp add: ews_def eds_def eD_def eA_def)
-    show \<open>tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblem_defs q2)) t < 2 ^ 63\<close>
+    show \<open>tbound (cvar_widths q2) (cdef_widths (cvar_widths q2) [] (CoreProblemL_defs q2)) t < 2 ^ 56\<close>
     proof (cases \<open>t \<in> set eA\<close>)
       case True
       then show ?thesis using T D2_defs by (simp add: q2_ws q2_parts)
     next
       case False
       then obtain j where j: \<open>j < en\<close> \<open>t = D2 ! j\<close> using t D2(1) by (auto simp: q2_parts in_set_conv_nth)
-      have \<open>tbound ews eds (eD ! j) < 2 ^ 63\<close> using T j(1) by (simp add: en_def)
+      have \<open>tbound ews eds (eD ! j) < 2 ^ 56\<close> using T j(1) by (simp add: en_def)
       then show ?thesis using D2_size[OF j(1)] D2_defs j by (simp add: q2_ws q2_parts)
     qed
   qed
@@ -1322,20 +1322,20 @@ lemma eval_m_cong:
   shows \<open>eval_m vs dv t = eval_m vs' dv' t\<close>
   using assms
 proof (induction t)
-  case (CoreTerm_Bin op a b)
+  case (CoreTermL_Bin op a b)
   have \<open>eval_m vs dv a = eval_m vs' dv' a\<close>
-    by (rule CoreTerm_Bin.IH(1)) (use CoreTerm_Bin.prems in auto)
+    by (rule CoreTermL_Bin.IH(1)) (use CoreTermL_Bin.prems in auto)
   moreover have \<open>eval_m vs dv b = eval_m vs' dv' b\<close>
-    by (rule CoreTerm_Bin.IH(2)) (use CoreTerm_Bin.prems in auto)
+    by (rule CoreTermL_Bin.IH(2)) (use CoreTermL_Bin.prems in auto)
   ultimately show ?case by simp
 next
-  case (CoreTerm_Ite c a b)
+  case (CoreTermL_Ite c a b)
   have \<open>eval_m vs dv c = eval_m vs' dv' c\<close>
-    by (rule CoreTerm_Ite.IH(1)) (use CoreTerm_Ite.prems in auto)
+    by (rule CoreTermL_Ite.IH(1)) (use CoreTermL_Ite.prems in auto)
   moreover have \<open>eval_m vs dv a = eval_m vs' dv' a\<close>
-    by (rule CoreTerm_Ite.IH(2)) (use CoreTerm_Ite.prems in auto)
+    by (rule CoreTermL_Ite.IH(2)) (use CoreTermL_Ite.prems in auto)
   moreover have \<open>eval_m vs dv b = eval_m vs' dv' b\<close>
-    by (rule CoreTerm_Ite.IH(3)) (use CoreTerm_Ite.prems in auto)
+    by (rule CoreTermL_Ite.IH(3)) (use CoreTermL_Ite.prems in auto)
   ultimately show ?case by simp
 qed (simp_all add: is_var_def is_ref_def)
 
@@ -1547,14 +1547,14 @@ qed
 
 lemma csat_bits:
   assumes \<open>cproblem_wt p\<close> \<open>map length m = cvar_widths p\<close>
-  shows \<open>csatisfies p m \<longleftrightarrow> (\<forall>t \<in> set (CoreProblem_asserts p). bits_nat (eval_m m (eval_defs_m p m) t) = 1)\<close>
+  shows \<open>csatisfies p m \<longleftrightarrow> (\<forall>t \<in> set (CoreProblemL_asserts p). bits_nat (eval_m m (eval_defs_m p m) t) = 1)\<close>
 proof -
-  let ?ws = \<open>cvar_widths p\<close> and ?D = \<open>CoreProblem_defs p\<close>
+  let ?ws = \<open>cvar_widths p\<close> and ?D = \<open>CoreProblemL_defs p\<close>
   have dw: \<open>cdefs_wt ?ws [] ?D\<close> using assms(1) by (simp add: cproblem_wt_def Let_def)
   note E = eval_defs_m_correct[OF dw assms(2)[symmetric]]
   have H: \<open>bits_nat (eval_m m (eval_defs_m p m) t) =
       ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t\<close>
-    if \<open>t \<in> set (CoreProblem_asserts p)\<close> for t
+    if \<open>t \<in> set (CoreProblemL_asserts p)\<close> for t
   proof -
     have \<open>cwt ?ws (cdef_widths ?ws [] ?D) t\<close> using assms(1) that by (simp add: cproblem_wt_def Let_def)
     note C = eval_m_correct[OF this assms(2)[symmetric] conjunct1[OF E, symmetric]]
@@ -1563,15 +1563,15 @@ proof -
   show ?thesis
     unfolding csatisfies_def Let_def
   proof (intro iffI ballI)
-    fix t assume A: \<open>\<forall>t \<in> set (CoreProblem_asserts p).
+    fix t assume A: \<open>\<forall>t \<in> set (CoreProblemL_asserts p).
       ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
-      and t: \<open>t \<in> set (CoreProblem_asserts p)\<close>
+      and t: \<open>t \<in> set (CoreProblemL_asserts p)\<close>
     have \<open>ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
       using A t by blast
     with H[OF t] show \<open>bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close> by (rule trans)
   next
-    fix t assume A: \<open>\<forall>t \<in> set (CoreProblem_asserts p). bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close>
-      and t: \<open>t \<in> set (CoreProblem_asserts p)\<close>
+    fix t assume A: \<open>\<forall>t \<in> set (CoreProblemL_asserts p). bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close>
+      and t: \<open>t \<in> set (CoreProblemL_asserts p)\<close>
     have \<open>bits_nat (eval_m m (eval_defs_m p m) t) = 1\<close> using A t by blast
     with H[OF t, symmetric]
     show \<open>ceval ?ws (cdef_widths ?ws [] ?D) (map bits_nat m) (cdef_values ?ws [] (map bits_nat m) [] ?D) t = 1\<close>
@@ -1596,7 +1596,7 @@ lemma leaf_var_unique:
   assumes \<open>l < en\<close> \<open>kd ! l = 1\<close> \<open>is_var x (eD ! l)\<close> \<open>k < en\<close> \<open>u \<in> set (csubterms (eD ! k))\<close> \<open>is_var x u\<close>
   shows \<open>k = l\<close>
 proof -
-  obtain i where i: \<open>eD ! l = CoreTerm_Var i\<close> \<open>vcnt (eD @ eA) (unat i) = 1\<close> using kd_1[OF assms(1,2)] by blast
+  obtain i where i: \<open>eD ! l = CoreTermL_Var i\<close> \<open>vcnt (eD @ eA) (unat i) = 1\<close> using kd_1[OF assms(1,2)] by blast
   have x: \<open>x = unat i\<close> using assms(3) i(1) by (simp add: is_var_def)
   show ?thesis using var_unique[of x k l u \<open>eD ! l\<close>] i x assms by (simp add: csubterms_self)
 qed
@@ -1605,7 +1605,7 @@ lemma leaf_var_not_A:
   assumes \<open>l < en\<close> \<open>kd ! l = 1\<close> \<open>is_var x (eD ! l)\<close> \<open>t \<in> set eA\<close> \<open>u \<in> set (csubterms t)\<close> \<open>is_var x u\<close>
   shows False
 proof -
-  obtain i where i: \<open>eD ! l = CoreTerm_Var i\<close> \<open>vcnt (eD @ eA) (unat i) = 1\<close> using kd_1[OF assms(1,2)] by blast
+  obtain i where i: \<open>eD ! l = CoreTermL_Var i\<close> \<open>vcnt (eD @ eA) (unat i) = 1\<close> using kd_1[OF assms(1,2)] by blast
   have x: \<open>x = unat i\<close> using assms(3) i(1) by (simp add: is_var_def)
   show False using var_not_A[of x l \<open>eD ! l\<close> t u] i x assms by (simp add: csubterms_self)
 qed
@@ -1640,11 +1640,11 @@ definition lvar :: \<open>nat \<Rightarrow> nat\<close> where \<open>lvar j = va
 lemma lvar:
   assumes \<open>j < en\<close> \<open>kd ! j \<noteq> 0\<close>
   shows \<open>lvar j < length ews \<and> ews ! lvar j = eds ! leaf j \<and> isleaf (lvar j) \<and> ldef (lvar j) = leaf j \<and>
-    eD ! leaf j = CoreTerm_Var (word_of_nat (lvar j))\<close>
+    eD ! leaf j = CoreTermL_Var (word_of_nat (lvar j))\<close>
 proof -
   note L = leaf_props[OF assms]
   have ll: \<open>leaf j < en\<close> using L assms(1) by simp
-  obtain i where i: \<open>eD ! leaf j = CoreTerm_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF ll] L by blast
+  obtain i where i: \<open>eD ! leaf j = CoreTermL_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF ll] L by blast
   have lv: \<open>lvar j = unat i\<close> using i by (simp add: lvar_def var_index_m_def)
   have iv: \<open>is_var (lvar j) (eD ! leaf j)\<close> using i lv by (simp add: is_var_def)
   have il: \<open>isleaf (lvar j)\<close> using ll L iv by (auto simp: isleaf_def)
@@ -1724,7 +1724,7 @@ proof -
       then show ?thesis using k0 by simp
     next
       case k1
-      obtain i where i: \<open>eD ! j = CoreTerm_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF j k1] by blast
+      obtain i where i: \<open>eD ! j = CoreTermL_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF j k1] by blast
       have d: \<open>D2 ! j = eD ! j\<close> using D2(3)[OF j] ana(6)[OF j] lj k1 by simp
       have lf: \<open>leaf j = j\<close> using leaf_stop[OF j] k1 by simp
       have lv: \<open>lvar j = unat i\<close> by (simp add: lvar_def lf i var_index_m_def)
@@ -1748,8 +1748,8 @@ proof -
       have tk: \<open>take j eds ! ?c = eds ! ?c\<close> using c j len_eds by simp
       have d1j: \<open>d1 ! j = rewrite_m (take j eds) ?c (eds ! j)\<close> using ana(6)[OF j] k2 by simp
       have d: \<open>D2 ! j = d1 ! j\<close> using D2(3)[OF j] lj by simp
-      have \<open>CoreTerm_Ref (word_of_nat ?c) \<in> set (csubterms (d1 ! j))\<close> using d1j by (simp add: rewrite_m_def)
-      moreover have \<open>is_ref ?c (CoreTerm_Ref (word_of_nat ?c))\<close> using cu by (simp add: is_ref_def)
+      have \<open>CoreTermL_Ref (word_of_nat ?c) \<in> set (csubterms (d1 ! j))\<close> using d1j by (simp add: rewrite_m_def)
+      moreover have \<open>is_ref ?c (CoreTermL_Ref (word_of_nat ?c))\<close> using cu by (simp add: is_ref_def)
       ultimately have lc: \<open>live ! ?c\<close> using D2(4)[OF j lj] by blast
       have IHc: \<open>dv2b ! ?c = take (eds ! ?c) (m2 ! lvar ?c)\<close> using less.IH[of ?c] c cl lc by auto
       have lvc: \<open>lvar ?c = lvar j\<close> using leaf_step[OF j k2] by (simp add: lvar_def)
@@ -1757,12 +1757,12 @@ proof -
       have U2: \<open>dv2b ! j = take (eds ! j) (m2 ! lvar j)\<close>
       proof (cases \<open>eds ! ?c = eds ! j\<close>)
         case True
-        then have \<open>D2 ! j = CoreTerm_Ref (word_of_nat ?c)\<close> using d d1j tk by (simp add: rewrite_m_def)
+        then have \<open>D2 ! j = CoreTermL_Ref (word_of_nat ?c)\<close> using d d1j tk by (simp add: rewrite_m_def)
         then show ?thesis using dv2P(2)[OF j] cu IHc lvc True by simp
       next
         case False
         obtain hi :: \<open>64 word\<close> where hi: \<open>hi = word_of_nat (eds ! j - 1)\<close> by blast
-        then have e: \<open>D2 ! j = CoreTerm_Extract hi 0 (CoreTerm_Ref (word_of_nat ?c))\<close>
+        then have e: \<open>D2 ! j = CoreTermL_Extract hi 0 (CoreTermL_Ref (word_of_nat ?c))\<close>
           using d d1j tk False by (simp add: rewrite_m_def)
         have hu: \<open>unat hi = eds ! j - 1\<close> unfolding hi by (rule unat_of_nat_eq) (use W False in simp)
         have \<open>dv2b ! j = bextract_m (dv2b ! ?c) (unat hi) 0\<close> using dv2P(2)[OF j] e cu by simp
@@ -1935,13 +1935,13 @@ qed
 lemma csubterms_trans: \<open>v \<in> set (csubterms u) \<Longrightarrow> u \<in> set (csubterms t) \<Longrightarrow> v \<in> set (csubterms t)\<close>
   by (induction t) auto
 
-lemma bit_const_cases: \<open>bit_const_m t < 2 \<Longrightarrow> \<exists>c. t = CoreTerm_Const [c] \<and> bit_const_m t = (if c then 1 else 0)\<close>
+lemma bit_const_cases: \<open>bit_const_m t < 2 \<Longrightarrow> \<exists>c. t = CoreTermL_Const [c] \<and> bit_const_m t = (if c then 1 else 0)\<close>
 proof (cases t)
-  case (CoreTerm_Const bs)
+  case (CoreTermL_Const bs)
   assume b: \<open>bit_const_m t < 2\<close>
-  then have \<open>length bs = 1\<close> using CoreTerm_Const by (simp add: bit_const_m_def split: if_splits)
+  then have \<open>length bs = 1\<close> using CoreTermL_Const by (simp add: bit_const_m_def split: if_splits)
   then obtain c where \<open>bs = [c]\<close> by (cases bs) auto
-  then show ?thesis using CoreTerm_Const by (simp add: bit_const_m_def)
+  then show ?thesis using CoreTermL_Const by (simp add: bit_const_m_def)
 qed (simp_all add: bit_const_m_def)
 
 lemma no_ref_of_rcnt0: \<open>rcnt [t] x = 0 \<Longrightarrow> \<forall>u \<in> set (csubterms t). \<not> is_ref x u\<close>
@@ -2004,15 +2004,15 @@ proof -
   have tk: \<open>x < j \<Longrightarrow> take j eds ! x = eds ! x\<close> for x using j len_eds by simp
   have fo: \<open>free_once_m (take j kd) erc x \<Longrightarrow> x < j\<close> for x using fo_take j by blast
   consider
-      (Not) a where \<open>eD ! j = CoreTerm_Not (CoreTerm_Ref a)\<close> \<open>kd ! j = 2\<close>
-    | (Ext) hi lo a where \<open>eD ! j = CoreTerm_Extract hi lo (CoreTerm_Ref a)\<close> \<open>kd ! j = 2\<close>
-    | (AX2) op i b where \<open>eD ! j = CoreTerm_Bin op (CoreTerm_Ref i) b\<close> \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> \<open>kd ! j = 2\<close>
-    | (AX3) op a i where \<open>eD ! j = CoreTerm_Bin op a (CoreTerm_Ref i)\<close> \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> \<open>kd ! j = 3\<close>
-    | (Eq2) i b where \<open>eD ! j = CoreTerm_Bin BinOp_Eq (CoreTerm_Ref i) b\<close> \<open>kd ! j = 2\<close> \<open>0 < eds ! unat i\<close>
-    | (Eq3) a i where \<open>eD ! j = CoreTerm_Bin BinOp_Eq a (CoreTerm_Ref i)\<close> \<open>kd ! j = 3\<close> \<open>0 < eds ! unat i\<close>
-    | (MD) op a b where \<open>eD ! j = CoreTerm_Bin op (CoreTerm_Ref a) (CoreTerm_Ref b)\<close> \<open>op = BinOp_Mul \<or> op = BinOp_Udiv\<close>
+      (Not) a where \<open>eD ! j = CoreTermL_Not (CoreTermL_Ref a)\<close> \<open>kd ! j = 2\<close>
+    | (Ext) hi lo a where \<open>eD ! j = CoreTermL_Extract hi lo (CoreTermL_Ref a)\<close> \<open>kd ! j = 2\<close>
+    | (AX2) op i b where \<open>eD ! j = CoreTermL_Bin op (CoreTermL_Ref i) b\<close> \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> \<open>kd ! j = 2\<close>
+    | (AX3) op a i where \<open>eD ! j = CoreTermL_Bin op a (CoreTermL_Ref i)\<close> \<open>op = BinOp_Add \<or> op = BinOp_Xor\<close> \<open>kd ! j = 3\<close>
+    | (Eq2) i b where \<open>eD ! j = CoreTermL_Bin BinOp_Eq (CoreTermL_Ref i) b\<close> \<open>kd ! j = 2\<close> \<open>0 < eds ! unat i\<close>
+    | (Eq3) a i where \<open>eD ! j = CoreTermL_Bin BinOp_Eq a (CoreTermL_Ref i)\<close> \<open>kd ! j = 3\<close> \<open>0 < eds ! unat i\<close>
+    | (MD) op a b where \<open>eD ! j = CoreTermL_Bin op (CoreTermL_Ref a) (CoreTermL_Ref b)\<close> \<open>op = BinOp_Mul \<or> op = BinOp_Udiv\<close>
         \<open>kd ! j = 4\<close> \<open>unat a \<noteq> unat b\<close>
-    | (Ite) x a b where \<open>eD ! j = CoreTerm_Ite (CoreTerm_Ref x) (CoreTerm_Ref a) (CoreTerm_Ref b)\<close> \<open>kd ! j = 2\<close>
+    | (Ite) x a b where \<open>eD ! j = CoreTermL_Ite (CoreTermL_Ref x) (CoreTermL_Ref a) (CoreTermL_Ref b)\<close> \<open>kd ! j = 2\<close>
         \<open>bit_const_m (eD ! unat a) < 2\<close> \<open>bit_const_m (eD ! unat b) < 2\<close> \<open>bit_const_m (eD ! unat a) \<noteq> bit_const_m (eD ! unat b)\<close>
     using sh fo tk by (elim disjE exE conjE) (blast | metis)+
   then show ?thesis
@@ -2113,7 +2113,7 @@ proof -
     have ww: \<open>eds ! unat a = eds ! unat b\<close> using wtj MD(1) nc by simp
     have we: \<open>cwidth ews eds (eD ! j) = eds ! unat a\<close> using MD(1) nc by (cases op) simp_all
     have w: \<open>eds ! unat a = eds ! j\<close> \<open>eds ! unat b = eds ! j\<close> using ww we E by simp_all
-    have rb: \<open>is_ref (unat b) (CoreTerm_Ref b)\<close> \<open>CoreTerm_Ref b \<in> set (csubterms (eD ! j))\<close>
+    have rb: \<open>is_ref (unat b) (CoreTermL_Ref b)\<close> \<open>CoreTermL_Ref b \<in> set (csubterms (eD ! j))\<close>
       using MD by (simp_all add: is_ref_def)
     have Ob: \<open>dv' ! unat b = dv ! unat b\<close>
       using O[THEN bspec, OF rb(2), THEN spec, of \<open>unat b\<close>] rb(1) c MD(4) by simp
@@ -2130,12 +2130,12 @@ proof -
   next
     case (Ite x a b)
     have c: \<open>cons j = unat x\<close> using Ite by (simp add: cons_def consumed_m_def ref_index_m_def)
-    have \<open>rcnt [CoreTerm_Ref a] (unat x) = 0\<close> \<open>rcnt [CoreTerm_Ref b] (unat x) = 0\<close>
+    have \<open>rcnt [CoreTermL_Ref a] (unat x) = 0\<close> \<open>rcnt [CoreTermL_Ref b] (unat x) = 0\<close>
       using once Ite(1) c by (simp_all add: rcnt_Ite rcnt_Ref)
     then have ne: \<open>unat a \<noteq> unat x\<close> \<open>unat b \<noteq> unat x\<close> by (simp_all add: rcnt_Ref split: if_splits)
-    obtain ca where ca: \<open>eD ! unat a = CoreTerm_Const [ca]\<close> \<open>bit_const_m (eD ! unat a) = (if ca then 1 else 0)\<close>
+    obtain ca where ca: \<open>eD ! unat a = CoreTermL_Const [ca]\<close> \<open>bit_const_m (eD ! unat a) = (if ca then 1 else 0)\<close>
       using bit_const_cases[OF Ite(3)] by blast
-    obtain cb where cb: \<open>eD ! unat b = CoreTerm_Const [cb]\<close> \<open>bit_const_m (eD ! unat b) = (if cb then 1 else 0)\<close>
+    obtain cb where cb: \<open>eD ! unat b = CoreTermL_Const [cb]\<close> \<open>bit_const_m (eD ! unat b) = (if cb then 1 else 0)\<close>
       using bit_const_cases[OF Ite(4)] by blast
     have cab: \<open>ca \<noteq> cb\<close> using Ite(5) ca(2) cb(2) by (cases ca; cases cb) simp_all
     have ra: \<open>dv' ! unat a = [ca]\<close> \<open>dv ! unat a = [ca]\<close>
@@ -2290,14 +2290,14 @@ definition target :: \<open>nat \<Rightarrow> bool list\<close> where
 lemma target_len: \<open>j < en \<Longrightarrow> length (target j) = eds ! j\<close>
   using dv2P(1,2) bits_one(1) by (auto simp: target_def) (metis nth_map)+
 
-lemma lvar_var: \<open>j < en \<Longrightarrow> kd ! j \<noteq> 0 \<Longrightarrow> \<exists>i. eD ! leaf j = CoreTerm_Var i \<and> lvar j = unat i \<and> unat i < length ews\<close>
+lemma lvar_var: \<open>j < en \<Longrightarrow> kd ! j \<noteq> 0 \<Longrightarrow> \<exists>i. eD ! leaf j = CoreTermL_Var i \<and> lvar j = unat i \<and> unat i < length ews\<close>
   using leaf_props[of j] kd_1[of \<open>leaf j\<close>] by (auto simp: lvar_def var_index_m_def)
 
 lemma lvar_only:
   assumes \<open>j < en\<close> \<open>kd ! j \<noteq> 0\<close> \<open>i < en\<close> \<open>u \<in> set (csubterms (eD ! i))\<close> \<open>is_var (lvar j) u\<close>
   shows \<open>i = leaf j\<close>
 proof -
-  obtain x where x: \<open>eD ! leaf j = CoreTerm_Var x\<close> \<open>lvar j = unat x\<close> using lvar_var[OF assms(1,2)] by blast
+  obtain x where x: \<open>eD ! leaf j = CoreTermL_Var x\<close> \<open>lvar j = unat x\<close> using lvar_var[OF assms(1,2)] by blast
   note L = leaf_props[OF assms(1,2)]
   have \<open>is_var (lvar j) (eD ! leaf j)\<close> using x by (simp add: is_var_def)
   then show ?thesis using leaf_var_unique[of \<open>leaf j\<close> \<open>lvar j\<close> i u] L assms by simp
@@ -2324,7 +2324,7 @@ next
   show ?case
   proof (cases \<open>kd ! j = 1\<close>)
     case True
-    obtain i where i: \<open>eD ! j = CoreTerm_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF j True] by blast
+    obtain i where i: \<open>eD ! j = CoreTermL_Var i\<close> \<open>unat i < length ews\<close> using kd_1[OF j True] by blast
     have lf: \<open>leaf j = j\<close> using leaf_stop j True by simp
     have lvj: \<open>lvar j = unat i\<close> by (simp add: lvar_def lf i var_index_m_def)
     have st: \<open>settle_m eD kd dv2 (Suc g) dv m j v = (?dv1, m[unat i := v])\<close> using True i by (simp add: var_index_m_def)

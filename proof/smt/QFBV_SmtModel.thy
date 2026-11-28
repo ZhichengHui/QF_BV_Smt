@@ -4,12 +4,22 @@ begin
 
 section \<open>The translation of general problems: functional model\<close>
 
+text \<open>The vectors of a problem, as lists of their elements.\<close>
+abbreviation sfuns :: \<open>SmtProblem \<Rightarrow> SmtFun list\<close> where \<open>sfuns p \<equiv> rvec_elems (SmtProblem_funs p)\<close>
+abbreviation sdefs :: \<open>SmtProblem \<Rightarrow> SmtDef list\<close> where \<open>sdefs p \<equiv> rvec_elems (SmtProblem_defs p)\<close>
+abbreviation sasserts :: \<open>SmtProblem \<Rightarrow> SmtTerm list\<close> where \<open>sasserts p \<equiv> rvec_elems (SmtProblem_asserts p)\<close>
+abbreviation dpar :: \<open>SmtDef \<Rightarrow> SmtSort list\<close> where \<open>dpar d \<equiv> rvec_elems (SmtDef_params d)\<close>
+abbreviation fargs :: \<open>SmtFun \<Rightarrow> SmtSort list\<close> where \<open>fargs f \<equiv> rvec_elems (SmtFun_args f)\<close>
+
+lemma set_rvec_elems: \<open>set_rvec v = set (rvec_elems v)\<close>
+  by (cases v) simp
+
 text \<open>HOL functions that compute what the Rust functions of the translation (\<^verbatim>\<open>check_sat\<close> and
   its callees in \<^verbatim>\<open>core/src/lib.rs\<close>) compute, with indices as natural numbers. The state of the
   translation is the list of definitions of the extended problem built so far.\<close>
 
-definition tref :: \<open>nat \<Rightarrow> Term\<close> where
-  \<open>tref k \<equiv> Term_Ref (word_of_nat k)\<close>
+definition tref :: \<open>nat \<Rightarrow> TermL\<close> where
+  \<open>tref k \<equiv> TermL_Ref (word_of_nat k)\<close>
 
 definition tr_op :: \<open>SmtOp \<Rightarrow> Op\<close> where
   \<open>tr_op op \<equiv>
@@ -94,33 +104,33 @@ lemma tr_op_simps [simp]:
   \<open>tr_op (SmtOp_RotateRight a0) = Op_Eq\<close>
   by (simp_all add: tr_op_def)
 
-definition fold_left_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> where
-  \<open>fold_left_m op ks \<equiv> foldl (\<lambda>acc k. Term_Bin (tr_op op) acc (tref k)) (tref (hd ks)) (tl ks)\<close>
+definition fold_left_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> TermL\<close> where
+  \<open>fold_left_m op ks \<equiv> foldl (\<lambda>acc k. TermL_Bin (tr_op op) acc (tref k)) (tref (hd ks)) (tl ks)\<close>
 
-definition chain_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> where
+definition chain_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> TermL\<close> where
   \<open>chain_m op ks \<equiv>
-     foldl (\<lambda>acc i. Term_Bin Op_And acc (Term_Bin (tr_op op) (tref (ks ! (i - 1))) (tref (ks ! i))))
-       (Term_Bin (tr_op op) (tref (ks ! 0)) (tref (ks ! 1))) [2..<length ks]\<close>
+     foldl (\<lambda>acc i. TermL_Bin Op_And acc (TermL_Bin (tr_op op) (tref (ks ! (i - 1))) (tref (ks ! i))))
+       (TermL_Bin (tr_op op) (tref (ks ! 0)) (tref (ks ! 1))) [2..<length ks]\<close>
 
 text \<open>The pairs \<open>(i, j)\<close>, \<open>i < j < n\<close>, other than \<open>(0, 1)\<close>, in the order of the two loops of
   \<^verbatim>\<open>pairwise\<close>.\<close>
 definition pairs_m :: \<open>nat \<Rightarrow> (nat \<times> nat) list\<close> where
   \<open>pairs_m n \<equiv> filter (\<lambda>ij. ij \<noteq> (0, 1)) (concat (map (\<lambda>i. map (\<lambda>j. (i, j)) [Suc i..<n]) [0..<n]))\<close>
 
-definition pairwise_m :: \<open>nat list \<Rightarrow> Term\<close> where
+definition pairwise_m :: \<open>nat list \<Rightarrow> TermL\<close> where
   \<open>pairwise_m ks \<equiv>
-     foldl (\<lambda>acc ij. Term_Bin Op_And acc (Term_Bin Op_Distinct (tref (ks ! fst ij)) (tref (ks ! snd ij))))
-       (Term_Bin Op_Distinct (tref (ks ! 0)) (tref (ks ! 1))) (pairs_m (length ks))\<close>
+     foldl (\<lambda>acc ij. TermL_Bin Op_And acc (TermL_Bin Op_Distinct (tref (ks ! fst ij)) (tref (ks ! snd ij))))
+       (TermL_Bin Op_Distinct (tref (ks ! 0)) (tref (ks ! 1))) (pairs_m (length ks))\<close>
 
-definition implies_m :: \<open>nat list \<Rightarrow> Term\<close> where
-  \<open>implies_m ks \<equiv> foldr (\<lambda>k acc. Term_Bin Op_Or (Term_Not (tref k)) acc) (butlast ks) (tref (last ks))\<close>
+definition implies_m :: \<open>nat list \<Rightarrow> TermL\<close> where
+  \<open>implies_m ks \<equiv> foldr (\<lambda>k acc. TermL_Bin Op_Or (TermL_Not (tref k)) acc) (butlast ks) (tref (last ks))\<close>
 
-definition tr_app_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<close> where
+definition tr_app_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> TermL\<close> where
   \<open>tr_app_m op ks \<equiv>
      (case op of
-        SmtOp_Not \<Rightarrow> (Term_Not (tref (ks ! 0)))
-      | SmtOp_Bvnot \<Rightarrow> (Term_Not (tref (ks ! 0)))
-      | SmtOp_Bvneg \<Rightarrow> (Term_Neg (tref (ks ! 0)))
+        SmtOp_Not \<Rightarrow> (TermL_Not (tref (ks ! 0)))
+      | SmtOp_Bvnot \<Rightarrow> (TermL_Not (tref (ks ! 0)))
+      | SmtOp_Bvneg \<Rightarrow> (TermL_Neg (tref (ks ! 0)))
       | SmtOp_And \<Rightarrow> (fold_left_m SmtOp_And ks)
       | SmtOp_Or \<Rightarrow> (fold_left_m SmtOp_Or ks)
       | SmtOp_Xor \<Rightarrow> (fold_left_m SmtOp_Xor ks)
@@ -132,19 +142,19 @@ definition tr_app_m :: \<open>SmtOp \<Rightarrow> nat list \<Rightarrow> Term\<c
       | SmtOp_Implies \<Rightarrow> (implies_m ks)
       | SmtOp_Eq \<Rightarrow> (chain_m SmtOp_Eq ks)
       | SmtOp_Distinct \<Rightarrow> (pairwise_m ks)
-      | SmtOp_Ite \<Rightarrow> (Term_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2)))
-      | SmtOp_Extract i j \<Rightarrow> (Term_Extract i j (tref (ks ! 0)))
-      | SmtOp_Repeat i \<Rightarrow> (Term_Repeat i (tref (ks ! 0)))
-      | SmtOp_ZeroExtend i \<Rightarrow> (Term_ZeroExtend i (tref (ks ! 0)))
-      | SmtOp_SignExtend i \<Rightarrow> (Term_SignExtend i (tref (ks ! 0)))
-      | SmtOp_RotateLeft i \<Rightarrow> (Term_RotateLeft i (tref (ks ! 0)))
-      | SmtOp_RotateRight i \<Rightarrow> (Term_RotateRight i (tref (ks ! 0)))
-      | _ \<Rightarrow> (Term_Bin (tr_op op) (tref (ks ! 0)) (tref (ks ! 1))))\<close>
+      | SmtOp_Ite \<Rightarrow> (TermL_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2)))
+      | SmtOp_Extract i j \<Rightarrow> (TermL_Extract i j (tref (ks ! 0)))
+      | SmtOp_Repeat i \<Rightarrow> (TermL_Repeat i (tref (ks ! 0)))
+      | SmtOp_ZeroExtend i \<Rightarrow> (TermL_ZeroExtend i (tref (ks ! 0)))
+      | SmtOp_SignExtend i \<Rightarrow> (TermL_SignExtend i (tref (ks ! 0)))
+      | SmtOp_RotateLeft i \<Rightarrow> (TermL_RotateLeft i (tref (ks ! 0)))
+      | SmtOp_RotateRight i \<Rightarrow> (TermL_RotateRight i (tref (ks ! 0)))
+      | _ \<Rightarrow> (TermL_Bin (tr_op op) (tref (ks ! 0)) (tref (ks ! 1))))\<close>
 
 lemma tr_app_m_simps [simp]:
-  \<open>tr_app_m SmtOp_Not ks = Term_Not (tref (ks ! 0))\<close>
-  \<open>tr_app_m SmtOp_Bvnot ks = Term_Not (tref (ks ! 0))\<close>
-  \<open>tr_app_m SmtOp_Bvneg ks = Term_Neg (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_Not ks = TermL_Not (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_Bvnot ks = TermL_Not (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_Bvneg ks = TermL_Neg (tref (ks ! 0))\<close>
   \<open>tr_app_m SmtOp_And ks = fold_left_m SmtOp_And ks\<close>
   \<open>tr_app_m SmtOp_Or ks = fold_left_m SmtOp_Or ks\<close>
   \<open>tr_app_m SmtOp_Xor ks = fold_left_m SmtOp_Xor ks\<close>
@@ -156,57 +166,60 @@ lemma tr_app_m_simps [simp]:
   \<open>tr_app_m SmtOp_Implies ks = implies_m ks\<close>
   \<open>tr_app_m SmtOp_Eq ks = chain_m SmtOp_Eq ks\<close>
   \<open>tr_app_m SmtOp_Distinct ks = pairwise_m ks\<close>
-  \<open>tr_app_m SmtOp_Ite ks = Term_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2))\<close>
-  \<open>tr_app_m (SmtOp_Extract i j) ks = Term_Extract i j (tref (ks ! 0))\<close>
-  \<open>tr_app_m (SmtOp_Repeat i) ks = Term_Repeat i (tref (ks ! 0))\<close>
-  \<open>tr_app_m (SmtOp_ZeroExtend i) ks = Term_ZeroExtend i (tref (ks ! 0))\<close>
-  \<open>tr_app_m (SmtOp_SignExtend i) ks = Term_SignExtend i (tref (ks ! 0))\<close>
-  \<open>tr_app_m (SmtOp_RotateLeft i) ks = Term_RotateLeft i (tref (ks ! 0))\<close>
-  \<open>tr_app_m (SmtOp_RotateRight i) ks = Term_RotateRight i (tref (ks ! 0))\<close>
-  \<open>tr_app_m SmtOp_Concat ks = Term_Bin (tr_op SmtOp_Concat) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvudiv ks = Term_Bin (tr_op SmtOp_Bvudiv) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvurem ks = Term_Bin (tr_op SmtOp_Bvurem) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvshl ks = Term_Bin (tr_op SmtOp_Bvshl) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvlshr ks = Term_Bin (tr_op SmtOp_Bvlshr) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvult ks = Term_Bin (tr_op SmtOp_Bvult) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvnand ks = Term_Bin (tr_op SmtOp_Bvnand) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvnor ks = Term_Bin (tr_op SmtOp_Bvnor) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvxnor ks = Term_Bin (tr_op SmtOp_Bvxnor) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvcomp ks = Term_Bin (tr_op SmtOp_Bvcomp) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsub ks = Term_Bin (tr_op SmtOp_Bvsub) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsdiv ks = Term_Bin (tr_op SmtOp_Bvsdiv) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsrem ks = Term_Bin (tr_op SmtOp_Bvsrem) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsmod ks = Term_Bin (tr_op SmtOp_Bvsmod) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvashr ks = Term_Bin (tr_op SmtOp_Bvashr) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvule ks = Term_Bin (tr_op SmtOp_Bvule) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvugt ks = Term_Bin (tr_op SmtOp_Bvugt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvuge ks = Term_Bin (tr_op SmtOp_Bvuge) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvslt ks = Term_Bin (tr_op SmtOp_Bvslt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsle ks = Term_Bin (tr_op SmtOp_Bvsle) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsgt ks = Term_Bin (tr_op SmtOp_Bvsgt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
-  \<open>tr_app_m SmtOp_Bvsge ks = Term_Bin (tr_op SmtOp_Bvsge) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Ite ks = TermL_Ite (tref (ks ! 0)) (tref (ks ! 1)) (tref (ks ! 2))\<close>
+  \<open>tr_app_m (SmtOp_Extract i j) ks = TermL_Extract i j (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_Repeat i) ks = TermL_Repeat i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_ZeroExtend i) ks = TermL_ZeroExtend i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_SignExtend i) ks = TermL_SignExtend i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_RotateLeft i) ks = TermL_RotateLeft i (tref (ks ! 0))\<close>
+  \<open>tr_app_m (SmtOp_RotateRight i) ks = TermL_RotateRight i (tref (ks ! 0))\<close>
+  \<open>tr_app_m SmtOp_Concat ks = TermL_Bin (tr_op SmtOp_Concat) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvudiv ks = TermL_Bin (tr_op SmtOp_Bvudiv) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvurem ks = TermL_Bin (tr_op SmtOp_Bvurem) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvshl ks = TermL_Bin (tr_op SmtOp_Bvshl) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvlshr ks = TermL_Bin (tr_op SmtOp_Bvlshr) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvult ks = TermL_Bin (tr_op SmtOp_Bvult) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvnand ks = TermL_Bin (tr_op SmtOp_Bvnand) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvnor ks = TermL_Bin (tr_op SmtOp_Bvnor) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvxnor ks = TermL_Bin (tr_op SmtOp_Bvxnor) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvcomp ks = TermL_Bin (tr_op SmtOp_Bvcomp) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsub ks = TermL_Bin (tr_op SmtOp_Bvsub) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsdiv ks = TermL_Bin (tr_op SmtOp_Bvsdiv) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsrem ks = TermL_Bin (tr_op SmtOp_Bvsrem) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsmod ks = TermL_Bin (tr_op SmtOp_Bvsmod) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvashr ks = TermL_Bin (tr_op SmtOp_Bvashr) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvule ks = TermL_Bin (tr_op SmtOp_Bvule) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvugt ks = TermL_Bin (tr_op SmtOp_Bvugt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvuge ks = TermL_Bin (tr_op SmtOp_Bvuge) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvslt ks = TermL_Bin (tr_op SmtOp_Bvslt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsle ks = TermL_Bin (tr_op SmtOp_Bvsle) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsgt ks = TermL_Bin (tr_op SmtOp_Bvsgt) (tref (ks ! 0)) (tref (ks ! 1))\<close>
+  \<open>tr_app_m SmtOp_Bvsge ks = TermL_Bin (tr_op SmtOp_Bvsge) (tref (ks ! 0)) (tref (ks ! 1))\<close>
   by (simp_all add: tr_app_m_def)
+
+lemma size_list_rvec_elems: \<open>size_list f (rvec_elems v) \<le> size_rvec f v\<close>
+  by (cases v) simp
 
 text \<open>The translation of a term and of a list of arguments (each added as a definition). \<open>dm\<close>: the
   definition of each definition without parameters of \<open>p\<close>; \<open>env\<close>: the definitions of the
   parameters in scope; \<open>n\<close>: only definitions below \<open>n\<close> are expanded (the Rust function has no such
   bound; in a well-sorted problem a definition refers only to earlier ones, so the bound is never
   reached).\<close>
-function (sequential) tr_term_m :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> Term list \<Rightarrow> SmtTerm \<Rightarrow> Term list \<times> Term\<close>
-  and tr_args_m :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> Term list \<Rightarrow> SmtTerm list \<Rightarrow> Term list \<times> nat list\<close>
+function (sequential) tr_term_m :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> TermL list \<Rightarrow> SmtTerm \<Rightarrow> TermL list \<times> TermL\<close>
+  and tr_args_m :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> TermL list \<Rightarrow> SmtTerm list \<Rightarrow> TermL list \<times> nat list\<close>
   where
-  \<open>tr_term_m p dm env n S (SmtTerm_BoolConst b) = (S, Term_Const [b])\<close>
-| \<open>tr_term_m p dm env n S (SmtTerm_BvConst bs) = (S, Term_Const bs)\<close>
+  \<open>tr_term_m p dm env n S (SmtTerm_BoolConst b) = (S, TermL_Const [b])\<close>
+| \<open>tr_term_m p dm env n S (SmtTerm_BvConst bs) = (S, TermL_Const (rvec_elems bs))\<close>
 | \<open>tr_term_m p dm env n S (SmtTerm_Param k) = (S, tref (env ! unat k))\<close>
-| \<open>tr_term_m p dm env n S (SmtTerm_Fun i args) = (S, Term_Var i)\<close>
+| \<open>tr_term_m p dm env n S (SmtTerm_Fun i args) = (S, TermL_Var i)\<close>
 | \<open>tr_term_m p dm env n S (SmtTerm_Def d args) =
-     (if SmtDef_params (SmtProblem_defs p ! unat d) = [] then (S, tref (dm ! unat d))
+     (if dpar (sdefs p ! unat d) = [] then (S, tref (dm ! unat d))
       else if unat d < n then
-        (let r = tr_args_m p dm env n S args in
-         tr_term_m p dm (snd r) (unat d) (fst r) (SmtDef_body (SmtProblem_defs p ! unat d)))
-      else (S, Term_Const []))\<close>
+        (let r = tr_args_m p dm env n S (rvec_elems args) in
+         tr_term_m p dm (snd r) (unat d) (fst r) (SmtDef_body (sdefs p ! unat d)))
+      else (S, TermL_Const []))\<close>
 | \<open>tr_term_m p dm env n S (SmtTerm_App op args) =
-     (let r = tr_args_m p dm env n S args in (fst r, tr_app_m op (snd r)))\<close>
+     (let r = tr_args_m p dm env n S (rvec_elems args) in (fst r, tr_app_m op (snd r)))\<close>
 | \<open>tr_args_m p dm env n S [] = (S, [])\<close>
 | \<open>tr_args_m p dm env n S (a # rest) =
      (let r1 = tr_term_m p dm env n S a;
@@ -216,24 +229,24 @@ function (sequential) tr_term_m :: \<open>SmtProblem \<Rightarrow> nat list \<Ri
 termination
   by (relation \<open>measures [\<lambda>x. case x of Inl (_, _, _, n, _, _) \<Rightarrow> n | Inr (_, _, _, n, _, _) \<Rightarrow> n,
                           \<lambda>x. case x of Inl (_, _, _, _, _, t) \<Rightarrow> size t | Inr (_, _, _, _, _, ts) \<Rightarrow> size_list size ts]\<close>)
-     auto
+     (auto simp: le_imp_less_Suc size_list_rvec_elems)
 
 text \<open>The definitions of the extended problem for the definitions of \<open>p\<close>, in order, and the
   definition of each definition without parameters (0 for one with parameters, which is expanded
   where it is applied).\<close>
-definition tr_defs_m :: \<open>SmtProblem \<Rightarrow> Term list \<times> nat list\<close> where
+definition tr_defs_m :: \<open>SmtProblem \<Rightarrow> TermL list \<times> nat list\<close> where
   \<open>tr_defs_m p \<equiv>
      foldl (\<lambda>(S, dm) d.
-        if SmtDef_params (SmtProblem_defs p ! d) = [] then
-          (let r = tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d)) in
+        if dpar (sdefs p ! d) = [] then
+          (let r = tr_term_m p dm [] d S (SmtDef_body (sdefs p ! d)) in
            (fst r @ [snd r], dm @ [length (fst r)]))
         else (S, dm @ [0]))
-       ([], []) [0..<length (SmtProblem_defs p)]\<close>
+       ([], []) [0..<length (sdefs p)]\<close>
 
-definition tr_asserts_m :: \<open>SmtProblem \<Rightarrow> Term list \<times> nat list \<Rightarrow> Term list \<times> Term list\<close> where
+definition tr_asserts_m :: \<open>SmtProblem \<Rightarrow> TermL list \<times> nat list \<Rightarrow> TermL list \<times> TermL list\<close> where
   \<open>tr_asserts_m p Sd \<equiv>
-     foldl (\<lambda>(S, ts) t. let r = tr_term_m p (snd Sd) [] (length (SmtProblem_defs p)) S t in (fst r, ts @ [snd r]))
-       (fst Sd, []) (SmtProblem_asserts p)\<close>
+     foldl (\<lambda>(S, ts) t. let r = tr_term_m p (snd Sd) [] (length (sdefs p)) S t in (fst r, ts @ [snd r]))
+       (fst Sd, []) (sasserts p)\<close>
 
 definition sort_width_m :: \<open>SmtSort \<Rightarrow> nat\<close> where
   \<open>sort_width_m srt \<equiv>
@@ -248,19 +261,25 @@ lemma sort_width_m_simps [simp]:
   \<open>sort_width_m (SmtSort_Uninterpreted s) = 0\<close>
   by (simp_all add: sort_width_m_def)
 
-definition tr_problem_m :: \<open>SmtProblem \<Rightarrow> Problem\<close> where
+definition tr_problem_m :: \<open>SmtProblem \<Rightarrow> ProblemL\<close> where
   \<open>tr_problem_m p \<equiv>
      let ra = tr_asserts_m p (tr_defs_m p) in
-     make_Problem (map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) (SmtProblem_funs p)) (fst ra) (snd ra)\<close>
+     make_ProblemL (map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) (sfuns p)) (fst ra) (snd ra)\<close>
 
-text \<open>The model of \<open>p\<close> for the assignment \<open>m\<close> of the variables of the translation.\<close>
-definition tr_model_m :: \<open>SmtProblem \<Rightarrow> bool list list \<Rightarrow> SmtModel\<close> where
-  \<open>tr_model_m p m \<equiv>
-     make_SmtModel []
-       (map (\<lambda>i. make_SmtInterp []
-                   (case SmtFun_ret (SmtProblem_funs p ! i) of SmtSort_Bool \<Rightarrow> SmtValue_Bool (m ! i ! 0)
-                    | _ \<Rightarrow> SmtValue_Bv (m ! i)))
-          [0..<length (SmtProblem_funs p)])\<close>
+text \<open>The value of a declared constant of sort \<open>s\<close> for the bits \<open>bs\<close> of its variable.\<close>
+definition mval_ok :: \<open>SmtSort \<Rightarrow> bool list \<Rightarrow> SmtValue \<Rightarrow> bool\<close> where
+  \<open>mval_ok s bs v \<equiv>
+     (case s of SmtSort_Bool \<Rightarrow> v = SmtValue_Bool (bs ! 0)
+      | _ \<Rightarrow> (\<exists>x. v = SmtValue_Bv x \<and> rvec_elems x = bs))\<close>
+
+text \<open>\<open>M\<close> is the model of \<open>p\<close> for the assignment \<open>m\<close> of the variables of the translation (up to
+  the capacities and layouts of its vectors).\<close>
+definition tr_model_ok :: \<open>SmtProblem \<Rightarrow> bool list list \<Rightarrow> SmtModel \<Rightarrow> bool\<close> where
+  \<open>tr_model_ok p m M \<equiv>
+     rvec_elems (SmtModel_domains M) = [] \<and> length (rvec_elems (SmtModel_funs M)) = length (sfuns p) \<and>
+     (\<forall>i < length (sfuns p).
+        rvec_elems (SmtInterp_entries (rvec_elems (SmtModel_funs M) ! i)) = [] \<and>
+        mval_ok (SmtFun_ret (sfuns p ! i)) (m ! i) (SmtInterp_default (rvec_elems (SmtModel_funs M) ! i)))\<close>
 
 section \<open>Facts about the definitions of the extended language\<close>
 
@@ -588,22 +607,25 @@ lemma smt_tsort_wf:
   using assms(1)
 proof (induction t arbitrary: s)
   case (SmtTerm_App op args)
-  then have \<open>None \<notin> set (map (smt_tsort fs ds ps) args)\<close>
-    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) args) = Some s\<close>
+  then have \<open>None \<notin> set (map (smt_tsort fs ds ps) (rvec_elems args))\<close>
+    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)) = Some s\<close>
     by (auto split: if_splits)
-  then have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) args). smt_wf_sort ns x\<close>
-    using SmtTerm_App.IH by (force simp: image_iff)
+  then have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)). smt_wf_sort ns x\<close>
+    using SmtTerm_App.IH[unfolded set_rvec_elems] by (force simp: image_iff)
   then show ?case using smt_op_sort_wf[OF o] by blast
 qed (use assms in \<open>auto simp: unat_of_nat_eq Suc_le_eq split: if_splits\<close>)
 
 text \<open>The meanings of definitions respect their sorts.\<close>
 definition defs_sound :: \<open>SmtFun list \<Rightarrow> SmtDef list \<Rightarrow> (sval list \<Rightarrow> sval) list \<Rightarrow> bool\<close> where
   \<open>defs_sound fs ds dv \<equiv> length dv = length ds \<and>
-     (\<forall>d < length ds. \<forall>xs. list_all2 smt_has_sort (SmtDef_params (ds ! d)) xs \<longrightarrow> smt_has_sort (SmtDef_ret (ds ! d)) ((dv ! d) xs))\<close>
+     (\<forall>d < length ds. \<forall>xs. list_all2 smt_has_sort (dpar (ds ! d)) xs \<longrightarrow> smt_has_sort (SmtDef_ret (ds ! d)) ((dv ! d) xs))\<close>
 
 definition interp_sound :: \<open>SmtFun list \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> bool\<close> where
   \<open>interp_sound fs I \<equiv>
-     \<forall>f < length fs. \<forall>xs. list_all2 smt_has_sort (SmtFun_args (fs ! f)) xs \<longrightarrow> smt_has_sort (SmtFun_ret (fs ! f)) (I f xs)\<close>
+     \<forall>f < length fs. \<forall>xs. list_all2 smt_has_sort (fargs (fs ! f)) xs \<longrightarrow> smt_has_sort (SmtFun_ret (fs ! f)) (I f xs)\<close>
+
+lemma map_the_Some: \<open>None \<notin> set (map g xs) \<Longrightarrow> map g xs = map Some (map (the \<circ> g) xs)\<close>
+  by (induction xs) auto
 
 lemma map_Some_la2:
   \<open>map g args = map Some ss \<Longrightarrow> (\<And>a s. a \<in> set args \<Longrightarrow> g a = Some s \<Longrightarrow> P s (h a)) \<Longrightarrow> list_all2 P ss (map h args)\<close>
@@ -612,9 +634,9 @@ lemma map_Some_la2:
 lemma smt_eval_sort:
   assumes \<open>smt_tsort fs ds ps t = Some s\<close> \<open>interp_sound fs I\<close> \<open>defs_sound fs ds dv\<close>
     \<open>list_all2 smt_has_sort ps xs\<close> \<open>\<forall>x \<in> set ps. smt_wf_sort ns x\<close>
-    \<open>\<forall>f \<in> set fs. \<forall>x \<in> set (SmtFun_args f). smt_wf_sort ns x\<close>
+    \<open>\<forall>f \<in> set fs. \<forall>x \<in> set (fargs f). smt_wf_sort ns x\<close>
     \<open>\<forall>f \<in> set fs. smt_wf_sort ns (SmtFun_ret f)\<close>
-    \<open>\<forall>d \<in> set ds. smt_wf_sort ns (SmtDef_ret d) \<and> (\<forall>x \<in> set (SmtDef_params d). smt_wf_sort ns x)\<close>
+    \<open>\<forall>d \<in> set ds. smt_wf_sort ns (SmtDef_ret d) \<and> (\<forall>x \<in> set (dpar d). smt_wf_sort ns x)\<close>
   shows \<open>smt_has_sort s (smt_eval I dv xs t)\<close>
   using assms(1)
 proof (induction t arbitrary: s)
@@ -625,28 +647,28 @@ next
   then show ?case using assms(4) by (auto simp: list_all2_conv_all_nth split: if_splits)
 next
   case (SmtTerm_Fun f args)
-  then have f: \<open>unat f < length fs\<close> and m: \<open>map (smt_tsort fs ds ps) args = map Some (SmtFun_args (fs ! unat f))\<close>
+  then have f: \<open>unat f < length fs\<close> and m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (fargs (fs ! unat f))\<close>
     and e: \<open>s = SmtFun_ret (fs ! unat f)\<close> by (auto split: if_splits)
-  have \<open>list_all2 smt_has_sort (SmtFun_args (fs ! unat f)) (map (smt_eval I dv xs) args)\<close>
-    using map_Some_la2[OF m] SmtTerm_Fun.IH by blast
+  have \<open>list_all2 smt_has_sort (fargs (fs ! unat f)) (map (smt_eval I dv xs) (rvec_elems args))\<close>
+    using map_Some_la2[OF m] SmtTerm_Fun.IH[unfolded set_rvec_elems] by blast
   then show ?case using assms(2) f e by (simp add: interp_sound_def)
 next
   case (SmtTerm_Def d args)
-  then have d: \<open>unat d < length ds\<close> and m: \<open>map (smt_tsort fs ds ps) args = map Some (SmtDef_params (ds ! unat d))\<close>
+  then have d: \<open>unat d < length ds\<close> and m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (dpar (ds ! unat d))\<close>
     and e: \<open>s = SmtDef_ret (ds ! unat d)\<close> by (auto split: if_splits)
-  have \<open>list_all2 smt_has_sort (SmtDef_params (ds ! unat d)) (map (smt_eval I dv xs) args)\<close>
-    using map_Some_la2[OF m] SmtTerm_Def.IH by blast
+  have \<open>list_all2 smt_has_sort (dpar (ds ! unat d)) (map (smt_eval I dv xs) (rvec_elems args))\<close>
+    using map_Some_la2[OF m] SmtTerm_Def.IH[unfolded set_rvec_elems] by blast
   then show ?case using assms(3) d e by (simp add: defs_sound_def)
 next
   case (SmtTerm_App op args)
-  then have n: \<open>None \<notin> set (map (smt_tsort fs ds ps) args)\<close>
-    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) args) = Some s\<close>
+  then have n: \<open>None \<notin> set (map (smt_tsort fs ds ps) (rvec_elems args))\<close>
+    and o: \<open>smt_op_sort op (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)) = Some s\<close>
     by (auto split: if_splits)
-  have m: \<open>map (smt_tsort fs ds ps) args = map Some (map (the \<circ> smt_tsort fs ds ps) args)\<close>
-    using n by (induction args) auto
-  have \<open>list_all2 smt_has_sort (map (the \<circ> smt_tsort fs ds ps) args) (map (smt_eval I dv xs) args)\<close>
-    using map_Some_la2[OF m] SmtTerm_App.IH by blast
-  moreover have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) args). smt_wf_sort ns x\<close>
+  have m: \<open>map (smt_tsort fs ds ps) (rvec_elems args) = map Some (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args))\<close>
+    using n by (rule map_the_Some)
+  have \<open>list_all2 smt_has_sort (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)) (map (smt_eval I dv xs) (rvec_elems args))\<close>
+    using map_Some_la2[OF m] SmtTerm_App.IH[unfolded set_rvec_elems] by blast
+  moreover have \<open>\<forall>x \<in> set (map (the \<circ> smt_tsort fs ds ps) (rvec_elems args)). smt_wf_sort ns x\<close>
     using m smt_tsort_wf[of fs ds ps _ _ ns] assms(5,7,8) by (force simp: image_iff)
   ultimately show ?case using smt_op_sem_sort[OF o] by simp
 qed auto
@@ -656,7 +678,7 @@ subsection \<open>The translation of a theory function\<close>
 text \<open>Definition \<open>k\<close> of the state \<open>S\<close> stands for the value \<open>v\<close> of sort \<open>s\<close>: its index fits in a
   word (the translation writes it as one), its width is that of \<open>s\<close> and its value the number of
   \<open>v\<close>.\<close>
-definition ref_ok :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> nat \<Rightarrow> SmtSort \<Rightarrow> sval \<Rightarrow> bool\<close> where
+definition ref_ok :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL list \<Rightarrow> nat \<Rightarrow> SmtSort \<Rightarrow> sval \<Rightarrow> bool\<close> where
   \<open>ref_ok ws vs S k s v \<equiv>
      k < length S \<and> k < 2 ^ 64 \<and> def_widths ws [] S ! k = sort_width_m s \<and>
      def_values ws [] vs [] S ! k = enc v \<and> smt_has_sort s v\<close>
@@ -711,25 +733,25 @@ lemma bin_sem_cmp:
 text \<open>A chain of binary operations that keep the width of their operands.\<close>
 text \<open>The binary operators of the extended language whose result has the width of the operands.\<close>
 definition width_pres :: \<open>Op \<Rightarrow> bool\<close> where
-  \<open>width_pres bop \<equiv> bop \<notin> {Op_Concat, Op_Comp, Op_Eq, Op_Distinct, Op_Ult, Op_Ule, Op_Ugt, Op_Uge,
+  \<open>width_pres xop \<equiv> xop \<notin> {Op_Concat, Op_Comp, Op_Eq, Op_Distinct, Op_Ult, Op_Ule, Op_Ugt, Op_Uge,
      Op_Slt, Op_Sle, Op_Sgt, Op_Sge}\<close>
 
 lemma fold_left_eval:
-  assumes \<open>width_pres bop\<close>
+  assumes \<open>width_pres xop\<close>
     \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = w\<close> \<open>wt ws dw acc\<close> \<open>width ws dw acc = w\<close>
-  shows \<open>wt ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) acc ks) \<and>
-         width ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) acc ks) = w \<and>
-         eval ws dw vs dv (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) acc ks) =
-           foldl (\<lambda>a k. bin_sem bop w a w (eval ws dw vs dv (tref k))) (eval ws dw vs dv acc) ks\<close>
+  shows \<open>wt ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) acc ks) \<and>
+         width ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) acc ks) = w \<and>
+         eval ws dw vs dv (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) acc ks) =
+           foldl (\<lambda>a k. bin_sem xop w a w (eval ws dw vs dv (tref k))) (eval ws dw vs dv acc) ks\<close>
   using assms(2-4)
 proof (induction ks arbitrary: acc)
   case Nil
   then show ?case by simp
 next
   case (Cons k ks)
-  have \<open>wt ws dw (Term_Bin bop acc (tref k)) \<and> width ws dw (Term_Bin bop acc (tref k)) = w\<close>
-    using Cons.prems assms(1) by (cases bop) (auto simp: width_pres_def)
-  then show ?case using Cons.IH[of \<open>Term_Bin bop acc (tref k)\<close>] Cons.prems assms(1) by auto
+  have \<open>wt ws dw (TermL_Bin xop acc (tref k)) \<and> width ws dw (TermL_Bin xop acc (tref k)) = w\<close>
+    using Cons.prems assms(1) by (cases xop) (auto simp: width_pres_def)
+  then show ?case using Cons.IH[of \<open>TermL_Bin xop acc (tref k)\<close>] Cons.prems assms(1) by auto
 qed
 
 lemma and_bool_s: \<open>Bit_Operations.and (of_bool a) (of_bool b) = (of_bool (a \<and> b) :: nat)\<close>
@@ -764,8 +786,8 @@ text \<open>The \<open>=\<close>, \<open>distinct\<close> and \<open>and\<close>
   references of one width.\<close>
 lemma eq_ref_eval:
   \<open>wt ws dw (tref a) \<Longrightarrow> wt ws dw (tref b) \<Longrightarrow> width ws dw (tref a) = width ws dw (tref b) \<Longrightarrow>
-     wt ws dw (Term_Bin op (tref a) (tref b)) \<and>
-     (op \<in> {Op_Eq, Op_Distinct} \<longrightarrow> width ws dw (Term_Bin op (tref a) (tref b)) = 1)\<close>
+     wt ws dw (TermL_Bin op (tref a) (tref b)) \<and>
+     (op \<in> {Op_Eq, Op_Distinct} \<longrightarrow> width ws dw (TermL_Bin op (tref a) (tref b)) = 1)\<close>
   by auto
 
 lemma chain_idx:
@@ -805,7 +827,7 @@ lemma chain_eval:
        of_bool (\<forall>i. Suc i < length ks \<longrightarrow> eval ws dw vs dv (tref (ks ! i)) = eval ws dw vs dv (tref (ks ! Suc i)))\<close>
 proof -
   let ?e = \<open>\<lambda>i. eval ws dw vs dv (tref (ks ! i))\<close>
-  let ?f = \<open>\<lambda>acc i. Term_Bin Op_And acc (Term_Bin Op_Eq (tref (ks ! (i - 1))) (tref (ks ! i)))\<close>
+  let ?f = \<open>\<lambda>acc i. TermL_Bin Op_And acc (TermL_Bin Op_Eq (tref (ks ! (i - 1))) (tref (ks ! i)))\<close>
   have g: \<open>\<forall>i \<in> set ix. 1 \<le> i \<and> i < length ks \<Longrightarrow> wt ws dw acc \<Longrightarrow> width ws dw acc = 1 \<Longrightarrow> eval ws dw vs dv acc = of_bool A \<Longrightarrow>
       wt ws dw (foldl ?f acc ix) \<and> width ws dw (foldl ?f acc ix) = 1 \<and>
       eval ws dw vs dv (foldl ?f acc ix) = of_bool (A \<and> (\<forall>i \<in> set ix. ?e (i - 1) = ?e i))\<close> for ix acc A
@@ -829,7 +851,7 @@ proof -
     using assms(2) m by blast+
   have \<open>(?e 0 = ?e 1 \<and> (\<forall>i \<in> set [2..<length ks]. ?e (i - 1) = ?e i)) = (\<forall>i. Suc i < length ks \<longrightarrow> ?e i = ?e (Suc i))\<close>
     using chain_idx[OF assms(1)] .
-  then show ?thesis using g[of \<open>[2..<length ks]\<close> \<open>Term_Bin Op_Eq (tref (ks ! 0)) (tref (ks ! 1))\<close> \<open>?e 0 = ?e 1\<close>] k01
+  then show ?thesis using g[of \<open>[2..<length ks]\<close> \<open>TermL_Bin Op_Eq (tref (ks ! 0)) (tref (ks ! 1))\<close> \<open>?e 0 = ?e 1\<close>] k01
     by (simp add: chain_m_def)
 qed
 
@@ -840,7 +862,7 @@ lemma pairwise_eval:
        of_bool (\<forall>i j. i < j \<and> j < length ks \<longrightarrow> eval ws dw vs dv (tref (ks ! i)) \<noteq> eval ws dw vs dv (tref (ks ! j)))\<close>
 proof -
   let ?e = \<open>\<lambda>i. eval ws dw vs dv (tref (ks ! i))\<close>
-  let ?f = \<open>\<lambda>acc ij. Term_Bin Op_And acc (Term_Bin Op_Distinct (tref (ks ! fst ij)) (tref (ks ! snd ij)))\<close>
+  let ?f = \<open>\<lambda>acc ij. TermL_Bin Op_And acc (TermL_Bin Op_Distinct (tref (ks ! fst ij)) (tref (ks ! snd ij)))\<close>
   have g: \<open>\<forall>ij \<in> set ix. fst ij < length ks \<and> snd ij < length ks \<Longrightarrow> wt ws dw acc \<Longrightarrow> width ws dw acc = 1 \<Longrightarrow>
       eval ws dw vs dv acc = of_bool A \<Longrightarrow>
       wt ws dw (foldl ?f acc ix) \<and> width ws dw (foldl ?f acc ix) = 1 \<and>
@@ -870,7 +892,7 @@ proof -
   also have \<open>\<dots> = (\<forall>i j. i < j \<and> j < length ks \<longrightarrow> ?e i \<noteq> ?e j)\<close>
     by (simp only: pairs_m_set[OF assms(1)]) auto
   finally show ?thesis
-    using g[OF p, of \<open>Term_Bin Op_Distinct (tref (ks ! 0)) (tref (ks ! 1))\<close> \<open>?e 0 \<noteq> ?e 1\<close>] k01
+    using g[OF p, of \<open>TermL_Bin Op_Distinct (tref (ks ! 0)) (tref (ks ! 1))\<close> \<open>?e 0 \<noteq> ?e 1\<close>] k01
     by (simp add: pairwise_m_def)
 qed
 
@@ -885,13 +907,13 @@ proof (induction ks rule: induct_list012)
   then show ?case by (auto simp: implies_m_def)
 next
   case (3 k1 k2 ks)
-  let ?r = \<open>foldr (\<lambda>k acc. Term_Bin Op_Or (Term_Not (tref k)) acc) (butlast (k2 # ks)) (tref (last (k2 # ks)))\<close>
+  let ?r = \<open>foldr (\<lambda>k acc. TermL_Bin Op_Or (TermL_Not (tref k)) acc) (butlast (k2 # ks)) (tref (last (k2 # ks)))\<close>
   have ih: \<open>wt ws dw ?r \<and> width ws dw ?r = 1 \<and>
      eval ws dw vs dv ?r = of_bool ((\<exists>k \<in> set (butlast (k2 # ks)). eval ws dw vs dv (tref k) = 0) \<or>
        eval ws dw vs dv (tref (last (k2 # ks))) = 1)\<close>
     using 3 by (simp add: implies_m_def)
   have k1: \<open>wt ws dw (tref k1) \<and> width ws dw (tref k1) = 1 \<and> eval ws dw vs dv (tref k1) \<in> {0, 1}\<close> using 3 by simp
-  have e: \<open>implies_m (k1 # k2 # ks) = Term_Bin Op_Or (Term_Not (tref k1)) ?r\<close> by (simp add: implies_m_def)
+  have e: \<open>implies_m (k1 # k2 # ks) = TermL_Bin Op_Or (TermL_Not (tref k1)) ?r\<close> by (simp add: implies_m_def)
   show ?case using ih k1 unfolding e
     by (cases \<open>eval ws dw vs dv (tref k1) = 0\<close>) (auto simp: Bit_Operations.or_eq_0_iff)
 qed simp
@@ -902,7 +924,7 @@ lemma fold_op_width_pres: \<open>fold_op op \<Longrightarrow> width_pres (tr_op 
 text \<open>The translation of a fold function is a chain from the left (one step for a binary one).\<close>
 lemma tr_app_fold:
   \<open>fold_op op \<Longrightarrow> smt_op_sort op ss = Some s \<Longrightarrow> length ks = length ss \<Longrightarrow>
-     tr_app_m op ks = foldl (\<lambda>acc k. Term_Bin (tr_op op) acc (tref k)) (tref (hd ks)) (tl ks)\<close>
+     tr_app_m op ks = foldl (\<lambda>acc k. TermL_Bin (tr_op op) acc (tref k)) (tref (hd ks)) (tl ks)\<close>
   by (cases op) (auto simp: fold_left_m_def dest!: smt_bin_width_Some split: if_splits;
       cases ks; auto simp: numeral_2_eq_2 length_Suc_conv)+
 
@@ -929,12 +951,12 @@ next
 qed
 
 lemma bool_fold_eval:
-  assumes \<open>width_pres bop\<close> \<open>ks \<noteq> []\<close> \<open>length ks = length bs\<close>
+  assumes \<open>width_pres xop\<close> \<open>ks \<noteq> []\<close> \<open>length ks = length bs\<close>
     \<open>\<forall>i < length ks. wt ws dw (tref (ks ! i)) \<and> width ws dw (tref (ks ! i)) = 1 \<and> eval ws dw vs dv (tref (ks ! i)) = of_bool (bs ! i)\<close>
-  shows \<open>wt ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) \<and>
-     width ws dw (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) = 1 \<and>
-     eval ws dw vs dv (foldl (\<lambda>acc k. Term_Bin bop acc (tref k)) (tref (hd ks)) (tl ks)) =
-       foldl (\<lambda>a b. bin_sem bop 1 a 1 (of_bool b)) (of_bool (hd bs)) (tl bs)\<close>
+  shows \<open>wt ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) (tref (hd ks)) (tl ks)) \<and>
+     width ws dw (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) (tref (hd ks)) (tl ks)) = 1 \<and>
+     eval ws dw vs dv (foldl (\<lambda>acc k. TermL_Bin xop acc (tref k)) (tref (hd ks)) (tl ks)) =
+       foldl (\<lambda>a b. bin_sem xop 1 a 1 (of_bool b)) (of_bool (hd bs)) (tl bs)\<close>
 proof -
   have K: \<open>\<forall>k \<in> set ks. wt ws dw (tref k) \<and> width ws dw (tref k) = 1\<close>
     using assms(4) by (auto simp: in_set_conv_nth)
@@ -946,8 +968,8 @@ proof -
   have hk: \<open>hd ks \<in> set ks\<close> \<open>\<forall>k \<in> set (tl ks). k \<in> set ks\<close> using assms(2) by (auto simp: list.set_sel)
   show ?thesis
     using fold_left_eval[OF assms(1), where ws=ws and dw=dw and ks=\<open>tl ks\<close> and w=1 and acc=\<open>tref (hd ks)\<close> and vs=vs and dv=dv]
-      K hk h tl foldl_map_h[of \<open>\<lambda>a. bin_sem bop 1 a 1\<close> \<open>\<lambda>k. eval ws dw vs dv (tref k)\<close>]
-      foldl_map_h[of \<open>\<lambda>a. bin_sem bop 1 a 1\<close> of_bool]
+      K hk h tl foldl_map_h[of \<open>\<lambda>a. bin_sem xop 1 a 1\<close> \<open>\<lambda>k. eval ws dw vs dv (tref k)\<close>]
+      foldl_map_h[of \<open>\<lambda>a. bin_sem xop 1 a 1\<close> of_bool]
     by auto
 qed
 
@@ -1423,14 +1445,14 @@ subsection \<open>The translation of terms\<close>
 text \<open>The context of the translation of the definitions below \<open>n\<close> and of the assertions:
   \<open>vs\<close> are the values of the variables (the declared constants) under \<open>I\<close>, and the definitions
   without parameters below \<open>n\<close> are translated in \<open>S\<close>.\<close>
-definition ctx_ok :: \<open>SmtProblem \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> bool\<close> where
+definition ctx_ok :: \<open>SmtProblem \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> TermL list \<Rightarrow> bool\<close> where
   \<open>ctx_ok p I ws vs n dm S \<equiv>
-     let fs = SmtProblem_funs p; ds = SmtProblem_defs p; dv = smt_def_sems I ds in
+     let fs = sfuns p; ds = sdefs p; dv = smt_def_sems I ds in
      smt_wf p \<and> smt_fragment p \<and> n \<le> length ds \<and>
      ws = map (\<lambda>f. sort_width_m (SmtFun_ret f)) fs \<and>
      length vs = length fs \<and> (\<forall>f < length fs. vs ! f = enc (I f [])) \<and> interp_sound fs I \<and>
      length dm \<ge> n \<and>
-     (\<forall>d < n. SmtDef_params (ds ! d) = [] \<longrightarrow> ref_ok ws vs S (dm ! d) (SmtDef_ret (ds ! d)) ((dv ! d) []))\<close>
+     (\<forall>d < n. dpar (ds ! d) = [] \<longrightarrow> ref_ok ws vs S (dm ! d) (SmtDef_ret (ds ! d)) ((dv ! d) []))\<close>
 
 lemma ref_ok_ext: \<open>ref_ok ws vs S k s v \<Longrightarrow> ref_ok ws vs (S @ E) k s v\<close>
 proof -
@@ -1483,28 +1505,28 @@ lemma smt_eval_take:
      smt_eval I (take d dv) xs t = smt_eval I dv xs t\<close>
 proof (induction t)
   case (SmtTerm_Fun f args)
-  have \<open>\<forall>a \<in> set args. \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
+  have \<open>\<forall>a \<in> set (rvec_elems args). \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
     using SmtTerm_Fun.prems(1) by (auto split: if_splits intro: map_Some_ex)
-  then have e: \<open>\<forall>a \<in> set args. smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
-    using SmtTerm_Fun.IH SmtTerm_Fun.prems(2) by blast
-  have \<open>map (smt_eval I (take d dv) xs) args = map (smt_eval I dv xs) args\<close> using e by (intro map_cong) auto
+  then have e: \<open>\<forall>a \<in> set (rvec_elems args). smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
+    using SmtTerm_Fun.IH[unfolded set_rvec_elems] SmtTerm_Fun.prems(2) by blast
+  have \<open>map (smt_eval I (take d dv) xs) (rvec_elems args) = map (smt_eval I dv xs) (rvec_elems args)\<close> using e by (intro map_cong) auto
   then show ?case by (metis smt_eval.simps(4))
 next
   case (SmtTerm_Def d' args)
-  have \<open>\<forall>a \<in> set args. \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close> and u: \<open>unat d' < length (take d ds)\<close>
+  have \<open>\<forall>a \<in> set (rvec_elems args). \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close> and u: \<open>unat d' < length (take d ds)\<close>
     using SmtTerm_Def.prems(1) by (auto split: if_splits intro: map_Some_ex)
-  then have e: \<open>\<forall>a \<in> set args. smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
-    using SmtTerm_Def.IH SmtTerm_Def.prems(2) by blast
-  have \<open>map (smt_eval I (take d dv) xs) args = map (smt_eval I dv xs) args\<close> using e by (intro map_cong) auto
+  then have e: \<open>\<forall>a \<in> set (rvec_elems args). smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
+    using SmtTerm_Def.IH[unfolded set_rvec_elems] SmtTerm_Def.prems(2) by blast
+  have \<open>map (smt_eval I (take d dv) xs) (rvec_elems args) = map (smt_eval I dv xs) (rvec_elems args)\<close> using e by (intro map_cong) auto
   moreover have \<open>take d dv ! unat d' = dv ! unat d'\<close> using u SmtTerm_Def.prems(2) by simp
   ultimately show ?case by (metis smt_eval.simps(5))
 next
   case (SmtTerm_App op args)
-  have \<open>\<forall>a \<in> set args. \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
+  have \<open>\<forall>a \<in> set (rvec_elems args). \<exists>y. smt_tsort fs (take d ds) ps a = Some y\<close>
     using SmtTerm_App.prems(1) by (auto split: if_splits) (metis image_eqI option.exhaust)
-  then have e: \<open>\<forall>a \<in> set args. smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
-    using SmtTerm_App.IH SmtTerm_App.prems(2) by blast
-  have \<open>map (smt_eval I (take d dv) xs) args = map (smt_eval I dv xs) args\<close> using e by (intro map_cong) auto
+  then have e: \<open>\<forall>a \<in> set (rvec_elems args). smt_eval I (take d dv) xs a = smt_eval I dv xs a\<close>
+    using SmtTerm_App.IH[unfolded set_rvec_elems] SmtTerm_App.prems(2) by blast
+  have \<open>map (smt_eval I (take d dv) xs) (rvec_elems args) = map (smt_eval I dv xs) (rvec_elems args)\<close> using e by (intro map_cong) auto
   then show ?case by (metis smt_eval.simps(6))
 qed auto
 
@@ -1512,9 +1534,9 @@ lemma frag_of_wf: \<open>smt_fragment p \<Longrightarrow> smt_wf_sort (unat (Smt
   by (cases s) (auto simp: smt_fragment_def)
 
 lemma defs_sound_sems:
-  assumes \<open>\<forall>d < length ds. smt_tsort fs (take d ds) (SmtDef_params (ds ! d)) (SmtDef_body (ds ! d)) = Some (SmtDef_ret (ds ! d))\<close>
-    \<open>\<forall>d \<in> set ds. smt_wf_sort ns (SmtDef_ret d) \<and> (\<forall>x \<in> set (SmtDef_params d). smt_wf_sort ns x)\<close>
-    \<open>\<forall>f \<in> set fs. \<forall>x \<in> set (SmtFun_args f). smt_wf_sort ns x\<close>
+  assumes \<open>\<forall>d < length ds. smt_tsort fs (take d ds) (dpar (ds ! d)) (SmtDef_body (ds ! d)) = Some (SmtDef_ret (ds ! d))\<close>
+    \<open>\<forall>d \<in> set ds. smt_wf_sort ns (SmtDef_ret d) \<and> (\<forall>x \<in> set (dpar d). smt_wf_sort ns x)\<close>
+    \<open>\<forall>f \<in> set fs. \<forall>x \<in> set (fargs f). smt_wf_sort ns x\<close>
     \<open>\<forall>f \<in> set fs. smt_wf_sort ns (SmtFun_ret f)\<close> \<open>interp_sound fs I\<close>
   shows \<open>defs_sound fs ds (smt_def_sems I ds)\<close>
   using assms(1,2)
@@ -1523,18 +1545,18 @@ proof (induction ds rule: rev_induct)
   then show ?case by (simp add: defs_sound_def smt_def_sems_def)
 next
   case (snoc x ds)
-  have p: \<open>\<forall>d < length ds. smt_tsort fs (take d ds) (SmtDef_params (ds ! d)) (SmtDef_body (ds ! d)) = Some (SmtDef_ret (ds ! d))\<close>
+  have p: \<open>\<forall>d < length ds. smt_tsort fs (take d ds) (dpar (ds ! d)) (SmtDef_body (ds ! d)) = Some (SmtDef_ret (ds ! d))\<close>
   proof (intro allI impI)
     fix d assume d: \<open>d < length ds\<close>
     then have \<open>take d (ds @ [x]) = take d ds\<close> \<open>(ds @ [x]) ! d = ds ! d\<close> by (simp_all add: nth_append)
-    then show \<open>smt_tsort fs (take d ds) (SmtDef_params (ds ! d)) (SmtDef_body (ds ! d)) = Some (SmtDef_ret (ds ! d))\<close>
+    then show \<open>smt_tsort fs (take d ds) (dpar (ds ! d)) (SmtDef_body (ds ! d)) = Some (SmtDef_ret (ds ! d))\<close>
       using snoc.prems(1)[rule_format, of d] d by simp
   qed
   have ih: \<open>defs_sound fs ds (smt_def_sems I ds)\<close> using snoc.IH p snoc.prems(2) by simp
-  have x: \<open>smt_tsort fs ds (SmtDef_params x) (SmtDef_body x) = Some (SmtDef_ret x)\<close>
+  have x: \<open>smt_tsort fs ds (dpar x) (SmtDef_body x) = Some (SmtDef_ret x)\<close>
     using snoc.prems(1)[rule_format, of \<open>length ds\<close>] by simp
   have \<open>smt_has_sort (SmtDef_ret x) (smt_eval I (smt_def_sems I ds) xs (SmtDef_body x))\<close>
-    if \<open>list_all2 smt_has_sort (SmtDef_params x) xs\<close> for xs
+    if \<open>list_all2 smt_has_sort (dpar x) xs\<close> for xs
     using smt_eval_sort[OF x assms(5) ih that, of ns] snoc.prems(2) assms(3,4) by simp
   then show ?case using ih
     by (auto simp: defs_sound_def smt_def_sems_snoc nth_append smt_def_sems_length less_Suc_eq)
@@ -1567,24 +1589,24 @@ lemma ctx_ok_mono: \<open>ctx_ok p I ws vs n dm S \<Longrightarrow> m \<le> n \<
 
 lemma ctx_ok_wf_sorts:
   assumes \<open>ctx_ok p I ws vs n dm S\<close>
-  shows \<open>\<forall>f \<in> set (SmtProblem_funs p). (\<forall>x \<in> set (SmtFun_args f). smt_wf_sort (unat (SmtProblem_num_sorts p)) x) \<and>
+  shows \<open>\<forall>f \<in> set (sfuns p). (\<forall>x \<in> set (fargs f). smt_wf_sort (unat (SmtProblem_num_sorts p)) x) \<and>
            smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtFun_ret f)\<close>
-    and \<open>\<forall>d \<in> set (SmtProblem_defs p). smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtDef_ret d) \<and>
-           (\<forall>x \<in> set (SmtDef_params d). smt_wf_sort (unat (SmtProblem_num_sorts p)) x)\<close>
-    and \<open>\<forall>d < length (SmtProblem_defs p). smt_tsort (SmtProblem_funs p) (take d (SmtProblem_defs p))
-           (SmtDef_params (SmtProblem_defs p ! d)) (SmtDef_body (SmtProblem_defs p ! d)) = Some (SmtDef_ret (SmtProblem_defs p ! d))\<close>
+    and \<open>\<forall>d \<in> set (sdefs p). smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtDef_ret d) \<and>
+           (\<forall>x \<in> set (dpar d). smt_wf_sort (unat (SmtProblem_num_sorts p)) x)\<close>
+    and \<open>\<forall>d < length (sdefs p). smt_tsort (sfuns p) (take d (sdefs p))
+           (dpar (sdefs p ! d)) (SmtDef_body (sdefs p ! d)) = Some (SmtDef_ret (sdefs p ! d))\<close>
 proof -
   from assms have w: \<open>smt_wf p\<close> by (simp add: ctx_ok_def Let_def)
-  then show \<open>\<forall>f \<in> set (SmtProblem_funs p). (\<forall>x \<in> set (SmtFun_args f). smt_wf_sort (unat (SmtProblem_num_sorts p)) x) \<and>
+  then show \<open>\<forall>f \<in> set (sfuns p). (\<forall>x \<in> set (fargs f). smt_wf_sort (unat (SmtProblem_num_sorts p)) x) \<and>
            smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtFun_ret f)\<close> by (simp add: smt_wf_def Let_def)
-  from w have \<open>\<forall>d < length (SmtProblem_defs p). smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtDef_ret (SmtProblem_defs p ! d)) \<and>
-           (\<forall>x \<in> set (SmtDef_params (SmtProblem_defs p ! d)). smt_wf_sort (unat (SmtProblem_num_sorts p)) x)\<close>
+  from w have \<open>\<forall>d < length (sdefs p). smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtDef_ret (sdefs p ! d)) \<and>
+           (\<forall>x \<in> set (dpar (sdefs p ! d)). smt_wf_sort (unat (SmtProblem_num_sorts p)) x)\<close>
     by (simp add: smt_wf_def Let_def)
-  then show \<open>\<forall>d \<in> set (SmtProblem_defs p). smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtDef_ret d) \<and>
-           (\<forall>x \<in> set (SmtDef_params d). smt_wf_sort (unat (SmtProblem_num_sorts p)) x)\<close>
+  then show \<open>\<forall>d \<in> set (sdefs p). smt_wf_sort (unat (SmtProblem_num_sorts p)) (SmtDef_ret d) \<and>
+           (\<forall>x \<in> set (dpar d). smt_wf_sort (unat (SmtProblem_num_sorts p)) x)\<close>
     by (metis in_set_conv_nth)
-  from w show \<open>\<forall>d < length (SmtProblem_defs p). smt_tsort (SmtProblem_funs p) (take d (SmtProblem_defs p))
-           (SmtDef_params (SmtProblem_defs p ! d)) (SmtDef_body (SmtProblem_defs p ! d)) = Some (SmtDef_ret (SmtProblem_defs p ! d))\<close>
+  from w show \<open>\<forall>d < length (sdefs p). smt_tsort (sfuns p) (take d (sdefs p))
+           (dpar (sdefs p ! d)) (SmtDef_body (sdefs p ! d)) = Some (SmtDef_ret (sdefs p ! d))\<close>
     by (simp add: smt_wf_def Let_def)
 qed
 
@@ -1592,11 +1614,11 @@ lemma defs_sound_take: \<open>defs_sound fs ds dv \<Longrightarrow> defs_sound f
   by (auto simp: defs_sound_def)
 
 lemma val_sort:
-  assumes \<open>ctx_ok p I ws vs n dm S\<close> \<open>smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps t = Some s\<close>
+  assumes \<open>ctx_ok p I ws vs n dm S\<close> \<open>smt_tsort (sfuns p) (take n (sdefs p)) ps t = Some s\<close>
     \<open>\<forall>x \<in> set ps. smt_wf_sort (unat (SmtProblem_num_sorts p)) x\<close> \<open>list_all2 smt_has_sort ps xs\<close>
-  shows \<open>smt_has_sort s (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs t)\<close>
+  shows \<open>smt_has_sort s (smt_eval I (smt_def_sems I (sdefs p)) xs t)\<close>
 proof -
-  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close> and ?ns = \<open>unat (SmtProblem_num_sorts p)\<close>
+  let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close> and ?ns = \<open>unat (SmtProblem_num_sorts p)\<close>
   note w = ctx_ok_wf_sorts[OF assms(1)]
   have isd: \<open>interp_sound ?fs I\<close> using assms(1) by (simp add: ctx_ok_def Let_def)
   have ds: \<open>defs_sound ?fs ?ds (smt_def_sems I ?ds)\<close>
@@ -1617,22 +1639,22 @@ lemma la2_of_refs:
 
 lemma tr_term_args_correct:
   shows \<open>tr_term_m p dm env n S t = (S', t') \<Longrightarrow> ctx_ok p I ws vs n dm S \<Longrightarrow>
-     smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps t = Some s \<Longrightarrow>
+     smt_tsort (sfuns p) (take n (sdefs p)) ps t = Some s \<Longrightarrow>
      \<forall>x \<in> set ps. frag_sort x \<Longrightarrow> length env = length ps \<Longrightarrow> length xs = length ps \<Longrightarrow>
      (\<forall>i < length ps. ref_ok ws vs S (env ! i) (ps ! i) (xs ! i)) \<Longrightarrow>
      defs_wt ws [] S \<Longrightarrow> length S' < 2 ^ 64 \<Longrightarrow>
      (\<exists>E. S' = S @ E) \<and> defs_wt ws [] S' \<and> wt ws (def_widths ws [] S') t' \<and>
      width ws (def_widths ws [] S') t' = sort_width_m s \<and>
      eval ws (def_widths ws [] S') vs (def_values ws [] vs [] S') t' =
-       enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs t)\<close>
+       enc (smt_eval I (smt_def_sems I (sdefs p)) xs t)\<close>
     and \<open>tr_args_m p dm env n S ts = (S', ks) \<Longrightarrow> ctx_ok p I ws vs n dm S \<Longrightarrow>
-     map (smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps) ts = map Some ss \<Longrightarrow>
+     map (smt_tsort (sfuns p) (take n (sdefs p)) ps) ts = map Some ss \<Longrightarrow>
      \<forall>x \<in> set ps. frag_sort x \<Longrightarrow> length env = length ps \<Longrightarrow> length xs = length ps \<Longrightarrow>
      (\<forall>i < length ps. ref_ok ws vs S (env ! i) (ps ! i) (xs ! i)) \<Longrightarrow>
      defs_wt ws [] S \<Longrightarrow> length S' < 2 ^ 64 \<Longrightarrow>
      (\<exists>E. S' = S @ E) \<and> defs_wt ws [] S' \<and> length ks = length ts \<and>
      (\<forall>i < length ts. ref_ok ws vs S' (ks ! i) (ss ! i)
-        (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs (ts ! i)))\<close>
+        (smt_eval I (smt_def_sems I (sdefs p)) xs (ts ! i)))\<close>
 proof (induction p dm env n S t and p dm env n S ts arbitrary: S' t' ps s xs and S' ks ps ss xs
     rule: tr_term_m_tr_args_m.induct)
   case (1 p dm env n S b S' t' ps s xs)
@@ -1647,77 +1669,77 @@ next
   then show ?case using 3 k tref_ok[OF 3(7)[rule_format, OF k(1)]] by auto
 next
   case (4 p dm env n S i args S' t' ps s xs)
-  let ?fs = \<open>SmtProblem_funs p\<close>
-  have i: \<open>unat i < length ?fs\<close> \<open>map (smt_tsort ?fs (take n (SmtProblem_defs p)) ps) args = map Some (SmtFun_args (?fs ! unat i))\<close>
+  let ?fs = \<open>sfuns p\<close>
+  have i: \<open>unat i < length ?fs\<close> \<open>map (smt_tsort ?fs (take n (sdefs p)) ps) (rvec_elems args) = map Some (fargs (?fs ! unat i))\<close>
     \<open>s = SmtFun_ret (?fs ! unat i)\<close> using 4(3) by (auto split: if_splits)
   have fr: \<open>smt_fragment p\<close> \<open>ws = map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close> \<open>length vs = length ?fs\<close>
     \<open>vs ! unat i = enc (I (unat i) [])\<close> using 4(2) i(1) by (auto simp: ctx_ok_def Let_def)
-  have na: \<open>SmtFun_args (?fs ! unat i) = []\<close> using fr(1) i(1) by (auto simp: smt_fragment_def)
-  then have a: \<open>args = []\<close> using i(2) by simp
+  have na: \<open>fargs (?fs ! unat i) = []\<close> using fr(1) i(1) by (auto simp: smt_fragment_def)
+  then have a: \<open>(rvec_elems args) = []\<close> using i(2) by simp
   have \<open>frag_sort s\<close> using frag_of_wf[OF fr(1)] ctx_ok_wf_sorts(1)[OF 4(2)] i(1,3) by (metis nth_mem)
   then show ?case using 4(1,8) i fr a sort_width_frag[of s] by auto
 next
   case (5 p dm env n S d args S' t' ps s xs)
-  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close> and ?dv = \<open>smt_def_sems I (SmtProblem_defs p)\<close>
-  have d: \<open>unat d < length (take n ?ds)\<close> \<open>map (smt_tsort ?fs (take n ?ds) ps) args = map Some (SmtDef_params (?ds ! unat d))\<close>
+  let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close> and ?dv = \<open>smt_def_sems I (sdefs p)\<close>
+  have d: \<open>unat d < length (take n ?ds)\<close> \<open>map (smt_tsort ?fs (take n ?ds) ps) (rvec_elems args) = map Some (dpar (?ds ! unat d))\<close>
     \<open>s = SmtDef_ret (?ds ! unat d)\<close> using 5(5) by (auto split: if_splits)
   have dn: \<open>unat d < n\<close> \<open>unat d < length ?ds\<close> using d(1) by auto
   have fr: \<open>smt_fragment p\<close> using 5(4) by (simp add: ctx_ok_def Let_def)
-  have wfr: \<open>frag_sort (SmtDef_ret (?ds ! unat d))\<close> \<open>\<forall>x \<in> set (SmtDef_params (?ds ! unat d)). frag_sort x\<close>
+  have wfr: \<open>frag_sort (SmtDef_ret (?ds ! unat d))\<close> \<open>\<forall>x \<in> set (dpar (?ds ! unat d)). frag_sort x\<close>
     using ctx_ok_wf_sorts(2)[OF 5(4)] frag_of_wf[OF fr] dn(2) by (meson nth_mem)+
   show ?case
-  proof (cases \<open>SmtDef_params (?ds ! unat d) = []\<close>)
+  proof (cases \<open>dpar (?ds ! unat d) = []\<close>)
     case True
-    then have a: \<open>args = []\<close> using d(2) by simp
+    then have a: \<open>(rvec_elems args) = []\<close> using d(2) by simp
     have res: \<open>S' = S\<close> \<open>t' = tref (dm ! unat d)\<close> using 5(3) True by auto
     have r: \<open>ref_ok ws vs S (dm ! unat d) (SmtDef_ret (?ds ! unat d)) ((?dv ! unat d) [])\<close>
       using 5(4) dn True unfolding ctx_ok_def Let_def by blast
     show ?thesis using tref_ok[OF r wfr(1)] res a d(3) 5(10) by simp
   next
     case False
-    obtain S1 ks1 where r: \<open>tr_args_m p dm env n S args = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S args\<close>)
+    obtain S1 ks1 where r: \<open>tr_args_m p dm env n S (rvec_elems args) = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S (rvec_elems args)\<close>)
     have res: \<open>tr_term_m p dm ks1 (unat d) S1 (SmtDef_body (?ds ! unat d)) = (S', t')\<close>
       using 5(3) False dn(1) r by (simp add: Let_def)
     obtain E2 where E2: \<open>S' = S1 @ E2\<close> using tr_prefix(1)[OF res] by blast
     have len1: \<open>length S1 < 2 ^ 64\<close> using 5(11) E2 by simp
-    let ?xs' = \<open>map (smt_eval I ?dv xs) args\<close>
-    have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length args \<and>
-        (\<forall>i < length args. ref_ok ws vs S1 (ks1 ! i) (SmtDef_params (?ds ! unat d) ! i) (smt_eval I ?dv xs (args ! i)))\<close>
+    let ?xs' = \<open>map (smt_eval I ?dv xs) (rvec_elems args)\<close>
+    have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length (rvec_elems args) \<and>
+        (\<forall>i < length (rvec_elems args). ref_ok ws vs S1 (ks1 ! i) (dpar (?ds ! unat d) ! i) (smt_eval I ?dv xs (rvec_elems args ! i)))\<close>
       using 5(1)[OF False dn(1) r 5(4) d(2) 5(6,7,8,9,10) len1] .
     obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
-    have la: \<open>length args = length (SmtDef_params (?ds ! unat d))\<close> using d(2) by (metis length_map)
+    have la: \<open>length (rvec_elems args) = length (dpar (?ds ! unat d))\<close> using d(2) by (metis length_map)
     have ctx1: \<open>ctx_ok p I ws vs (unat d) dm S1\<close> using ctx_ok_mono[OF ctx_ok_ext[OF 5(4), of E1]] E1 dn(1) by simp
-    have tb: \<open>smt_tsort ?fs (take (unat d) ?ds) (SmtDef_params (?ds ! unat d)) (SmtDef_body (?ds ! unat d)) = Some (SmtDef_ret (?ds ! unat d))\<close>
+    have tb: \<open>smt_tsort ?fs (take (unat d) ?ds) (dpar (?ds ! unat d)) (SmtDef_body (?ds ! unat d)) = Some (SmtDef_ret (?ds ! unat d))\<close>
       using ctx_ok_wf_sorts(3)[OF 5(4)] dn(2) by blast
     have B: \<open>(\<exists>E. S' = S1 @ E) \<and> defs_wt ws [] S' \<and> wt ws (def_widths ws [] S') t' \<and>
         width ws (def_widths ws [] S') t' = sort_width_m (SmtDef_ret (?ds ! unat d)) \<and>
         eval ws (def_widths ws [] S') vs (def_values ws [] vs [] S') t' = enc (smt_eval I ?dv ?xs' (SmtDef_body (?ds ! unat d)))\<close>
-      using 5(2)[of \<open>(S1, ks1)\<close> S' t' \<open>SmtDef_params (?ds ! unat d)\<close> \<open>SmtDef_ret (?ds ! unat d)\<close> ?xs'] False dn(1) r res ctx1 tb wfr(2)
+      using 5(2)[of \<open>(S1, ks1)\<close> S' t' \<open>dpar (?ds ! unat d)\<close> \<open>SmtDef_ret (?ds ! unat d)\<close> ?xs'] False dn(1) r res ctx1 tb wfr(2)
         A la 5(11) by auto
     have v: \<open>smt_eval I ?dv xs (SmtTerm_Def d args) = smt_eval I ?dv ?xs' (SmtDef_body (?ds ! unat d))\<close>
       using smt_def_sems_nth[OF dn(2), of I] tb
-        smt_eval_take[of ?fs \<open>unat d\<close> ?ds \<open>SmtDef_params (?ds ! unat d)\<close> \<open>SmtDef_body (?ds ! unat d)\<close> ?dv I ?xs']
+        smt_eval_take[of ?fs \<open>unat d\<close> ?ds \<open>dpar (?ds ! unat d)\<close> \<open>SmtDef_body (?ds ! unat d)\<close> ?dv I ?xs']
       by (simp add: smt_def_sems_length)
     show ?thesis using B v d(3) E1 E2 by auto
   qed
 next
   case (6 p dm env n S op args S' t' ps s xs)
-  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close> and ?dv = \<open>smt_def_sems I (SmtProblem_defs p)\<close>
-  let ?ss = \<open>map (the \<circ> smt_tsort ?fs (take n ?ds) ps) args\<close>
-  obtain S1 ks1 where r: \<open>tr_args_m p dm env n S args = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S args\<close>)
+  let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close> and ?dv = \<open>smt_def_sems I (sdefs p)\<close>
+  let ?ss = \<open>map (the \<circ> smt_tsort ?fs (take n ?ds) ps) (rvec_elems args)\<close>
+  obtain S1 ks1 where r: \<open>tr_args_m p dm env n S (rvec_elems args) = (S1, ks1)\<close> by (cases \<open>tr_args_m p dm env n S (rvec_elems args)\<close>)
   have res: \<open>S' = S1\<close> \<open>t' = tr_app_m op ks1\<close> using 6(2) r by (auto simp: Let_def)
-  have o: \<open>None \<notin> set (map (smt_tsort ?fs (take n ?ds) ps) args)\<close> \<open>smt_op_sort op ?ss = Some s\<close>
+  have o: \<open>None \<notin> set (map (smt_tsort ?fs (take n ?ds) ps) (rvec_elems args))\<close> \<open>smt_op_sort op ?ss = Some s\<close>
     using 6(4) by (auto split: if_splits)
-  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) args = map Some ?ss\<close> using o(1) by (induction args) auto
-  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length args \<and>
-      (\<forall>i < length args. ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (args ! i)))\<close>
+  have m: \<open>map (smt_tsort ?fs (take n ?ds) ps) (rvec_elems args) = map Some ?ss\<close> using o(1) by (rule map_the_Some)
+  have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> length ks1 = length (rvec_elems args) \<and>
+      (\<forall>i < length (rvec_elems args). ref_ok ws vs S1 (ks1 ! i) (?ss ! i) (smt_eval I ?dv xs (rvec_elems args ! i)))\<close>
     using 6(1)[OF r 6(3) m 6(5,6,7,8,9)] res 6(10) by simp
   have fr: \<open>smt_fragment p\<close> using 6(3) by (simp add: ctx_ok_def Let_def)
   note w = ctx_ok_wf_sorts[OF 6(3)]
   have frs: \<open>\<forall>x \<in> set ?ss. frag_sort x\<close>
   proof
     fix x assume \<open>x \<in> set ?ss\<close>
-    then obtain a where a: \<open>a \<in> set args\<close> \<open>x = the (smt_tsort ?fs (take n ?ds) ps a)\<close> by auto
+    then obtain a where a: \<open>a \<in> set (rvec_elems args)\<close> \<open>x = the (smt_tsort ?fs (take n ?ds) ps a)\<close> by auto
     then have \<open>smt_tsort ?fs (take n ?ds) ps a = Some x\<close> using o(1) by (metis image_eqI option.collapse set_map)
     then have \<open>smt_wf_sort (unat (SmtProblem_num_sorts p)) x\<close>
       using smt_tsort_wf[of ?fs \<open>take n ?ds\<close> ps a x] 6(5) wf_of_frag w(1,2) set_take_subset[of n ?ds] by blast
@@ -1725,8 +1747,8 @@ next
   qed
   have C: \<open>wt ws (def_widths ws [] S1) (tr_app_m op ks1) \<and> width ws (def_widths ws [] S1) (tr_app_m op ks1) = sort_width_m s \<and>
       eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) (tr_app_m op ks1) =
-        enc (smt_op_sem op (map (smt_eval I ?dv xs) args))\<close>
-    using tr_app_correct[OF o(2) frs, of ks1 \<open>map (smt_eval I ?dv xs) args\<close> ws vs S1] A by simp
+        enc (smt_op_sem op (map (smt_eval I ?dv xs) (rvec_elems args)))\<close>
+    using tr_app_correct[OF o(2) frs, of ks1 \<open>map (smt_eval I ?dv xs) (rvec_elems args)\<close> ws vs S1] A by simp
   show ?case using A C res by simp
 next
   case (7 p dm env n S S' ks ps ss xs)
@@ -1737,19 +1759,19 @@ next
   obtain S2 ks2 where r2: \<open>tr_args_m p dm env n (S1 @ [t1]) rest = (S2, ks2)\<close>
     by (cases \<open>tr_args_m p dm env n (S1 @ [t1]) rest\<close>)
   have res: \<open>S' = S2\<close> \<open>ks = length S1 # ks2\<close> using 8(3) r1 r2 by (auto simp: Let_def)
-  obtain s0 ss' where ss: \<open>ss = s0 # ss'\<close> \<open>smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps a = Some s0\<close>
-    \<open>map (smt_tsort (SmtProblem_funs p) (take n (SmtProblem_defs p)) ps) rest = map Some ss'\<close>
+  obtain s0 ss' where ss: \<open>ss = s0 # ss'\<close> \<open>smt_tsort (sfuns p) (take n (sdefs p)) ps a = Some s0\<close>
+    \<open>map (smt_tsort (sfuns p) (take n (sdefs p)) ps) rest = map Some ss'\<close>
     using 8(5) by (cases ss) auto
   obtain E2 where E2: \<open>S2 = (S1 @ [t1]) @ E2\<close> using tr_prefix(2)[OF r2] by blast
   have len1: \<open>length S1 < 2 ^ 64\<close> using 8(11) res E2 by simp
   have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> wt ws (def_widths ws [] S1) t1 \<and>
       width ws (def_widths ws [] S1) t1 = sort_width_m s0 \<and>
       eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) t1 =
-        enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+        enc (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
     using 8(1)[OF r1 8(4) ss(2) 8(6,7,8,9,10) len1] .
-  have hs: \<open>smt_has_sort s0 (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+  have hs: \<open>smt_has_sort s0 (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
     using val_sort[OF 8(4) ss(2)] 8(6) la2_of_refs[OF 8(8,9)] wf_of_frag by blast
-  have refa: \<open>ref_ok ws vs (S1 @ [t1]) (length S1) s0 (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+  have refa: \<open>ref_ok ws vs (S1 @ [t1]) (length S1) s0 (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
     using A hs len1 by (simp add: ref_ok_def def_snoc)
   have dw1: \<open>defs_wt ws [] (S1 @ [t1])\<close> using A by (simp add: def_snoc)
   obtain E1 where E1: \<open>S1 = S @ E1\<close> using A by blast
@@ -1758,9 +1780,9 @@ next
     using 8(9) ref_ok_ext[of ws vs S _ _ _ \<open>E1 @ [t1]\<close>] E1 by simp
   have B: \<open>(\<exists>E. S2 = (S1 @ [t1]) @ E) \<and> defs_wt ws [] S2 \<and> length ks2 = length rest \<and>
       (\<forall>i < length rest. ref_ok ws vs S2 (ks2 ! i) (ss' ! i)
-        (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs (rest ! i)))\<close>
+        (smt_eval I (smt_def_sems I (sdefs p)) xs (rest ! i)))\<close>
     using 8(2)[of \<open>(S1, t1)\<close> S2 ks2 ps ss' xs] r1 r2 ctx1 ss(3) 8(6,7,8) env1 dw1 res 8(11) by auto
-  have r0: \<open>ref_ok ws vs S2 (length S1) s0 (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs a)\<close>
+  have r0: \<open>ref_ok ws vs S2 (length S1) s0 (smt_eval I (smt_def_sems I (sdefs p)) xs a)\<close>
     using ref_ok_ext[OF refa, of E2] E2 by simp
   show ?case
   proof (intro conjI)
@@ -1768,10 +1790,10 @@ next
     show \<open>defs_wt ws [] S'\<close> using B res by simp
     show \<open>length ks = length (a # rest)\<close> using B res by simp
     show \<open>\<forall>i < length (a # rest). ref_ok ws vs S' (ks ! i) (ss ! i)
-        (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs ((a # rest) ! i))\<close>
+        (smt_eval I (smt_def_sems I (sdefs p)) xs ((a # rest) ! i))\<close>
     proof (intro allI impI)
       fix i assume \<open>i < length (a # rest)\<close>
-      then show \<open>ref_ok ws vs S' (ks ! i) (ss ! i) (smt_eval I (smt_def_sems I (SmtProblem_defs p)) xs ((a # rest) ! i))\<close>
+      then show \<open>ref_ok ws vs S' (ks ! i) (ss ! i) (smt_eval I (smt_def_sems I (sdefs p)) xs ((a # rest) ! i))\<close>
         using r0 B res ss(1) by (cases i) auto
     qed
   qed
@@ -1779,28 +1801,28 @@ qed
 
 subsection \<open>The translation of the definitions and of the assertions\<close>
 
-definition tr_defs_step :: \<open>SmtProblem \<Rightarrow> Term list \<times> nat list \<Rightarrow> nat \<Rightarrow> Term list \<times> nat list\<close> where
+definition tr_defs_step :: \<open>SmtProblem \<Rightarrow> TermL list \<times> nat list \<Rightarrow> nat \<Rightarrow> TermL list \<times> nat list\<close> where
   \<open>tr_defs_step p \<equiv> \<lambda>(S, dm) d.
-     if SmtDef_params (SmtProblem_defs p ! d) = [] then
-       (let r = tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d)) in (fst r @ [snd r], dm @ [length (fst r)]))
+     if dpar (sdefs p ! d) = [] then
+       (let r = tr_term_m p dm [] d S (SmtDef_body (sdefs p ! d)) in (fst r @ [snd r], dm @ [length (fst r)]))
      else (S, dm @ [0])\<close>
 
-lemma tr_defs_m_step: \<open>tr_defs_m p = foldl (tr_defs_step p) ([], []) [0..<length (SmtProblem_defs p)]\<close>
+lemma tr_defs_m_step: \<open>tr_defs_m p = foldl (tr_defs_step p) ([], []) [0..<length (sdefs p)]\<close>
   by (simp add: tr_defs_m_def tr_defs_step_def)
 
 lemma tr_defs_step_prefix: \<open>\<exists>E. fst (tr_defs_step p (S, dm) d) = S @ E\<close> \<open>length (snd (tr_defs_step p (S, dm) d)) = Suc (length dm)\<close>
 proof -
-  obtain S1 t1 where r: \<open>tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d)) = (S1, t1)\<close>
-    by (cases \<open>tr_term_m p dm [] d S (SmtDef_body (SmtProblem_defs p ! d))\<close>)
+  obtain S1 t1 where r: \<open>tr_term_m p dm [] d S (SmtDef_body (sdefs p ! d)) = (S1, t1)\<close>
+    by (cases \<open>tr_term_m p dm [] d S (SmtDef_body (sdefs p ! d))\<close>)
   obtain E where \<open>S1 = S @ E\<close> using tr_prefix(1)[OF r] by blast
   then show \<open>\<exists>E. fst (tr_defs_step p (S, dm) d) = S @ E\<close> using r by (auto simp: tr_defs_step_def)
   show \<open>length (snd (tr_defs_step p (S, dm) d)) = Suc (length dm)\<close> by (simp add: tr_defs_step_def Let_def)
 qed
 
 lemma ctx_ok_Suc:
-  assumes \<open>ctx_ok p I ws vs k dm S\<close> \<open>length dm = k\<close> \<open>k < length (SmtProblem_defs p)\<close> \<open>S' = S @ E\<close>
-    \<open>SmtDef_params (SmtProblem_defs p ! k) = [] \<Longrightarrow>
-       ref_ok ws vs S' x (SmtDef_ret (SmtProblem_defs p ! k)) ((smt_def_sems I (SmtProblem_defs p) ! k) [])\<close>
+  assumes \<open>ctx_ok p I ws vs k dm S\<close> \<open>length dm = k\<close> \<open>k < length (sdefs p)\<close> \<open>S' = S @ E\<close>
+    \<open>dpar (sdefs p ! k) = [] \<Longrightarrow>
+       ref_ok ws vs S' x (SmtDef_ret (sdefs p ! k)) ((smt_def_sems I (sdefs p) ! k) [])\<close>
   shows \<open>ctx_ok p I ws vs (Suc k) (dm @ [x]) S'\<close>
   using assms unfolding ctx_ok_def Let_def
   by (auto simp: nth_append less_Suc_eq intro: ref_ok_ext)
@@ -1821,7 +1843,7 @@ qed
 text \<open>After the first \<open>k\<close> definitions: the context of the translation for the definitions below
   \<open>k\<close> holds, the state is well-sorted, and there is an entry of \<open>dm\<close> for each definition.\<close>
 lemma tr_defs_correct:
-  assumes \<open>ctx_ok p I ws vs 0 [] []\<close> \<open>k \<le> length (SmtProblem_defs p)\<close>
+  assumes \<open>ctx_ok p I ws vs 0 [] []\<close> \<open>k \<le> length (sdefs p)\<close>
     \<open>length (fst (tr_defs_m p)) < 2 ^ 64\<close>
   shows \<open>ctx_ok p I ws vs k (snd (foldl (tr_defs_step p) ([], []) [0..<k])) (fst (foldl (tr_defs_step p) ([], []) [0..<k])) \<and>
          defs_wt ws [] (fst (foldl (tr_defs_step p) ([], []) [0..<k])) \<and>
@@ -1832,7 +1854,7 @@ proof (induction k)
   then show ?case using assms(1) by simp
 next
   case (Suc k)
-  let ?ds = \<open>SmtProblem_defs p\<close> and ?fs = \<open>SmtProblem_funs p\<close> and ?dv = \<open>smt_def_sems I (SmtProblem_defs p)\<close>
+  let ?ds = \<open>sdefs p\<close> and ?fs = \<open>sfuns p\<close> and ?dv = \<open>smt_def_sems I (sdefs p)\<close>
   obtain S dm where st: \<open>foldl (tr_defs_step p) ([], []) [0..<k] = (S, dm)\<close>
     by (cases \<open>foldl (tr_defs_step p) ([], []) [0..<k]\<close>)
   have kd: \<open>k < length ?ds\<close> using Suc.prems by simp
@@ -1846,7 +1868,7 @@ next
     then show ?thesis using tr_defs_prefix[of p \<open>fst (tr_defs_step p (S, dm) k)\<close> \<open>snd (tr_defs_step p (S, dm) k)\<close>] by simp
   qed
   show ?case
-  proof (cases \<open>SmtDef_params (?ds ! k) = []\<close>)
+  proof (cases \<open>dpar (?ds ! k) = []\<close>)
     case True
     obtain S1 t1 where r: \<open>tr_term_m p dm [] k S (SmtDef_body (?ds ! k)) = (S1, t1)\<close>
       by (cases \<open>tr_term_m p dm [] k S (SmtDef_body (?ds ! k))\<close>)
@@ -1876,11 +1898,11 @@ next
   qed
 qed
 
-text \<open>Term \<open>t\<close> of the state \<open>S\<close> translates assertion \<open>a\<close>.\<close>
-definition aok :: \<open>SmtProblem \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> Term \<Rightarrow> SmtTerm \<Rightarrow> bool\<close> where
+text \<open>TermL \<open>t\<close> of the state \<open>S\<close> translates assertion \<open>a\<close>.\<close>
+definition aok :: \<open>SmtProblem \<Rightarrow> (nat \<Rightarrow> sval list \<Rightarrow> sval) \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> TermL list \<Rightarrow> TermL \<Rightarrow> SmtTerm \<Rightarrow> bool\<close> where
   \<open>aok p I ws vs S t a \<equiv>
      wt ws (def_widths ws [] S) t \<and> width ws (def_widths ws [] S) t = 1 \<and>
-     eval ws (def_widths ws [] S) vs (def_values ws [] vs [] S) t = enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) [] a)\<close>
+     eval ws (def_widths ws [] S) vs (def_values ws [] vs [] S) t = enc (smt_eval I (smt_def_sems I (sdefs p)) [] a)\<close>
 
 lemma aok_ext: \<open>aok p I ws vs S t a \<Longrightarrow> aok p I ws vs (S @ E) t a\<close>
 proof -
@@ -1893,10 +1915,10 @@ proof -
   show ?thesis using h wt_width_eval_append[OF _ l, of ws t e vs f] e f by (simp add: aok_def)
 qed
 
-definition tr_asserts_step :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> Term list \<times> Term list \<Rightarrow> SmtTerm \<Rightarrow> Term list \<times> Term list\<close> where
-  \<open>tr_asserts_step p dm \<equiv> \<lambda>(S, ts) t. let r = tr_term_m p dm [] (length (SmtProblem_defs p)) S t in (fst r, ts @ [snd r])\<close>
+definition tr_asserts_step :: \<open>SmtProblem \<Rightarrow> nat list \<Rightarrow> TermL list \<times> TermL list \<Rightarrow> SmtTerm \<Rightarrow> TermL list \<times> TermL list\<close> where
+  \<open>tr_asserts_step p dm \<equiv> \<lambda>(S, ts) t. let r = tr_term_m p dm [] (length (sdefs p)) S t in (fst r, ts @ [snd r])\<close>
 
-lemma tr_asserts_m_step: \<open>tr_asserts_m p Sd = foldl (tr_asserts_step p (snd Sd)) (fst Sd, []) (SmtProblem_asserts p)\<close>
+lemma tr_asserts_m_step: \<open>tr_asserts_m p Sd = foldl (tr_asserts_step p (snd Sd)) (fst Sd, []) (sasserts p)\<close>
   by (simp add: tr_asserts_m_def tr_asserts_step_def)
 
 lemma tr_prefix_asserts: \<open>foldl (tr_asserts_step p dm) (S, acc) ass = (S', acc') \<Longrightarrow> \<exists>E. S' = S @ E\<close>
@@ -1905,8 +1927,8 @@ proof (induction ass arbitrary: S acc)
   then show ?case by simp
 next
   case (Cons a ass)
-  obtain S1 t1 where r: \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a = (S1, t1)\<close>
-    by (cases \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a\<close>)
+  obtain S1 t1 where r: \<open>tr_term_m p dm [] (length (sdefs p)) S a = (S1, t1)\<close>
+    by (cases \<open>tr_term_m p dm [] (length (sdefs p)) S a\<close>)
   have \<open>foldl (tr_asserts_step p dm) (S1, acc @ [t1]) ass = (S', acc')\<close>
     using Cons.prems r by (simp add: tr_asserts_step_def)
   then obtain E2 where \<open>S' = S1 @ E2\<close> using Cons.IH by blast
@@ -1915,8 +1937,8 @@ next
 qed
 
 lemma tr_asserts_gen:
-  assumes \<open>ctx_ok p I ws vs (length (SmtProblem_defs p)) dm S\<close> \<open>defs_wt ws [] S\<close>
-    \<open>\<forall>a \<in> set ass. smt_tsort (SmtProblem_funs p) (SmtProblem_defs p) [] a = Some SmtSort_Bool\<close>
+  assumes \<open>ctx_ok p I ws vs (length (sdefs p)) dm S\<close> \<open>defs_wt ws [] S\<close>
+    \<open>\<forall>a \<in> set ass. smt_tsort (sfuns p) (sdefs p) [] a = Some SmtSort_Bool\<close>
     \<open>foldl (tr_asserts_step p dm) (S, acc) ass = (S', acc')\<close> \<open>length S' < 2 ^ 64\<close>
   shows \<open>(\<exists>E. S' = S @ E) \<and> defs_wt ws [] S' \<and> (\<exists>new. acc' = acc @ new \<and> length new = length ass \<and>
            (\<forall>i < length ass. aok p I ws vs S' (new ! i) (ass ! i)))\<close>
@@ -1926,14 +1948,14 @@ proof (induction ass arbitrary: S acc)
   then show ?case by simp
 next
   case (Cons a ass)
-  obtain S1 t1 where r: \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a = (S1, t1)\<close>
-    by (cases \<open>tr_term_m p dm [] (length (SmtProblem_defs p)) S a\<close>)
+  obtain S1 t1 where r: \<open>tr_term_m p dm [] (length (sdefs p)) S a = (S1, t1)\<close>
+    by (cases \<open>tr_term_m p dm [] (length (sdefs p)) S a\<close>)
   have f: \<open>foldl (tr_asserts_step p dm) (S1, acc @ [t1]) ass = (S', acc')\<close>
     using Cons.prems(4) r by (simp add: tr_asserts_step_def)
   obtain E1 where E1: \<open>S1 = S @ E1\<close> using tr_prefix(1)[OF r] by blast
-  have ta: \<open>smt_tsort (SmtProblem_funs p) (take (length (SmtProblem_defs p)) (SmtProblem_defs p)) [] a = Some SmtSort_Bool\<close>
+  have ta: \<open>smt_tsort (sfuns p) (take (length (sdefs p)) (sdefs p)) [] a = Some SmtSort_Bool\<close>
     using Cons.prems(3) by simp
-  have ctx1: \<open>ctx_ok p I ws vs (length (SmtProblem_defs p)) dm S1\<close> using ctx_ok_ext[OF Cons.prems(1)] E1 by simp
+  have ctx1: \<open>ctx_ok p I ws vs (length (sdefs p)) dm S1\<close> using ctx_ok_ext[OF Cons.prems(1)] E1 by simp
   have IH0: \<open>(\<exists>E. S' = S1 @ E) \<and> defs_wt ws [] S' \<and> (\<exists>new. acc' = (acc @ [t1]) @ new \<and> length new = length ass \<and>
            (\<forall>i < length ass. aok p I ws vs S' (new ! i) (ass ! i)))\<close>
     if \<open>defs_wt ws [] S1\<close> using Cons.IH[OF ctx1 that _ f Cons.prems(5)] Cons.prems(3) by simp
@@ -1941,7 +1963,7 @@ next
   have len1: \<open>length S1 < 2 ^ 64\<close> using E2 Cons.prems(5) by simp
   have A: \<open>(\<exists>E. S1 = S @ E) \<and> defs_wt ws [] S1 \<and> wt ws (def_widths ws [] S1) t1 \<and>
       width ws (def_widths ws [] S1) t1 = sort_width_m SmtSort_Bool \<and>
-      eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) t1 = enc (smt_eval I (smt_def_sems I (SmtProblem_defs p)) [] a)\<close>
+      eval ws (def_widths ws [] S1) vs (def_values ws [] vs [] S1) t1 = enc (smt_eval I (smt_def_sems I (sdefs p)) [] a)\<close>
     using tr_term_args_correct(1)[OF r Cons.prems(1) ta, of \<open>[]\<close>] Cons.prems(2) len1 by simp
   have a0: \<open>aok p I ws vs S' t1 a\<close> using aok_ext[of p I ws vs S1 t1 a E2] A E2 by (simp add: aok_def)
   obtain new where new: \<open>acc' = (acc @ [t1]) @ new\<close> \<open>length new = length ass\<close>
@@ -1966,17 +1988,17 @@ text \<open>For an interpretation \<open>I\<close> of the constants and the valu
   translation that agree, the translation is well-sorted and its assertions hold exactly when those
   of \<open>p\<close> hold under \<open>I\<close>.\<close>
 lemma tr_problem_sem:
-  assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>interp_sound (SmtProblem_funs p) I\<close>
-    \<open>length vs = length (SmtProblem_funs p)\<close> \<open>\<forall>f < length (SmtProblem_funs p). vs ! f = enc (I f [])\<close>
+  assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>interp_sound (sfuns p) I\<close>
+    \<open>length vs = length (sfuns p)\<close> \<open>\<forall>f < length (sfuns p). vs ! f = enc (I f [])\<close>
     \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close>
   shows \<open>problem_wt (tr_problem_m p) \<and>
-    var_widths (tr_problem_m p) = map (\<lambda>f. sort_width_m (SmtFun_ret f)) (SmtProblem_funs p) \<and>
-    ((\<forall>t \<in> set (Problem_asserts (tr_problem_m p)).
-        eval (var_widths (tr_problem_m p)) (def_widths (var_widths (tr_problem_m p)) [] (Problem_defs (tr_problem_m p))) vs
-          (def_values (var_widths (tr_problem_m p)) [] vs [] (Problem_defs (tr_problem_m p))) t = 1) =
+    var_widths (tr_problem_m p) = map (\<lambda>f. sort_width_m (SmtFun_ret f)) (sfuns p) \<and>
+    ((\<forall>t \<in> set (ProblemL_asserts (tr_problem_m p)).
+        eval (var_widths (tr_problem_m p)) (def_widths (var_widths (tr_problem_m p)) [] (ProblemL_defs (tr_problem_m p))) vs
+          (def_values (var_widths (tr_problem_m p)) [] vs [] (ProblemL_defs (tr_problem_m p))) t = 1) =
      smt_satisfies p I)\<close>
 proof -
-  let ?fs = \<open>SmtProblem_funs p\<close> and ?ds = \<open>SmtProblem_defs p\<close>
+  let ?fs = \<open>sfuns p\<close> and ?ds = \<open>sdefs p\<close>
   let ?ws = \<open>map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close>
   have frs: \<open>\<forall>f \<in> set ?fs. frag_sort (SmtFun_ret f)\<close>
     using assms(1,2) frag_of_wf by (auto simp: smt_wf_def Let_def)
@@ -1985,35 +2007,35 @@ proof -
   have c0: \<open>ctx_ok p I ?ws vs 0 [] []\<close> using assms(1-5) by (simp add: ctx_ok_def Let_def)
   obtain S0 dm where d: \<open>tr_defs_m p = (S0, dm)\<close> by (cases \<open>tr_defs_m p\<close>)
   obtain S' ts where a: \<open>tr_asserts_m p (S0, dm) = (S', ts)\<close> by (cases \<open>tr_asserts_m p (S0, dm)\<close>)
-  have af: \<open>foldl (tr_asserts_step p dm) (S0, []) (SmtProblem_asserts p) = (S', ts)\<close>
+  have af: \<open>foldl (tr_asserts_step p dm) (S0, []) (sasserts p) = (S', ts)\<close>
     using a by (simp add: tr_asserts_m_step)
   have len0: \<open>length S0 < 2 ^ 64\<close> using tr_prefix_asserts[OF af] assms(6) a d by auto
   have D: \<open>ctx_ok p I ?ws vs (length ?ds) dm S0 \<and> defs_wt ?ws [] S0\<close>
     using tr_defs_correct[OF c0, of \<open>length ?ds\<close>] len0 d by (simp add: tr_defs_m_step)
-  have ta: \<open>\<forall>t \<in> set (SmtProblem_asserts p). smt_tsort ?fs ?ds [] t = Some SmtSort_Bool\<close>
+  have ta: \<open>\<forall>t \<in> set (sasserts p). smt_tsort ?fs ?ds [] t = Some SmtSort_Bool\<close>
     using assms(1) by (simp add: smt_wf_def Let_def)
-  have A: \<open>(\<exists>E. S' = S0 @ E) \<and> defs_wt ?ws [] S' \<and> (\<exists>new. ts = [] @ new \<and> length new = length (SmtProblem_asserts p) \<and>
-           (\<forall>i < length (SmtProblem_asserts p). aok p I ?ws vs S' (new ! i) (SmtProblem_asserts p ! i)))\<close>
+  have A: \<open>(\<exists>E. S' = S0 @ E) \<and> defs_wt ?ws [] S' \<and> (\<exists>new. ts = [] @ new \<and> length new = length (sasserts p) \<and>
+           (\<forall>i < length (sasserts p). aok p I ?ws vs S' (new ! i) (sasserts p ! i)))\<close>
     using tr_asserts_gen[OF conjunct1[OF D] conjunct2[OF D] ta af] assms(6) a d by simp
-  have tp: \<open>tr_problem_m p = make_Problem (map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) ?fs) S' ts\<close>
+  have tp: \<open>tr_problem_m p = make_ProblemL (map (\<lambda>f. word_of_nat (sort_width_m (SmtFun_ret f))) ?fs) S' ts\<close>
     using a d by (simp add: tr_problem_m_def)
-  have hs: \<open>smt_has_sort SmtSort_Bool (smt_eval I (smt_def_sems I ?ds) [] t)\<close> if \<open>t \<in> set (SmtProblem_asserts p)\<close> for t
+  have hs: \<open>smt_has_sort SmtSort_Bool (smt_eval I (smt_def_sems I ?ds) [] t)\<close> if \<open>t \<in> set (sasserts p)\<close> for t
     using val_sort[OF conjunct1[OF D], of \<open>[]\<close> t SmtSort_Bool \<open>[]\<close>] ta that by simp
   have ev: \<open>(enc (smt_eval I (smt_def_sems I ?ds) [] t) = 1) = (smt_eval I (smt_def_sems I ?ds) [] t = VBool True)\<close>
-    if \<open>t \<in> set (SmtProblem_asserts p)\<close> for t
+    if \<open>t \<in> set (sasserts p)\<close> for t
     using hs[OF that] by (cases \<open>smt_eval I (smt_def_sems I ?ds) [] t\<close>) auto
-  obtain new where nw: \<open>ts = new\<close> \<open>length new = length (SmtProblem_asserts p)\<close>
-    \<open>\<forall>i < length (SmtProblem_asserts p). aok p I ?ws vs S' (new ! i) (SmtProblem_asserts p ! i)\<close>
+  obtain new where nw: \<open>ts = new\<close> \<open>length new = length (sasserts p)\<close>
+    \<open>\<forall>i < length (sasserts p). aok p I ?ws vs S' (new ! i) (sasserts p ! i)\<close>
     using A by auto
-  have pf: \<open>Problem_defs (tr_problem_m p) = S'\<close> \<open>Problem_asserts (tr_problem_m p) = ts\<close> using tp by simp_all
+  have pf: \<open>ProblemL_defs (tr_problem_m p) = S'\<close> \<open>ProblemL_asserts (tr_problem_m p) = ts\<close> using tp by simp_all
   let ?E = \<open>\<lambda>t. eval ?ws (def_widths ?ws [] S') vs (def_values ?ws [] vs [] S') t\<close>
   have eqv: \<open>(\<forall>t \<in> set ts. ?E t = 1) = smt_satisfies p I\<close>
   proof -
     have \<open>(\<forall>t \<in> set ts. ?E t = 1) = (\<forall>i < length ts. ?E (ts ! i) = 1)\<close> by (rule all_set_conv_all_nth)
-    also have \<open>\<dots> = (\<forall>i < length (SmtProblem_asserts p).
-        smt_eval I (smt_def_sems I ?ds) [] (SmtProblem_asserts p ! i) = VBool True)\<close>
+    also have \<open>\<dots> = (\<forall>i < length (sasserts p).
+        smt_eval I (smt_def_sems I ?ds) [] (sasserts p ! i) = VBool True)\<close>
       using nw ev by (auto simp: aok_def)
-    also have \<open>\<dots> = (\<forall>t \<in> set (SmtProblem_asserts p). smt_eval I (smt_def_sems I ?ds) [] t = VBool True)\<close>
+    also have \<open>\<dots> = (\<forall>t \<in> set (sasserts p). smt_eval I (smt_def_sems I ?ds) [] t = VBool True)\<close>
       by (rule all_set_conv_all_nth[symmetric])
     finally show ?thesis by (simp add: smt_satisfies_def Let_def)
   qed
@@ -2022,9 +2044,9 @@ proof -
     show \<open>problem_wt (tr_problem_m p)\<close>
       using A nw vw pf unfolding problem_wt_def Let_def by (auto simp: aok_def all_set_conv_all_nth)
     show \<open>var_widths (tr_problem_m p) = ?ws\<close> using vw .
-    show \<open>(\<forall>t \<in> set (Problem_asserts (tr_problem_m p)).
-        eval (var_widths (tr_problem_m p)) (def_widths (var_widths (tr_problem_m p)) [] (Problem_defs (tr_problem_m p))) vs
-          (def_values (var_widths (tr_problem_m p)) [] vs [] (Problem_defs (tr_problem_m p))) t = 1) = smt_satisfies p I\<close>
+    show \<open>(\<forall>t \<in> set (ProblemL_asserts (tr_problem_m p)).
+        eval (var_widths (tr_problem_m p)) (def_widths (var_widths (tr_problem_m p)) [] (ProblemL_defs (tr_problem_m p))) vs
+          (def_values (var_widths (tr_problem_m p)) [] vs [] (ProblemL_defs (tr_problem_m p))) t = 1) = smt_satisfies p I\<close>
       using eqv vw pf by simp
   qed
 qed
@@ -2049,17 +2071,17 @@ next
   then show ?case using Suc.IH by simp
 qed
 
-lemma interp_sound_iff: \<open>interp_sound (SmtProblem_funs p) I = smt_interp_ok p I\<close>
+lemma interp_sound_iff: \<open>interp_sound (sfuns p) I = smt_interp_ok p I\<close>
   by (simp add: interp_sound_def smt_interp_ok_def)
 
 lemma tr_model_correct:
   assumes \<open>smt_wf p\<close> \<open>smt_fragment p\<close> \<open>length (fst (tr_asserts_m p (tr_defs_m p))) < 2 ^ 64\<close>
-    \<open>is_model (tr_problem_m p) m\<close>
-  shows \<open>smt_is_model p (tr_model_m p m)\<close>
+    \<open>is_model (tr_problem_m p) m\<close> \<open>tr_model_ok p m M\<close>
+  shows \<open>smt_is_model p M\<close>
 proof -
-  let ?fs = \<open>SmtProblem_funs p\<close> and ?I = \<open>smt_model_interp (tr_model_m p m)\<close>
+  let ?fs = \<open>sfuns p\<close> and ?I = \<open>smt_model_interp M\<close>
   let ?ws = \<open>map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close>
-  have frs: \<open>\<forall>f \<in> set ?fs. frag_sort (SmtFun_ret f)\<close> and na: \<open>\<forall>f \<in> set ?fs. SmtFun_args f = []\<close>
+  have frs: \<open>\<forall>f \<in> set ?fs. frag_sort (SmtFun_ret f)\<close> and na: \<open>\<forall>f \<in> set ?fs. fargs f = []\<close>
     and ns: \<open>unat (SmtProblem_num_sorts p) = 0\<close>
     using assms(1,2) frag_of_wf by (auto simp: smt_wf_def smt_fragment_def Let_def)
   have vw: \<open>var_widths (tr_problem_m p) = ?ws\<close>
@@ -2070,13 +2092,13 @@ proof -
     using lm0 ml by (auto, metis nth_map)
   have Iv: \<open>?I f [] = (case SmtFun_ret (?fs ! f) of SmtSort_Bool \<Rightarrow> VBool (m ! f ! 0)
       | _ \<Rightarrow> VBv (length (m ! f)) (smt_bits_nat (m ! f)))\<close> if \<open>f < length ?fs\<close> for f
-    using that by (auto simp: smt_model_interp_def smt_interp_of_def tr_model_m_def split: SmtSort.splits)
+    using that assms(5) lm by (auto simp: smt_model_interp_def smt_interp_of_def tr_model_ok_def mval_ok_def split: SmtSort.splits)
   have one: \<open>length (m ! f) = 1 \<Longrightarrow> smt_bits_nat (m ! f) = of_bool (m ! f ! 0)\<close> for f
     by (cases \<open>m ! f\<close>) auto
   have isd: \<open>interp_sound ?fs ?I\<close>
     unfolding interp_sound_def
   proof (intro allI impI)
-    fix f xs assume f: \<open>f < length ?fs\<close> and la: \<open>list_all2 smt_has_sort (SmtFun_args (?fs ! f)) xs\<close>
+    fix f xs assume f: \<open>f < length ?fs\<close> and la: \<open>list_all2 smt_has_sort (fargs (?fs ! f)) xs\<close>
     then have \<open>xs = []\<close> using na by (metis list.rel_sel nth_mem)
     moreover have \<open>frag_sort (SmtFun_ret (?fs ! f))\<close> using frs f by simp
     ultimately show \<open>smt_has_sort (SmtFun_ret (?fs ! f)) (?I f xs)\<close>
@@ -2091,9 +2113,17 @@ proof -
   have S: \<open>smt_satisfies p ?I\<close>
     using tr_problem_sem[OF assms(1,2) isd _ vs assms(3)] assms(4) lm vw
     by (simp add: is_model_def satisfies_def Let_def helper_defs_eq)
-  have W: \<open>smt_model_wf p (tr_model_m p m)\<close>
+  have vo: \<open>smt_model_value_ok [] (SmtFun_ret (?fs ! f)) (SmtInterp_default (rvec_elems (SmtModel_funs M) ! f))\<close>
+    if f: \<open>f < length ?fs\<close> for f
+  proof -
+    have mv: \<open>mval_ok (SmtFun_ret (?fs ! f)) (m ! f) (SmtInterp_default (rvec_elems (SmtModel_funs M) ! f))\<close>
+      using assms(5) f by (simp add: tr_model_ok_def)
+    have fr: \<open>frag_sort (SmtFun_ret (?fs ! f))\<close> using frs f by simp
+    show ?thesis using mv lm f fr by (cases \<open>SmtFun_ret (?fs ! f)\<close>) (auto simp: mval_ok_def)
+  qed
+  have W: \<open>smt_model_wf p M\<close>
     unfolding smt_model_wf_def Let_def
-    using ns lm frs[unfolded all_set_conv_all_nth] by (auto simp: tr_model_m_def split: SmtSort.splits)
+    using ns vo assms(5) by (auto simp: tr_model_ok_def)
   show ?thesis using S W by (simp add: smt_is_model_def)
 qed
 
@@ -2103,9 +2133,9 @@ lemma tr_complete:
   shows \<open>\<exists>m. is_model (tr_problem_m p) m\<close>
 proof -
   obtain I where I: \<open>smt_interp_ok p I\<close> \<open>smt_satisfies p I\<close> using assms(4) by (auto simp: smt_satisfiable_def)
-  let ?fs = \<open>SmtProblem_funs p\<close>
+  let ?fs = \<open>sfuns p\<close>
   let ?ws = \<open>map (\<lambda>f. sort_width_m (SmtFun_ret f)) ?fs\<close>
-  have frs: \<open>\<forall>f < length ?fs. frag_sort (SmtFun_ret (?fs ! f))\<close> and na: \<open>\<forall>f < length ?fs. SmtFun_args (?fs ! f) = []\<close>
+  have frs: \<open>\<forall>f < length ?fs. frag_sort (SmtFun_ret (?fs ! f))\<close> and na: \<open>\<forall>f < length ?fs. fargs (?fs ! f) = []\<close>
     using assms(1,2) frag_of_wf by (auto simp: smt_wf_def smt_fragment_def Let_def)
   have vw: \<open>var_widths (tr_problem_m p) = ?ws\<close>
     using frs sort_width_lt by (auto simp: var_widths_def tr_problem_m_def Let_def unat_of_nat_eq all_set_conv_all_nth)

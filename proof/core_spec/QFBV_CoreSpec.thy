@@ -1,5 +1,5 @@
 theory QFBV_CoreSpec
-  imports "QFBV_Spec.QFBV_Spec"
+  imports QFBV_Rvec
 begin
 
 section \<open>Case analysis on the word enumerations\<close>
@@ -221,9 +221,9 @@ text \<open>
   evaluates to 1; the answer \<open>Unsat\<close> means that no model exists.
 
   The statement \<open>solve_correct\<close> at the end of this theory: for every well-sorted problem
-  (\<open>problem_wt\<close>) whose \<open>size_bound\<close> is less than \<open>2^64\<close> (\<open>sizes_ok\<close>), there is a number \<open>N\<close>
+  (\<open>problem_wt\<close>) whose \<open>ovf_bound\<close> is less than \<open>2^56\<close> (\<open>sizes_ok\<close>), there is a number \<open>N\<close>
   such that the solver, translated with any fuel \<open>\<ge> N\<close>, satisfies the contract (and so does not
-  panic). For a problem that is not well-sorted, or whose \<open>size_bound\<close> is not below \<open>2^64\<close>, the
+  panic). For a problem that is not well-sorted, or whose \<open>ovf_bound\<close> is not below \<open>2^56\<close>, the
   statement says nothing.
 
   The input of the solver is a value of type \<^typ>\<open>Problem\<close>, not SMT-LIB text. Its terms
@@ -286,6 +286,87 @@ text \<open>
     reference model, and the theorem holds for every heap that satisfies them.
 \<close>
 
+subsection \<open>The list views of the generated types\<close>
+
+text \<open>The translation represents a \<^verbatim>\<open>Vec\<close> as an \<^typ>\<open>'a rvec\<close>: its elements
+  (\<^const>\<open>rvec_elems\<close>), its capacity and the layout of its elements. The meaning of a problem
+  depends only on the elements. This specification is therefore stated on list views of the
+  generated types \<^typ>\<open>Term\<close> and \<^typ>\<open>Problem\<close>, with the same constructors and fields and
+  every vector replaced by the list of its elements: \<open>TermL\<close>, \<open>ProblemL\<close>, and the views
+  \<open>term_of\<close>, \<open>prob_of\<close> of the generated values.\<close>
+
+datatype TermL =
+    TermL_Const \<open>bool list\<close>
+  | TermL_Var \<open>64 word\<close>
+  | TermL_Ref \<open>64 word\<close>
+  | TermL_Not TermL
+  | TermL_Neg TermL
+  | TermL_Bin Op TermL TermL
+  | TermL_Extract \<open>64 word\<close> \<open>64 word\<close> TermL
+  | TermL_Repeat \<open>64 word\<close> TermL
+  | TermL_ZeroExtend \<open>64 word\<close> TermL
+  | TermL_SignExtend \<open>64 word\<close> TermL
+  | TermL_RotateLeft \<open>64 word\<close> TermL
+  | TermL_RotateRight \<open>64 word\<close> TermL
+  | TermL_Ite TermL TermL TermL
+
+datatype_record ProblemL =
+  ProblemL_widths :: \<open>64 word list\<close>
+  ProblemL_defs :: \<open>TermL list\<close>
+  ProblemL_asserts :: \<open>TermL list\<close>
+
+primrec term_of :: \<open>Term \<Rightarrow> TermL\<close> where
+  \<open>term_of (Term_Const bs) = TermL_Const (rvec_elems bs)\<close>
+| \<open>term_of (Term_Var i) = TermL_Var i\<close>
+| \<open>term_of (Term_Ref i) = TermL_Ref i\<close>
+| \<open>term_of (Term_Not a) = TermL_Not (term_of a)\<close>
+| \<open>term_of (Term_Neg a) = TermL_Neg (term_of a)\<close>
+| \<open>term_of (Term_Bin op a b) = TermL_Bin op (term_of a) (term_of b)\<close>
+| \<open>term_of (Term_Extract hi lo a) = TermL_Extract hi lo (term_of a)\<close>
+| \<open>term_of (Term_Repeat i a) = TermL_Repeat i (term_of a)\<close>
+| \<open>term_of (Term_ZeroExtend i a) = TermL_ZeroExtend i (term_of a)\<close>
+| \<open>term_of (Term_SignExtend i a) = TermL_SignExtend i (term_of a)\<close>
+| \<open>term_of (Term_RotateLeft i a) = TermL_RotateLeft i (term_of a)\<close>
+| \<open>term_of (Term_RotateRight i a) = TermL_RotateRight i (term_of a)\<close>
+| \<open>term_of (Term_Ite c a b) = TermL_Ite (term_of c) (term_of a) (term_of b)\<close>
+
+definition prob_of :: \<open>Problem \<Rightarrow> ProblemL\<close> where
+  \<open>prob_of p \<equiv> make_ProblemL (rvec_elems (Problem_widths p)) (map term_of (rvec_elems (Problem_defs p)))
+     (map term_of (rvec_elems (Problem_asserts p)))\<close>
+
+lemma prob_of_simps [simp]:
+  \<open>ProblemL_widths (prob_of p) = rvec_elems (Problem_widths p)\<close>
+  \<open>ProblemL_defs (prob_of p) = map term_of (rvec_elems (Problem_defs p))\<close>
+  \<open>ProblemL_asserts (prob_of p) = map term_of (rvec_elems (Problem_asserts p))\<close>
+  by (simp_all add: prob_of_def)
+
+text \<open>The lists of the elements of a vector of vectors (an assignment).\<close>
+definition vecs_of :: \<open>'a rvec rvec \<Rightarrow> 'a list list\<close> where
+  \<open>vecs_of v \<equiv> map rvec_elems (rvec_elems v)\<close>
+
+lemma vecs_of_simps [simp]:
+  \<open>length (vecs_of v) = rvec_length v\<close>
+  \<open>i < rvec_length v \<Longrightarrow> vecs_of v ! i = rvec_elems (rvec_elems v ! i)\<close>
+  by (simp_all add: vecs_of_def)
+
+lemma vecs_of_new [simp]: \<open>vecs_of (rvec_new_val l) = []\<close>
+  by (simp add: vecs_of_def)
+
+lemma vecs_of_push [simp]:
+  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> vecs_of (the (rvec_append_val v [x])) = vecs_of v @ [rvec_elems x]\<close>
+  by (simp add: vecs_of_def)
+
+text \<open>The vectors of a vector of vectors can grow.\<close>
+definition allvok :: \<open>'a rvec rvec \<Rightarrow> bool\<close> where
+  \<open>allvok v \<equiv> \<forall>x \<in> set (rvec_elems v). vok x\<close>
+
+lemma allvok_nth: \<open>allvok v \<Longrightarrow> i < rvec_length v \<Longrightarrow> vok (rvec_elems v ! i)\<close>
+  by (simp add: allvok_def)
+
+lemma allvok_push [simp]:
+  \<open>vok v \<Longrightarrow> rvec_length v < 2 ^ 56 \<Longrightarrow> allvok (the (rvec_append_val v [x])) = (allvok v \<and> vok x)\<close>
+  by (auto simp add: allvok_def)
+
 subsection \<open>Values\<close>
 
 text \<open>The number a bit list denotes, least significant bit first (\<open>bv2nat\<close>).\<close>
@@ -325,13 +406,13 @@ text \<open>The width of a term, given the widths \<open>ws\<close> of the varia
   \<open>i - j + 1\<close>; \<open>bvcomp\<close> has width 1; the predicates are Boolean (width 1 here); \<open>((_ repeat i) s)\<close>
   has width \<open>i * m\<close>; \<open>zero_extend\<close> and \<open>sign_extend\<close> by \<open>i\<close> have width \<open>m + i\<close>; every other
   function has the width \<open>m\<close> of its operands.\<close>
-fun width :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
-  \<open>width ws ds (Term_Const bs) = length bs\<close>
-| \<open>width ws ds (Term_Var i) = ws ! unat i\<close>
-| \<open>width ws ds (Term_Ref i) = ds ! unat i\<close>
-| \<open>width ws ds (Term_Not a) = width ws ds a\<close>
-| \<open>width ws ds (Term_Neg a) = width ws ds a\<close>
-| \<open>width ws ds (Term_Bin op a b) =
+fun width :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> nat\<close> where
+  \<open>width ws ds (TermL_Const bs) = length bs\<close>
+| \<open>width ws ds (TermL_Var i) = ws ! unat i\<close>
+| \<open>width ws ds (TermL_Ref i) = ds ! unat i\<close>
+| \<open>width ws ds (TermL_Not a) = width ws ds a\<close>
+| \<open>width ws ds (TermL_Neg a) = width ws ds a\<close>
+| \<open>width ws ds (TermL_Bin op a b) =
      (case op of
         Op_Concat \<Rightarrow> width ws ds a + width ws ds b
       | Op_Comp \<Rightarrow> 1
@@ -339,33 +420,33 @@ fun width :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightar
       | Op_Ult \<Rightarrow> 1 | Op_Ule \<Rightarrow> 1 | Op_Ugt \<Rightarrow> 1 | Op_Uge \<Rightarrow> 1
       | Op_Slt \<Rightarrow> 1 | Op_Sle \<Rightarrow> 1 | Op_Sgt \<Rightarrow> 1 | Op_Sge \<Rightarrow> 1
       | _ \<Rightarrow> width ws ds a)\<close>
-| \<open>width ws ds (Term_Extract hi lo a) = unat hi - unat lo + 1\<close>
-| \<open>width ws ds (Term_Repeat i a) = unat i * width ws ds a\<close>
-| \<open>width ws ds (Term_ZeroExtend i a) = width ws ds a + unat i\<close>
-| \<open>width ws ds (Term_SignExtend i a) = width ws ds a + unat i\<close>
-| \<open>width ws ds (Term_RotateLeft i a) = width ws ds a\<close>
-| \<open>width ws ds (Term_RotateRight i a) = width ws ds a\<close>
-| \<open>width ws ds (Term_Ite c a b) = width ws ds a\<close>
+| \<open>width ws ds (TermL_Extract hi lo a) = unat hi - unat lo + 1\<close>
+| \<open>width ws ds (TermL_Repeat i a) = unat i * width ws ds a\<close>
+| \<open>width ws ds (TermL_ZeroExtend i a) = width ws ds a + unat i\<close>
+| \<open>width ws ds (TermL_SignExtend i a) = width ws ds a + unat i\<close>
+| \<open>width ws ds (TermL_RotateLeft i a) = width ws ds a\<close>
+| \<open>width ws ds (TermL_RotateRight i a) = width ws ds a\<close>
+| \<open>width ws ds (TermL_Ite c a b) = width ws ds a\<close>
 
 text \<open>Well-sortedness, following the sort declarations of SMT-LIB: every width is at least 1
   (\<open>m > 0\<close>); indices are in bounds; the operands of a binary function other than \<open>concat\<close> have
   equal widths; \<open>((_ extract i j) s)\<close> needs \<open>m > i \<ge> j \<ge> 0\<close>; \<open>repeat\<close> needs \<open>i \<ge> 1\<close>; the condition
   of \<open>ite\<close> is Boolean (width 1) and its branches have equal widths.\<close>
-fun wt :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> bool\<close> where
-  \<open>wt ws ds (Term_Const bs) = (0 < length bs)\<close>
-| \<open>wt ws ds (Term_Var i) = (unat i < length ws \<and> 0 < ws ! unat i)\<close>
-| \<open>wt ws ds (Term_Ref i) = (unat i < length ds \<and> 0 < ds ! unat i)\<close>
-| \<open>wt ws ds (Term_Not a) = wt ws ds a\<close>
-| \<open>wt ws ds (Term_Neg a) = wt ws ds a\<close>
-| \<open>wt ws ds (Term_Bin op a b) =
+fun wt :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> bool\<close> where
+  \<open>wt ws ds (TermL_Const bs) = (0 < length bs)\<close>
+| \<open>wt ws ds (TermL_Var i) = (unat i < length ws \<and> 0 < ws ! unat i)\<close>
+| \<open>wt ws ds (TermL_Ref i) = (unat i < length ds \<and> 0 < ds ! unat i)\<close>
+| \<open>wt ws ds (TermL_Not a) = wt ws ds a\<close>
+| \<open>wt ws ds (TermL_Neg a) = wt ws ds a\<close>
+| \<open>wt ws ds (TermL_Bin op a b) =
      (wt ws ds a \<and> wt ws ds b \<and> (op \<noteq> Op_Concat \<longrightarrow> width ws ds a = width ws ds b))\<close>
-| \<open>wt ws ds (Term_Extract hi lo a) = (wt ws ds a \<and> unat lo \<le> unat hi \<and> unat hi < width ws ds a)\<close>
-| \<open>wt ws ds (Term_Repeat i a) = (wt ws ds a \<and> 1 \<le> unat i)\<close>
-| \<open>wt ws ds (Term_ZeroExtend i a) = wt ws ds a\<close>
-| \<open>wt ws ds (Term_SignExtend i a) = wt ws ds a\<close>
-| \<open>wt ws ds (Term_RotateLeft i a) = wt ws ds a\<close>
-| \<open>wt ws ds (Term_RotateRight i a) = wt ws ds a\<close>
-| \<open>wt ws ds (Term_Ite c a b) =
+| \<open>wt ws ds (TermL_Extract hi lo a) = (wt ws ds a \<and> unat lo \<le> unat hi \<and> unat hi < width ws ds a)\<close>
+| \<open>wt ws ds (TermL_Repeat i a) = (wt ws ds a \<and> 1 \<le> unat i)\<close>
+| \<open>wt ws ds (TermL_ZeroExtend i a) = wt ws ds a\<close>
+| \<open>wt ws ds (TermL_SignExtend i a) = wt ws ds a\<close>
+| \<open>wt ws ds (TermL_RotateLeft i a) = wt ws ds a\<close>
+| \<open>wt ws ds (TermL_RotateRight i a) = wt ws ds a\<close>
+| \<open>wt ws ds (TermL_Ite c a b) =
      (wt ws ds c \<and> wt ws ds a \<and> wt ws ds b \<and> width ws ds c = 1 \<and> width ws ds a = width ws ds b)\<close>
 
 subsection \<open>Evaluation\<close>
@@ -501,99 +582,99 @@ text \<open>The value of a term, given the widths \<open>ws\<close>, \<open>ds\<
     \<open>i\<close> times, every bit moves down one place and the bottom bit moves to the top. With
     \<open>r = i mod m\<close>, the low \<open>r\<close> bits of \<open>t\<close> end up above its high \<open>m - r\<close> bits.
   \<^item> \<open>ite c a b\<close> (Core): \<open>a\<close> iff \<open>c\<close> is true (1).\<close>
-fun eval :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
-  \<open>eval ws ds vs dv (Term_Const bs) = bits_nat bs\<close>
-| \<open>eval ws ds vs dv (Term_Var i) = vs ! unat i\<close>
-| \<open>eval ws ds vs dv (Term_Ref i) = dv ! unat i\<close>
-| \<open>eval ws ds vs dv (Term_Not a) = 2 ^ width ws ds a - 1 - eval ws ds vs dv a\<close>
-| \<open>eval ws ds vs dv (Term_Neg a) = (2 ^ width ws ds a - eval ws ds vs dv a) mod 2 ^ width ws ds a\<close>
-| \<open>eval ws ds vs dv (Term_Bin op a b) =
+fun eval :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> nat\<close> where
+  \<open>eval ws ds vs dv (TermL_Const bs) = bits_nat bs\<close>
+| \<open>eval ws ds vs dv (TermL_Var i) = vs ! unat i\<close>
+| \<open>eval ws ds vs dv (TermL_Ref i) = dv ! unat i\<close>
+| \<open>eval ws ds vs dv (TermL_Not a) = 2 ^ width ws ds a - 1 - eval ws ds vs dv a\<close>
+| \<open>eval ws ds vs dv (TermL_Neg a) = (2 ^ width ws ds a - eval ws ds vs dv a) mod 2 ^ width ws ds a\<close>
+| \<open>eval ws ds vs dv (TermL_Bin op a b) =
      bin_sem op (width ws ds a) (eval ws ds vs dv a) (width ws ds b) (eval ws ds vs dv b)\<close>
-| \<open>eval ws ds vs dv (Term_Extract hi lo a) =
+| \<open>eval ws ds vs dv (TermL_Extract hi lo a) =
      (eval ws ds vs dv a div 2 ^ unat lo) mod 2 ^ (unat hi - unat lo + 1)\<close>
-| \<open>eval ws ds vs dv (Term_Repeat i a) = repeat_val (width ws ds a) (unat i) (eval ws ds vs dv a)\<close>
-| \<open>eval ws ds vs dv (Term_ZeroExtend i a) = eval ws ds vs dv a\<close>
-| \<open>eval ws ds vs dv (Term_SignExtend i a) =
+| \<open>eval ws ds vs dv (TermL_Repeat i a) = repeat_val (width ws ds a) (unat i) (eval ws ds vs dv a)\<close>
+| \<open>eval ws ds vs dv (TermL_ZeroExtend i a) = eval ws ds vs dv a\<close>
+| \<open>eval ws ds vs dv (TermL_SignExtend i a) =
      to_bv (width ws ds a + unat i) (sint (width ws ds a) (eval ws ds vs dv a))\<close>
-| \<open>eval ws ds vs dv (Term_RotateLeft i a) =
+| \<open>eval ws ds vs dv (TermL_RotateLeft i a) =
      (let w = width ws ds a; r = unat i mod w; x = eval ws ds vs dv a in
       (x mod 2 ^ (w - r)) * 2 ^ r + x div 2 ^ (w - r))\<close>
-| \<open>eval ws ds vs dv (Term_RotateRight i a) =
+| \<open>eval ws ds vs dv (TermL_RotateRight i a) =
      (let w = width ws ds a; r = unat i mod w; x = eval ws ds vs dv a in
       (x mod 2 ^ r) * 2 ^ (w - r) + x div 2 ^ r)\<close>
-| \<open>eval ws ds vs dv (Term_Ite c a b) =
+| \<open>eval ws ds vs dv (TermL_Ite c a b) =
      (if eval ws ds vs dv c = 1 then eval ws ds vs dv a else eval ws ds vs dv b)\<close>
 
 subsection \<open>Problems\<close>
 
 text \<open>The definitions in order: each is well-sorted over the earlier ones.\<close>
-fun defs_wt :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> bool\<close> where
+fun defs_wt :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL list \<Rightarrow> bool\<close> where
   \<open>defs_wt ws ds [] = True\<close>
 | \<open>defs_wt ws ds (d # dd) = (wt ws ds d \<and> defs_wt ws (ds @ [width ws ds d]) dd)\<close>
 
 text \<open>The widths of the definitions, appended to \<open>ds\<close>.\<close>
-fun def_widths :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> nat list\<close> where
+fun def_widths :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL list \<Rightarrow> nat list\<close> where
   \<open>def_widths ws ds [] = ds\<close>
 | \<open>def_widths ws ds (d # dd) = def_widths ws (ds @ [width ws ds d]) dd\<close>
 
 text \<open>The values of the definitions, appended to \<open>dv\<close> (the values of definitions of widths \<open>ds\<close>), given
   the widths \<open>ws\<close> and values \<open>vs\<close> of the variables.\<close>
-fun def_values :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> Term list \<Rightarrow> nat list\<close> where
+fun def_values :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> nat list \<Rightarrow> TermL list \<Rightarrow> nat list\<close> where
   \<open>def_values ws ds vs dv [] = dv\<close>
 | \<open>def_values ws ds vs dv (d # dd) =
      def_values ws (ds @ [width ws ds d]) vs (dv @ [eval ws ds vs dv d]) dd\<close>
 
-definition var_widths :: \<open>Problem \<Rightarrow> nat list\<close> where
-  \<open>var_widths p \<equiv> map unat (Problem_widths p)\<close>
+definition var_widths :: \<open>ProblemL \<Rightarrow> nat list\<close> where
+  \<open>var_widths p \<equiv> map unat (ProblemL_widths p)\<close>
 
 text \<open>A well-sorted problem: well-sorted definitions and assertions of width 1.\<close>
-definition problem_wt :: \<open>Problem \<Rightarrow> bool\<close> where
+definition problem_wt :: \<open>ProblemL \<Rightarrow> bool\<close> where
   \<open>problem_wt p \<equiv>
      let ws = var_widths p in
-     let ds = def_widths ws [] (Problem_defs p) in
-     defs_wt ws [] (Problem_defs p) \<and>
-     (\<forall>t \<in> set (Problem_asserts p). wt ws ds t \<and> width ws ds t = 1)\<close>
+     let ds = def_widths ws [] (ProblemL_defs p) in
+     defs_wt ws [] (ProblemL_defs p) \<and>
+     (\<forall>t \<in> set (ProblemL_asserts p). wt ws ds t \<and> width ws ds t = 1)\<close>
 
 text \<open>An assignment gives every variable a bit list of its width.\<close>
-definition is_assignment :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
+definition is_assignment :: \<open>ProblemL \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
   \<open>is_assignment p m \<equiv> map length m = var_widths p\<close>
 
 text \<open>Every assertion evaluates to 1 under the assignment.\<close>
-definition satisfies :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
+definition satisfies :: \<open>ProblemL \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
   \<open>satisfies p m \<equiv>
      let ws = var_widths p in
      let vs = map bits_nat m in
-     let ds = def_widths ws [] (Problem_defs p) in
-     let dv = def_values ws [] vs [] (Problem_defs p) in
-     \<forall>t \<in> set (Problem_asserts p). eval ws ds vs dv t = 1\<close>
+     let ds = def_widths ws [] (ProblemL_defs p) in
+     let dv = def_values ws [] vs [] (ProblemL_defs p) in
+     \<forall>t \<in> set (ProblemL_asserts p). eval ws ds vs dv t = 1\<close>
 
 text \<open>A model is an assignment under which every assertion evaluates to 1.\<close>
-definition is_model :: \<open>Problem \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
+definition is_model :: \<open>ProblemL \<Rightarrow> bool list list \<Rightarrow> bool\<close> where
   \<open>is_model p m \<equiv> is_assignment p m \<and> satisfies p m\<close>
 
 subsection \<open>The size of a problem\<close>
 
 text \<open>The subterms of a term, the term included.\<close>
-primrec subterms :: \<open>Term \<Rightarrow> Term list\<close> where
-  \<open>subterms (Term_Const bs) = [Term_Const bs]\<close>
-| \<open>subterms (Term_Var i) = [Term_Var i]\<close>
-| \<open>subterms (Term_Ref i) = [Term_Ref i]\<close>
-| \<open>subterms (Term_Not a) = Term_Not a # subterms a\<close>
-| \<open>subterms (Term_Neg a) = Term_Neg a # subterms a\<close>
-| \<open>subterms (Term_Bin op a b) = Term_Bin op a b # subterms a @ subterms b\<close>
-| \<open>subterms (Term_Extract hi lo a) = Term_Extract hi lo a # subterms a\<close>
-| \<open>subterms (Term_Repeat i a) = Term_Repeat i a # subterms a\<close>
-| \<open>subterms (Term_ZeroExtend i a) = Term_ZeroExtend i a # subterms a\<close>
-| \<open>subterms (Term_SignExtend i a) = Term_SignExtend i a # subterms a\<close>
-| \<open>subterms (Term_RotateLeft i a) = Term_RotateLeft i a # subterms a\<close>
-| \<open>subterms (Term_RotateRight i a) = Term_RotateRight i a # subterms a\<close>
-| \<open>subterms (Term_Ite c a b) = Term_Ite c a b # subterms c @ subterms a @ subterms b\<close>
+primrec subterms :: \<open>TermL \<Rightarrow> TermL list\<close> where
+  \<open>subterms (TermL_Const bs) = [TermL_Const bs]\<close>
+| \<open>subterms (TermL_Var i) = [TermL_Var i]\<close>
+| \<open>subterms (TermL_Ref i) = [TermL_Ref i]\<close>
+| \<open>subterms (TermL_Not a) = TermL_Not a # subterms a\<close>
+| \<open>subterms (TermL_Neg a) = TermL_Neg a # subterms a\<close>
+| \<open>subterms (TermL_Bin op a b) = TermL_Bin op a b # subterms a @ subterms b\<close>
+| \<open>subterms (TermL_Extract hi lo a) = TermL_Extract hi lo a # subterms a\<close>
+| \<open>subterms (TermL_Repeat i a) = TermL_Repeat i a # subterms a\<close>
+| \<open>subterms (TermL_ZeroExtend i a) = TermL_ZeroExtend i a # subterms a\<close>
+| \<open>subterms (TermL_SignExtend i a) = TermL_SignExtend i a # subterms a\<close>
+| \<open>subterms (TermL_RotateLeft i a) = TermL_RotateLeft i a # subterms a\<close>
+| \<open>subterms (TermL_RotateRight i a) = TermL_RotateRight i a # subterms a\<close>
+| \<open>subterms (TermL_Ite c a b) = TermL_Ite c a b # subterms c @ subterms a @ subterms b\<close>
 
 text \<open>The weight of a term: the sum over its subterms (counted with multiplicity) of the cube of
-  the width plus one. Widths are those given by \<^const>\<open>width\<close>, so a \<^const>\<open>Term_Ref\<close> weighs by the
+  the width plus one. Widths are those given by \<^const>\<open>width\<close>, so a \<^const>\<open>TermL_Ref\<close> weighs by the
   width of the definition it refers to, however large that is. The cube covers \<open>repeat\<close>, whose
   rewriting builds \<open>i\<close> concatenations of growing widths.\<close>
-definition term_weight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+definition term_weight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> nat\<close> where
   \<open>term_weight ws ds t \<equiv> sum_list (map (\<lambda>u. (width ws ds u + 1) ^ 3) (subterms t))\<close>
 
 text \<open>The size of a problem, as a bound on the work of the solver: one plus the sum of the widths of
@@ -601,12 +682,12 @@ text \<open>The size of a problem, as a bound on the work of the solver: one plu
   all definitions and assertions, times 1000000. It is linear in the number of subterms and
   cubic in their widths. The solver needs a fuel (a bound on the iterations of each loop and
   on the depth of the recursion) and counters (of type \<^verbatim>\<open>usize\<close>) of this size.\<close>
-definition size_bound :: \<open>Problem \<Rightarrow> nat\<close> where
+definition size_bound :: \<open>ProblemL \<Rightarrow> nat\<close> where
   \<open>size_bound p \<equiv>
      let ws = var_widths p in
-     let ds = def_widths ws [] (Problem_defs p) in
-     1000000 * (1 + sum_list ws + length ws + length (Problem_defs p) + length (Problem_asserts p) +
-                sum_list (map (term_weight ws ds) (Problem_defs p @ Problem_asserts p)))\<close>
+     let ds = def_widths ws [] (ProblemL_defs p) in
+     1000000 * (1 + sum_list ws + length ws + length (ProblemL_defs p) + length (ProblemL_asserts p) +
+                sum_list (map (term_weight ws ds) (ProblemL_defs p @ ProblemL_asserts p)))\<close>
 
 context QFBV_ctx
 begin
@@ -615,11 +696,11 @@ subsection \<open>The contract\<close>
 
 definition solve_contract :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort) function_contract\<close> where
   \<open>solve_contract p \<equiv>
-     let pre = can_alloc_reference \<star> \<langle>problem_wt p\<rangle> in
+     let pre = can_alloc_reference \<star> \<langle>problem_wt (prob_of p)\<rangle> in
      let post = \<lambda>r. can_alloc_reference \<star>
         \<langle>case r of
-           Answer_Sat m \<Rightarrow> is_model p m
-         | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model p m)\<rangle> in
+           Answer_Sat m \<Rightarrow> is_model (prob_of p) (vecs_of m)
+         | Answer_Unsat \<Rightarrow> (\<forall>m. \<not> is_model (prob_of p) m)\<rangle> in
      make_function_contract pre post\<close>
 
 end
@@ -632,7 +713,7 @@ text \<open>\<^const>\<open>size_bound\<close> bounds the fuel of the solver exc
   \<^verbatim>\<open>usize\<close>) are bounded by the following linear measures instead.\<close>
 
 text \<open>The weight of a term for the counters of the rewriting: one plus the width of each subterm.\<close>
-definition lweight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+definition lweight :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> nat\<close> where
   \<open>lweight ws ds t \<equiv> sum_list (map (\<lambda>u. width ws ds u + 1) (subterms t))\<close>
 
 text \<open>The number of stages of the barrel shifter on width \<open>n\<close>: the least \<open>i\<close> with \<open>n \<le> 2^i\<close>.\<close>
@@ -648,27 +729,29 @@ definition ebin :: \<open>Op \<Rightarrow> nat \<Rightarrow> nat\<close> where
      else if op \<in> {Op_Shl, Op_Lshr, Op_Ashr} then 10 * w * nst w + 30 * w
      else 30 * w + 20\<close>
 
-definition enode :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+definition enode :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> nat\<close> where
   \<open>enode ws ds u \<equiv> (case u of
-     Term_Bin op a b \<Rightarrow> ebin op (width ws ds a)
-   | Term_Neg a \<Rightarrow> 15 * width ws ds a
-   | Term_SignExtend i a \<Rightarrow> 5 * unat i
-   | Term_Ite c a b \<Rightarrow> 5 * width ws ds a
+     TermL_Bin op a b \<Rightarrow> ebin op (width ws ds a)
+   | TermL_Neg a \<Rightarrow> 15 * width ws ds a
+   | TermL_SignExtend i a \<Rightarrow> 5 * unat i
+   | TermL_Ite c a b \<Rightarrow> 5 * width ws ds a
    | _ \<Rightarrow> 0)\<close>
 
-definition ecount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> Term \<Rightarrow> nat\<close> where
+definition ecount :: \<open>nat list \<Rightarrow> nat list \<Rightarrow> TermL \<Rightarrow> nat\<close> where
   \<open>ecount ws ds t \<equiv> sum_list (map (enode ws ds) (subterms t))\<close>
 
-definition ovf_bound :: \<open>Problem \<Rightarrow> nat\<close> where
+definition ovf_bound :: \<open>ProblemL \<Rightarrow> nat\<close> where
   \<open>ovf_bound p \<equiv>
      let ws = var_widths p in
-     let ds = def_widths ws [] (Problem_defs p) in
-     4 * (1 + sum_list ws + length ws + length (Problem_defs p) + length (Problem_asserts p) +
-          sum_list (map (\<lambda>t. 4 * lweight ws ds t + ecount ws ds t) (Problem_defs p @ Problem_asserts p)))\<close>
+     let ds = def_widths ws [] (ProblemL_defs p) in
+     4 * (1 + sum_list ws + length ws + length (ProblemL_defs p) + length (ProblemL_asserts p) +
+          sum_list (map (\<lambda>t. 4 * lweight ws ds t + ecount ws ds t) (ProblemL_defs p @ ProblemL_asserts p)))\<close>
 
-text \<open>The condition on the size of a problem: \<^const>\<open>ovf_bound\<close> is below \<open>2^63\<close>.\<close>
-definition sizes_ok :: \<open>Problem \<Rightarrow> bool\<close> where
-  \<open>sizes_ok p \<equiv> ovf_bound p < 2 ^ 63\<close>
+text \<open>The condition on the size of a problem: \<^const>\<open>ovf_bound\<close> is below \<open>2^56\<close>. The bound
+  keeps every vector the solver builds well below the largest capacity of a \<^verbatim>\<open>Vec\<close>
+  (\<^const>\<open>rvec_cap_max\<close>, at least \<open>2^57\<close> for the element types of the solver).\<close>
+definition sizes_ok :: \<open>ProblemL \<Rightarrow> bool\<close> where
+  \<open>sizes_ok p \<equiv> ovf_bound p < 2 ^ 56\<close>
 
 subsection \<open>The statement over all instances with enough fuel\<close>
 
@@ -688,7 +771,7 @@ abbreviation solve_contract :: \<open>Problem \<Rightarrow> ('s, Answer, 'abort)
 
 definition solve_correct where
   \<open>solve_correct \<Gamma> \<equiv>
-     \<forall>p. problem_wt p \<and> sizes_ok p \<longrightarrow> (\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p)\<close>
+     \<forall>p. problem_wt (prob_of p) \<and> sizes_ok (prob_of p) \<longrightarrow> (\<exists>N. \<forall>fuel \<ge> N. \<Gamma>; solve fuel p \<Turnstile>\<^sub>F solve_contract p)\<close>
 
 end
 

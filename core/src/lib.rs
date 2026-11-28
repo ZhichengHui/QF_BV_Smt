@@ -152,6 +152,27 @@ pub struct Cnf {
 // ---------------------------------------------------------------------------------------------
 // Literals and gates
 
+// Scratch (issue #142, not for merge): QFBV_HASH=1 hash-conses the Tseitin gates (structural
+// hashing, as an AIG manager does), so a gate built twice on the same inputs gets one variable.
+mod shash {
+    use super::Lit;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    type K = (u8, usize, bool, usize, bool, usize, bool);
+    thread_local! { static M: RefCell<HashMap<K, (usize, bool)>> = RefCell::new(HashMap::new()); }
+    pub fn on() -> bool {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(|| std::env::var_os("QFBV_HASH").is_some())
+    }
+    pub fn get(k: K) -> Option<Lit> {
+        if !on() { return None; }
+        M.with(|m| m.borrow().get(&k).map(|&(var, neg)| Lit { var, neg }))
+    }
+    pub fn put(k: K, x: Lit) {
+        if on() { M.with(|m| { m.borrow_mut().insert(k, (x.var, x.neg)); }); }
+    }
+}
+
 fn lit_const(b: bool) -> Lit {
     Lit { var: 0, neg: !b }
 }
@@ -194,7 +215,11 @@ fn clause3(a: Lit, b: Lit, d: Lit) -> Vec<Lit> {
 
 /// A fresh literal `x` with `x <-> a & b`.
 fn tseitin_and(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+    let (a, b) = if !shash::on() || (a.var, a.neg) <= (b.var, b.neg) { (a, b) } else { (b, a) };
+    let key = (0u8, a.var, a.neg, b.var, b.neg, 0usize, false);
+    if let Some(x) = shash::get(key) { return (cnf, x); }
     let (cnf, x) = fresh(cnf);
+    shash::put(key, x);
     let cnf = add_clause(cnf, clause2(lit_neg(x), a));
     let cnf = add_clause(cnf, clause2(lit_neg(x), b));
     let cnf = add_clause(cnf, clause3(x, lit_neg(a), lit_neg(b)));
@@ -203,6 +228,26 @@ fn tseitin_and(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
 
 /// A fresh literal `x` with `x <-> a ^ b`.
 fn tseitin_xor(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
+    if shash::on() {
+        let flip = a.neg != b.neg;
+        let (u, v) = if a.var <= b.var { (a.var, b.var) } else { (b.var, a.var) };
+        let key = (1u8, u, false, v, false, 0usize, false);
+        let pa = Lit { var: u, neg: false };
+        let pb = Lit { var: v, neg: false };
+        let (cnf, x) = match shash::get(key) {
+            Some(x) => (cnf, x),
+            None => {
+                let (cnf, x) = fresh(cnf);
+                shash::put(key, x);
+                let cnf = add_clause(cnf, clause3(lit_neg(x), pa, pb));
+                let cnf = add_clause(cnf, clause3(lit_neg(x), lit_neg(pa), lit_neg(pb)));
+                let cnf = add_clause(cnf, clause3(x, lit_neg(pa), pb));
+                let cnf = add_clause(cnf, clause3(x, pa, lit_neg(pb)));
+                (cnf, x)
+            }
+        };
+        return (cnf, if flip { lit_neg(x) } else { x });
+    }
     let (cnf, x) = fresh(cnf);
     let cnf = add_clause(cnf, clause3(lit_neg(x), a, b));
     let cnf = add_clause(cnf, clause3(lit_neg(x), lit_neg(a), lit_neg(b)));
@@ -213,7 +258,11 @@ fn tseitin_xor(cnf: Cnf, a: Lit, b: Lit) -> (Cnf, Lit) {
 
 /// A fresh literal `x` with `x <-> (if c then a else b)`.
 fn tseitin_ite(cnf: Cnf, c: Lit, a: Lit, b: Lit) -> (Cnf, Lit) {
+    let (c, a, b) = if shash::on() && c.neg { (lit_neg(c), b, a) } else { (c, a, b) };
+    let key = (2u8, c.var, a.neg, a.var, b.neg, b.var, false);
+    if let Some(x) = shash::get(key) { return (cnf, x); }
     let (cnf, x) = fresh(cnf);
+    shash::put(key, x);
     let cnf = add_clause(cnf, clause3(lit_neg(c), lit_neg(x), a));
     let cnf = add_clause(cnf, clause3(lit_neg(c), x, lit_neg(a)));
     let cnf = add_clause(cnf, clause3(c, lit_neg(x), b));
@@ -1808,6 +1857,12 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
 
 // Scratch profiling (issue #142, not for merge): env QFBV_PROF=1 prints phase times and search
 // counters to standard error.
+fn op_code_prof(op: &BinOp) -> usize {
+    match op { BinOp::And => 0, BinOp::Or => 1, BinOp::Xor => 2, BinOp::Add => 3, BinOp::Mul => 4, BinOp::Udiv => 5, BinOp::Urem => 6, BinOp::Shl => 7, BinOp::Lshr => 8, BinOp::Concat => 9, BinOp::Eq => 10, BinOp::Ult => 11 }
+}
+impl CoreTerm {
+    fn width_prof(&self, _w: &Vec<usize>) -> usize { 0 }
+}
 pub mod prof {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::OnceLock;
@@ -1863,8 +1918,40 @@ fn encode(p: &CoreProblem) -> (Cnf, Vec<Vec<Lit>>) {
     let mut defs = Vec::new();
     let mut j: usize = 0;
     while j < p.defs.len() {
+        let v0 = cnf.num_vars;
         let (c, ls) = blast(cnf, &vars, &defs, &p.defs[j]);
         cnf = c;
+        let ls = ls;
+        if prof::on() {
+            let kind = match &p.defs[j] {
+                CoreTerm::Bin(op, x, y) => {
+                    let cx = matches!(**x, CoreTerm::Const(_));
+                    let cy = matches!(**y, CoreTerm::Const(_));
+                    format!("{}{}", ["and", "or", "xor", "add", "mul", "udiv", "urem", "shl", "lshr", "concat", "eq", "ult"][op_code_prof(op)], if cx || cy { "_c" } else { "" })
+                }
+                CoreTerm::Not(_) => "not".to_string(),
+                CoreTerm::Ite(..) => "ite".to_string(),
+                CoreTerm::Extract(..) => "extract".to_string(),
+                _ => "other".to_string(),
+            };
+            if let CoreTerm::Bin(BinOp::Mul, x, y) = &p.defs[j] {
+                let opl = |t: &CoreTerm| -> (usize, usize, String) { match t {
+                    CoreTerm::Ref(k) => (defs[*k].len(), defs[*k].iter().filter(|l: &&Lit| l.var == 0).count(), format!("r{}", k)),
+                    CoreTerm::Var(k) => (vars[*k].len(), 0, format!("v{}", k)),
+                    _ => (0, 0, "?".to_string()) } };
+                let (wx, cx, nx) = opl(x);
+                let (wy, cy, ny) = opl(y);
+                let cv = |t: &CoreTerm| -> String { if let CoreTerm::Ref(k) = t { defs[*k].iter().rev().map(|l: &Lit| if l.var == 0 { if l.neg { '0' } else { '1' } } else { 'x' }).collect() } else { String::new() } }; eprintln!("muldef {} {} w{} const {} {} | {} {} {} {}", j, nx, wx, cx, ny, wy, cy, cv(x), cv(y));
+            }
+            {
+                fn sh(t: &CoreTerm) -> String { match t {
+                    CoreTerm::Const(b) => format!("c{}", b.len()), CoreTerm::Var(k) => format!("v{}", k), CoreTerm::Ref(k) => format!("r{}", k),
+                    CoreTerm::Not(x) => format!("(not {})", sh(x)), CoreTerm::Bin(op, x, y) => format!("({} {} {})", op_code_prof(op), sh(x), sh(y)),
+                    CoreTerm::Extract(h, l, x) => format!("(ex{}:{} {})", h, l, sh(x)), CoreTerm::Ite(c, x, y) => format!("(ite {} {} {})", sh(c), sh(x), sh(y)) } }
+                eprintln!("def r{} = {} w{} nconst {}", j, sh(&p.defs[j]), ls.len(), ls.iter().filter(|l: &&Lit| l.var == 0).count());
+            }
+            eprintln!("blastdef {} {} {}", kind, p.defs[j].width_prof(&p.widths), cnf.num_vars - v0);
+        }
         defs.push(ls);
         j += 1;
     }

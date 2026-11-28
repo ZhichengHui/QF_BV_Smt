@@ -547,4 +547,133 @@ proof (induction locked lbd m0 t keep left c rule: keep_loop.induct)
   qed
 qed
 
+subsubsection \<open>The selection\<close>
+
+lemma length_filter_disj_le:
+  \<open>(\<forall>x. \<not> (R1 x \<and> R2 x)) \<Longrightarrow>
+    length (filter (\<lambda>x. Q x \<and> R1 x) xs) + length (filter (\<lambda>x. Q x \<and> R2 x) xs) \<le> length (filter Q xs)\<close>
+  by (induction xs) auto
+
+lemma sum_length_filter_eq:
+  \<open>sum_list (map (\<lambda>b. length (filter (\<lambda>j. P j \<and> f j = b) xs)) [a..<t]) =
+    length (filter (\<lambda>j. P j \<and> a \<le> f j \<and> f j < t) xs)\<close>
+proof (induction t)
+  case 0
+  then show ?case by (simp add: filter_False)
+next
+  case (Suc t)
+  show ?case
+  proof (cases \<open>a \<le> t\<close>)
+    case True
+    have \<open>length (filter (\<lambda>j. P j \<and> a \<le> f j \<and> f j < Suc t) xs) =
+        length (filter (\<lambda>j. P j \<and> a \<le> f j \<and> f j < t) xs) + length (filter (\<lambda>j. P j \<and> f j = t) xs)\<close>
+      using True by (induction xs) auto
+    then show ?thesis using Suc True by simp
+  next
+    case False
+    then show ?thesis by (simp add: filter_False)
+  qed
+qed
+
+text \<open>The facts of the selection: \<open>locked\<close> marks the reasons; every index of \<open>hist\<close> is below
+  \<open>tb\<close>, its length; \<open>acc \<le> quota\<close>, so \<open>left = quota - acc\<close> does not underflow; the original
+  clauses, the locked ones and those of LBD at most 2 are kept; and at least \<open>quota\<close> of the
+  \<open>cand\<close> candidates are kept. No hypothesis is needed: the model is total.\<close>
+lemma sel_m_props:
+  assumes \<open>sel_m m lbd rs m0 = (locked, tb, hist, cand, quota, t, acc, keep)\<close>
+  shows \<open>length locked = m\<close> \<open>\<forall>c < m. locked ! c \<longleftrightarrow> c \<in> set rs\<close>
+    \<open>3 \<le> tb\<close> \<open>\<forall>j. m0 \<le> j \<and> j < m \<longrightarrow> lbd ! (j - m0) < tb\<close> \<open>length hist = tb\<close>
+    \<open>cand = length (filter (isc locked lbd m0) [m0..<m])\<close> \<open>quota = cand div 2\<close>
+    \<open>acc \<le> quota\<close> \<open>3 \<le> t\<close> \<open>t \<le> tb\<close> \<open>length keep = m\<close>
+    \<open>\<forall>c < m. c < m0 \<or> c \<in> set rs \<or> lbd ! (c - m0) \<le> 2 \<longrightarrow> keep ! c\<close>
+    \<open>quota \<le> length (filter (\<lambda>c. isc locked lbd m0 c \<and> keep ! c) [m0..<m])\<close>
+proof -
+  let ?xs = \<open>[m0..<m]\<close>
+  let ?P = \<open>isc locked lbd m0\<close>
+  let ?F = \<open>\<lambda>b. length (filter (\<lambda>j. ?P j \<and> lbd ! (j - m0) = b) ?xs)\<close>
+  obtain hist' cand' t' acc' keep' left' where
+    h: \<open>hist_loop (locked_m rs m) lbd m0 m (replicate (top_m lbd m0 m) 0) 0 m0 = (hist', cand')\<close> and
+    th: \<open>thr_loop hist' (top_m lbd m0 m) (cand' div 2) 3 0 = (t', acc')\<close> and
+    k: \<open>keep_loop (locked_m rs m) lbd m0 t' (replicate m True) (cand' div 2 - acc') m = (keep', left')\<close>
+    by (metis prod.exhaust)
+  have v: \<open>locked = locked_m rs m\<close> \<open>tb = top_m lbd m0 m\<close> \<open>hist = hist'\<close> \<open>cand = cand'\<close>
+    \<open>quota = cand' div 2\<close> \<open>t = t'\<close> \<open>acc = acc'\<close> \<open>keep = keep'\<close>
+  proof -
+    have \<open>sel_m m lbd rs m0 = (locked_m rs m, top_m lbd m0 m, hist', cand', cand' div 2, t', acc', keep')\<close>
+      by (simp add: sel_m_def Let_def h th k)
+    then show \<open>locked = locked_m rs m\<close> \<open>tb = top_m lbd m0 m\<close> \<open>hist = hist'\<close> \<open>cand = cand'\<close>
+      \<open>quota = cand' div 2\<close> \<open>t = t'\<close> \<open>acc = acc'\<close> \<open>keep = keep'\<close>
+      using assms by auto
+  qed
+  show l: \<open>length locked = m\<close> \<open>\<forall>c < m. locked ! c \<longleftrightarrow> c \<in> set rs\<close>
+    using locked_m_props v(1) by auto
+  show tb: \<open>3 \<le> tb\<close> \<open>\<forall>j. m0 \<le> j \<and> j < m \<longrightarrow> lbd ! (j - m0) < tb\<close>
+    using top_m_bound v(2) by auto
+  have \<open>hist_loop locked lbd m0 m (replicate tb 0) 0 m0 = (hist, cand)\<close> using h v by simp
+  then have hh: \<open>hist = map (\<lambda>b. replicate tb 0 ! b + ?F b) [0..<tb]\<close> \<open>cand = length (filter ?P ?xs)\<close>
+    using hist_loop_eq[of m0 m lbd m0 \<open>replicate tb 0\<close> locked 0] tb(2) by simp_all
+  have he: \<open>\<forall>b < tb. hist ! b = ?F b\<close> \<open>length hist = tb\<close> \<open>cand = length (filter ?P ?xs)\<close>
+    using hh by simp_all
+  then show \<open>length hist = tb\<close> \<open>cand = length (filter ?P ?xs)\<close> by simp_all
+  show q: \<open>quota = cand div 2\<close> using v(4,5) by simp
+  have thp: \<open>acc \<le> quota \<and> 3 \<le> t \<and> t \<le> tb \<and> acc = sum_list (map (nth hist) [3..<t]) \<and>
+      (t < tb \<longrightarrow> quota < acc + hist ! t)\<close>
+    using thr_loop_props[OF le0 top_m_bound(1) th] unfolding v by (simp only: add_0_left) blast
+  then show \<open>acc \<le> quota\<close> \<open>3 \<le> t\<close> \<open>t \<le> tb\<close> by simp_all
+  note kk = keep_loop_kept[OF k[folded v]]
+  show \<open>length keep = m\<close> using kk by simp
+  show \<open>\<forall>c < m. c < m0 \<or> c \<in> set rs \<or> lbd ! (c - m0) \<le> 2 \<longrightarrow> keep ! c\<close>
+    using kk l by (auto simp: isc_def)
+  \<comment> \<open>at least \<open>quota\<close> candidates are kept\<close>
+  have acc: \<open>acc = length (filter (\<lambda>j. ?P j \<and> lbd ! (j - m0) < t) ?xs)\<close>
+  proof -
+    have mm: \<open>map (nth hist) [3..<t] = map ?F [3..<t]\<close> using he(1) thp by auto
+    have a1: \<open>acc = sum_list (map (nth hist) [3..<t])\<close> using thp by simp
+    have \<open>acc = sum_list (map ?F [3..<t])\<close> by (simp only: a1 mm)
+    then have \<open>acc = length (filter (\<lambda>j. ?P j \<and> 3 \<le> lbd ! (j - m0) \<and> lbd ! (j - m0) < t) ?xs)\<close>
+      using sum_length_filter_eq[of ?P \<open>\<lambda>j. lbd ! (j - m0)\<close> ?xs 3 t] by simp
+    also have \<open>\<dots> = length (filter (\<lambda>j. ?P j \<and> lbd ! (j - m0) < t) ?xs)\<close>
+      by (rule arg_cong[where f = length], rule filter_cong) (auto simp: isc_def)
+    finally show ?thesis .
+  qed
+  have low: \<open>filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) < t) ?xs = filter (\<lambda>j. ?P j \<and> lbd ! (j - m0) < t) ?xs\<close>
+    using kk by (intro filter_cong) auto
+  then have lowl: \<open>length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) < t) ?xs) = acc\<close>
+    using acc by simp
+  have eqt: \<open>min (quota - acc) (?F t) \<le> length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) = t) ?xs)\<close>
+    using keep_loop_count[OF k[folded v]] v(4,5) q by (simp add: conj_ac)
+  have sum: \<open>length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) < t) ?xs) +
+      length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) = t) ?xs) \<le>
+      length (filter (\<lambda>j. ?P j \<and> keep ! j) ?xs)\<close>
+    by (rule length_filter_disj_le) simp
+  show \<open>quota \<le> length (filter (\<lambda>c. ?P c \<and> keep ! c) ?xs)\<close>
+  proof (cases \<open>t < tb\<close>)
+    case True
+    then have \<open>quota < acc + ?F t\<close> using thp he(1) by simp
+    then have \<open>min (quota - acc) (?F t) = quota - acc\<close> by simp
+    then show ?thesis using sum eqt lowl thp by linarith
+  next
+    case False
+    then have \<open>t = tb\<close> using thp by simp
+    then have \<open>filter (\<lambda>j. ?P j \<and> lbd ! (j - m0) < t) ?xs = filter ?P ?xs\<close>
+      using tb(2) by (intro filter_cong) auto
+    then have \<open>acc = cand\<close> using acc he(3) by simp
+    then have \<open>acc = quota\<close> using q thp by linarith
+    then show ?thesis using sum lowl by linarith
+  qed
+qed
+
+lemma keep_m_props:
+  \<open>length (keep_m m lbd rs m0) = m\<close>
+  \<open>c < m \<Longrightarrow> c < m0 \<or> c \<in> set rs \<or> lbd ! (c - m0) \<le> 2 \<Longrightarrow> keep_m m lbd rs m0 ! c\<close>
+proof -
+  obtain locked tb hist cand quota t acc keep
+    where s: \<open>sel_m m lbd rs m0 = (locked, tb, hist, cand, quota, t, acc, keep)\<close>
+    by (cases \<open>sel_m m lbd rs m0\<close>) auto
+  have \<open>keep_m m lbd rs m0 = keep\<close> using s by (simp add: keep_m_def)
+  then show \<open>length (keep_m m lbd rs m0) = m\<close>
+    \<open>c < m \<Longrightarrow> c < m0 \<or> c \<in> set rs \<or> lbd ! (c - m0) \<le> 2 \<Longrightarrow> keep_m m lbd rs m0 ! c\<close>
+    using sel_m_props[OF s] by auto
+qed
+
 end

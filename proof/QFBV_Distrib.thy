@@ -10,7 +10,9 @@ text \<open>
   sum of two definitions, becomes \<open>a * x + a * y\<close>, and \<open>(x + y) * b\<close> becomes \<open>x * b + y * b\<close>, but
   only if both products are earlier definitions of the width. The right operand is tried first.
   The rewrite keeps the well-sortedness, the width and the value of the term, and its result is
-  the term itself or a sum of two references, so it adds no product.
+  the term itself or a sum of two references, so it adds no product. \<open>mk_d_m\<close> and \<open>normalize_d_m\<close>
+  are \<open>mk_m\<close> and \<open>normalize_m\<close> with the rewrite, and \<open>normalize_d_correct\<close> is \<open>normalize_correct\<close>
+  for them.
 
   \<open>lookup_m\<close> does not model the hash buckets, for the reason given in the header of
   \<^verbatim>\<open>QFBV_Norm\<close>: it is \<open>find_def_m\<close>.
@@ -254,6 +256,181 @@ proof -
       else mk_raw_m L ?r w) = (L', k)\<close>
     using assms(5) by (simp add: mk_d_m_def Let_def)
   show ?thesis using mk_tail_ok[OF assms(1,2) conjunct1[OF RW] conjunct1[OF conjunct2[OF RW]] m] RW by auto
+qed
+
+subsection \<open>The normalization with \<^verbatim>\<open>distribute\<close>\<close>
+
+text \<open>The loop of \<^verbatim>\<open>normalize\<close>, as \<open>norm_loop\<close>.\<close>
+primrec norm_loop_d :: \<open>nat list \<Rightarrow> CoreTermL list \<Rightarrow> lst \<times> nat list \<Rightarrow> lst \<times> nat list\<close> where
+  \<open>norm_loop_d dw [] S = S\<close>
+| \<open>norm_loop_d dw (d # dd) S =
+     (let (L, M) = S in
+      let (L1, k) = mk_d_m L (remap_m M d) (dw ! length M) in
+      norm_loop_d dw dd (L1, M @ [k]))\<close>
+
+text \<open>\<^verbatim>\<open>normalize\<close> with \<^verbatim>\<open>distribute\<close> in \<^verbatim>\<open>mk\<close>, without the substitution.\<close>
+definition normalize_d_m :: \<open>CoreProblemL \<Rightarrow> CoreProblemL\<close> where
+  \<open>normalize_d_m q \<equiv>
+     (let ws = cvar_widths q in
+      let dw = cdef_widths ws [] (CoreProblemL_defs q) in
+      let (L, M) = norm_loop_d dw (CoreProblemL_defs q) (([], []), []) in
+      make_CoreProblemL (CoreProblemL_widths q) (fst L) (map (remap_m M) (CoreProblemL_asserts q)))\<close>
+
+text \<open>One iteration of the loop keeps the invariant. This and the next proofs are those of
+  \<^verbatim>\<open>QFBV_Norm\<close>, with \<open>mk_d_ok\<close> for \<open>mk_ok\<close>.\<close>
+lemma ninv_d_step:
+  assumes \<open>ninv ws P L M\<close> \<open>cwt ws (cdef_widths ws [] P) d\<close> \<open>length (fst L) + 15 < 2 ^ 64\<close>
+    \<open>mk_d_m L (remap_m M d) (cwidth ws (cdef_widths ws [] P) d) = (L1, k)\<close>
+  shows \<open>ninv ws (P @ [d]) L1 (M @ [k])\<close>
+proof -
+  let ?ds = \<open>cdef_widths ws [] P\<close>
+  have I: \<open>lok ws L\<close> \<open>length M = length P\<close> \<open>length (fst L) \<le> 15 * length P\<close> \<open>menv M (snd L) ?ds\<close>
+    \<open>\<forall>vs. vs_ok ws vs \<longrightarrow> venv M (CV ws vs L) ?ds (cdef_values ws [] vs [] P)\<close>
+    using assms(1) by (simp_all add: ninv_def)
+  have lds: \<open>length ?ds = length P\<close> by (simp add: cdef_widths_length)
+  note RM = remap_wt[OF I(4) assms(2)]
+  note K = mk_d_ok[OF I(1) assms(3) conjunct1[OF RM] conjunct2[OF RM] assms(4)]
+  have lx: \<open>lext ws L L1\<close> and kl: \<open>k < length (fst L1)\<close> and kw: \<open>snd L1 ! k = cwidth ws ?ds d\<close>
+    and ln: \<open>length (fst L1) \<le> length (fst L) + 15\<close>
+    and kv: \<open>\<forall>vs. vs_ok ws vs \<longrightarrow> CV ws vs L1 ! k = ceval ws (snd L) vs (CV ws vs L) (remap_m M d)\<close>
+    using K by simp_all
+  have lok1: \<open>lok ws L1\<close> using lx lext_lok by blast
+  have len0: \<open>length (snd L) = length (fst L)\<close> using lok_length[OF I(1)] .
+  have len1: \<open>length (snd L1) = length (fst L1)\<close> using lok_length[OF lok1] .
+  have W: \<open>cdef_widths ws [] (P @ [d]) = ?ds @ [cwidth ws ?ds d]\<close> by (simp add: cdef_widths_append)
+  have V: \<open>cdef_values ws [] vs [] (P @ [d]) =
+      cdef_values ws [] vs [] P @ [ceval ws ?ds vs (cdef_values ws [] vs [] P) d]\<close> for vs
+    by (simp add: cdef_values_append)
+  have me: \<open>menv (M @ [k]) (snd L1) (cdef_widths ws [] (P @ [d]))\<close>
+    unfolding menv_def W
+  proof (intro allI impI)
+    fix j assume j: \<open>j < length (?ds @ [cwidth ws ?ds d])\<close>
+    show \<open>(M @ [k]) ! j < length (snd L1) \<and> (M @ [k]) ! j < 2 ^ 64 \<and>
+        snd L1 ! ((M @ [k]) ! j) = (?ds @ [cwidth ws ?ds d]) ! j\<close>
+    proof (cases \<open>j < length P\<close>)
+      case True
+      have m: \<open>M ! j < length (fst L)\<close> \<open>M ! j < 2 ^ 64\<close> \<open>snd L ! (M ! j) = ?ds ! j\<close>
+        using I(4) True lds len0 by (simp_all add: menv_def)
+      show ?thesis using m True I(2) lds lext_nth_snd[OF I(1) lx m(1)] lext_length[OF lx] len1
+        by (simp add: nth_append)
+    next
+      case False
+      then have jP: \<open>j = length P\<close> using j lds by simp
+      show ?thesis using kl kw ln assms(3) len1 I(2) lds jP by (simp add: nth_append)
+    qed
+  qed
+  have ve: \<open>venv (M @ [k]) (CV ws vs L1) (cdef_widths ws [] (P @ [d])) (cdef_values ws [] vs [] (P @ [d]))\<close>
+    if vs: \<open>vs_ok ws vs\<close> for vs
+    unfolding venv_def W V
+  proof (intro allI impI)
+    fix j assume j: \<open>j < length (?ds @ [cwidth ws ?ds d])\<close>
+    show \<open>CV ws vs L1 ! ((M @ [k]) ! j) =
+        (cdef_values ws [] vs [] P @ [ceval ws ?ds vs (cdef_values ws [] vs [] P) d]) ! j\<close>
+    proof (cases \<open>j < length P\<close>)
+      case True
+      have m: \<open>M ! j < length (fst L)\<close> using I(4) True lds len0 by (simp add: menv_def)
+      show ?thesis using lext_nth_CV[OF lx m] I(5) vs True I(2) lds
+        by (simp add: nth_append venv_def cdef_values_length)
+    next
+      case False
+      then have jP: \<open>j = length P\<close> using j lds by simp
+      have \<open>ceval ws (snd L) vs (CV ws vs L) (remap_m M d) = ceval ws ?ds vs (cdef_values ws [] vs [] P) d\<close>
+        using remap_eval[OF I(4) _ assms(2)] I(5) vs by blast
+      then show ?thesis using kv vs jP I(2) by (simp add: nth_append cdef_values_length)
+    qed
+  qed
+  show ?thesis unfolding ninv_def using lok1 I(2,3) ln me ve by simp
+qed
+
+lemma norm_loop_d_d_ok:
+  assumes \<open>cdefs_wt ws [] (P @ R)\<close> \<open>ninv ws P L M\<close> \<open>15 * length (P @ R) < 2 ^ 64\<close>
+    \<open>norm_loop_d (cdef_widths ws [] (P @ R)) R (L, M) = (L', M')\<close>
+  shows \<open>ninv ws (P @ R) L' M'\<close>
+  using assms
+proof (induction R arbitrary: P L M)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons d R)
+  let ?ds = \<open>cdef_widths ws [] P\<close>
+  have wtd: \<open>cwt ws ?ds d\<close> using Cons(2) by (simp add: cdefs_wt_append)
+  have dwn: \<open>cdef_widths ws [] (P @ d # R) ! length M = cwidth ws ?ds d\<close>
+  proof -
+    have \<open>cdef_widths ws [] (P @ d # R) = cdef_widths ws (?ds @ [cwidth ws ?ds d]) R\<close>
+      by (simp add: cdef_widths_append)
+    moreover obtain e where \<open>cdef_widths ws (?ds @ [cwidth ws ?ds d]) R = (?ds @ [cwidth ws ?ds d]) @ e\<close>
+      using cdef_widths_prefix by blast
+    moreover have \<open>length M = length ?ds\<close> using Cons(3) by (simp add: ninv_def cdef_widths_length)
+    ultimately show ?thesis by (simp add: nth_append)
+  qed
+  have bnd: \<open>length (fst L) + 15 < 2 ^ 64\<close> using Cons(3,4) by (simp add: ninv_def)
+  obtain L1 k where mk: \<open>mk_d_m L (remap_m M d) (cwidth ws ?ds d) = (L1, k)\<close> by fastforce
+  have N1: \<open>ninv ws (P @ [d]) L1 (M @ [k])\<close> using ninv_d_step[OF Cons(3) wtd bnd mk] .
+  have rest: \<open>norm_loop_d (cdef_widths ws [] ((P @ [d]) @ R)) R (L1, M @ [k]) = (L', M')\<close>
+    using Cons(5) mk dwn by simp
+  show ?case using Cons.IH[of \<open>P @ [d]\<close> L1 \<open>M @ [k]\<close>] Cons(2,4) N1 rest by simp
+qed
+
+subsection \<open>The theorem\<close>
+
+theorem normalize_d_correct:
+  assumes \<open>cproblem_wt q\<close> \<open>15 * length (CoreProblemL_defs q) < 2 ^ 64\<close>
+  shows \<open>CoreProblemL_widths (normalize_d_m q) = CoreProblemL_widths q\<close> \<open>cproblem_wt (normalize_d_m q)\<close>
+    \<open>cis_model (normalize_d_m q) m \<longleftrightarrow> cis_model q m\<close>
+proof -
+  let ?ws = \<open>cvar_widths q\<close> and ?D = \<open>CoreProblemL_defs q\<close> and ?A = \<open>CoreProblemL_asserts q\<close>
+  let ?dw = \<open>cdef_widths ?ws [] ?D\<close>
+  obtain L M where nl: \<open>norm_loop_d ?dw ?D (([], []), []) = (L, M)\<close> by fastforce
+  have nq: \<open>normalize_d_m q = make_CoreProblemL (CoreProblemL_widths q) (fst L) (map (remap_m M) ?A)\<close>
+    using nl by (simp add: normalize_d_m_def)
+  have wtD: \<open>cdefs_wt ?ws [] ?D\<close> and wtA: \<open>\<forall>t \<in> set ?A. cwt ?ws ?dw t \<and> cwidth ?ws ?dw t = 1\<close>
+    using assms(1) by (simp_all add: cproblem_wt_def Let_def)
+  have N: \<open>ninv ?ws ?D L M\<close>
+    using norm_loop_d_d_ok[of ?ws \<open>[]\<close> ?D \<open>([], [])\<close> \<open>[]\<close> L M] wtD assms(2) ninv_init nl by simp
+  have lok: \<open>lok ?ws L\<close> and me: \<open>menv M (snd L) ?dw\<close>
+    and ve: \<open>\<forall>vs. vs_ok ?ws vs \<longrightarrow> venv M (CV ?ws vs L) ?dw (cdef_values ?ws [] vs [] ?D)\<close>
+    using N by (simp_all add: ninv_def)
+  have sL: \<open>cdef_widths ?ws [] (fst L) = snd L\<close> using lok by (simp add: lok_def)
+  have cw: \<open>cvar_widths (normalize_d_m q) = ?ws\<close> by (simp add: nq cvar_widths_def)
+  show \<open>CoreProblemL_widths (normalize_d_m q) = CoreProblemL_widths q\<close> by (simp add: nq)
+  have At: \<open>\<forall>t \<in> set ?A. cwt ?ws (snd L) (remap_m M t) \<and> cwidth ?ws (snd L) (remap_m M t) = 1\<close>
+    using remap_wt[OF me] wtA by auto
+  show \<open>cproblem_wt (normalize_d_m q)\<close>
+    using cw lok At sL by (simp add: cproblem_wt_def nq lok_def Let_def)
+  have ca: \<open>cis_assignment (normalize_d_m q) m = cis_assignment q m\<close>
+    by (simp add: cis_assignment_def cw)
+  have cs: \<open>csatisfies (normalize_d_m q) m = csatisfies q m\<close> if a: \<open>cis_assignment q m\<close>
+  proof -
+    let ?vs = \<open>map bits_nat m\<close>
+    have vs: \<open>vs_ok ?ws ?vs\<close>
+    proof -
+      have l: \<open>map length m = ?ws\<close> using a by (simp add: cis_assignment_def)
+      then have \<open>length ?vs = length ?ws\<close> by (metis length_map)
+      moreover have \<open>\<forall>i < length ?ws. ?vs ! i < 2 ^ (?ws ! i)\<close>
+        using l bits_nat_lt by (metis length_map nth_map)
+      ultimately show ?thesis by (simp add: vs_ok_def)
+    qed
+    have \<open>ceval ?ws (snd L) ?vs (CV ?ws ?vs L) (remap_m M t) = ceval ?ws ?dw ?vs (cdef_values ?ws [] ?vs [] ?D) t\<close>
+      if \<open>t \<in> set ?A\<close> for t
+      using remap_eval[OF me _ conjunct1[OF bspec[OF wtA that]]] ve vs by blast
+    then show ?thesis using cw sL by (simp add: csatisfies_def nq Let_def)
+  qed
+  show \<open>cis_model (normalize_d_m q) m \<longleftrightarrow> cis_model q m\<close>
+    using ca cs by (auto simp add: cis_model_def)
+qed
+
+
+text \<open>The number of definitions grows at most 15-fold: a flattened product adds at most 15.\<close>
+lemma normalize_d_defs_length:
+  assumes \<open>cproblem_wt q\<close> \<open>15 * length (CoreProblemL_defs q) < 2 ^ 64\<close>
+  shows \<open>length (CoreProblemL_defs (normalize_d_m q)) \<le> 15 * length (CoreProblemL_defs q)\<close>
+proof -
+  let ?ws = \<open>cvar_widths q\<close> and ?D = \<open>CoreProblemL_defs q\<close>
+  obtain L M where nl: \<open>norm_loop_d (cdef_widths ?ws [] ?D) ?D (([], []), []) = (L, M)\<close> by fastforce
+  have wtD: \<open>cdefs_wt ?ws [] ?D\<close> using assms(1) by (simp add: cproblem_wt_def Let_def)
+  have \<open>ninv ?ws ?D L M\<close>
+    using norm_loop_d_d_ok[of ?ws \<open>[]\<close> ?D \<open>([], [])\<close> \<open>[]\<close> L M] wtD assms(2) ninv_init nl by simp
+  then show ?thesis using nl by (simp add: normalize_d_m_def ninv_def)
 qed
 
 end

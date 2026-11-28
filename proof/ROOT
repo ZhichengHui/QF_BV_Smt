@@ -10,6 +10,7 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
     QFBV_Heap
     QFBV_Luby
     QFBV_Reduce
+    QFBV_ReduceCompact
 
 session "QFBV_Smt" in "smt" = "QFBV_CoreSpec" +
   options [document = false]

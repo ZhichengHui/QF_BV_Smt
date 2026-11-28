@@ -559,7 +559,7 @@ lemma sum_length_filter_eq:
     length (filter (\<lambda>j. P j \<and> a \<le> f j \<and> f j < t) xs)\<close>
 proof (induction t)
   case 0
-  then show ?case by (simp add: filter_False)
+  then show ?case by simp
 next
   case (Suc t)
   show ?case
@@ -571,7 +571,7 @@ next
     then show ?thesis using Suc True by simp
   next
     case False
-    then show ?thesis by (simp add: filter_False)
+    then show ?thesis by simp
   qed
 qed
 
@@ -641,7 +641,7 @@ proof -
   then have lowl: \<open>length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) < t) ?xs) = acc\<close>
     using acc by simp
   have eqt: \<open>min (quota - acc) (?F t) \<le> length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) = t) ?xs)\<close>
-    using keep_loop_count[OF k[folded v]] v(4,5) q by (simp add: conj_ac)
+    using keep_loop_count[OF k[folded v]] v(4,5) q by (simp add: conj_commute conj_left_commute)
   have sum: \<open>length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) < t) ?xs) +
       length (filter (\<lambda>j. (?P j \<and> keep ! j) \<and> lbd ! (j - m0) = t) ?xs) \<le>
       length (filter (\<lambda>j. ?P j \<and> keep ! j) ?xs)\<close>

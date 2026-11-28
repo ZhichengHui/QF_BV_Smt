@@ -1884,6 +1884,18 @@ fn solve_core(p: &CoreProblem) -> Answer {
     prof::kv("cnf_vars", cnf.num_vars);
     prof::kv("cnf_clauses", cnf.clauses.len());
     prof::kv("cnf_lits", cnf.clauses.iter().map(|c| c.len()).sum());
+    if let Some(path) = std::env::var_os("QFBV_DIMACS") {
+        use std::io::Write;
+        let mut w = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+        writeln!(w, "p cnf {} {}", cnf.num_vars, cnf.clauses.len()).unwrap();
+        for c in &cnf.clauses {
+            for l in c {
+                let v = l.var as i64 + 1;
+                write!(w, "{} ", if l.neg { -v } else { v }).unwrap();
+            }
+            writeln!(w, "0").unwrap();
+        }
+    }
     let r = dpll(&cnf.clauses, cnf.num_vars);
     prof::rep("sat", t);
     prof::kv("decisions", prof::get(&prof::DEC));

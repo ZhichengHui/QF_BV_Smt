@@ -871,6 +871,10 @@ const RESTARTS: bool = true;
 /// Whether the search reduces the learned clauses (`reduce_db`).
 const REDUCE: bool = true;
 
+/// Learned clauses of LBD at most `TIER2` that took part in an analysis since the last reduction
+/// are kept by it (the middle tier of CaDiCaL; 0: no middle tier).
+const TIER2: usize = 6;
+
 /// Whether the LBD of a learned clause taking part in a conflict analysis is updated (Glucose).
 const LBD_UPDATE: bool = true;
 
@@ -1322,13 +1326,15 @@ fn update_lbd(db: &Vec<Vec<Lit>>, used: &Vec<usize>, tp: &Vec<usize>, lim: &Vec<
 }
 
 /// Clause-database reduction. The learned clauses are the clauses from index `m0` on, `lbd[c - m0]`
-/// the LBD of clause `c`. Every learned clause of LBD at most 2 and every clause that is the reason
-/// of a trail entry (`rs`) is kept; of the other learned clauses, half are kept: those of lowest
+/// the LBD of clause `c`, `uf[c - m0]` whether it was learned or took part in an analysis since the
+/// last reduction (reset for every kept clause). Every learned clause of LBD at most 2, every used
+/// one of LBD at most `TIER2`, and every clause that is the reason of a trail entry (`rs`) is kept;
+/// of the other learned clauses, half are kept: those of lowest
 /// LBD and, among those of equal LBD, the newest. The clauses before `m0` are kept unchanged. The
 /// kept clauses keep their order and their watched positions (`pos`); the watch lists are rebuilt
 /// over `nl` literal indices, and the reasons are renumbered. Called after a propagation without
 /// conflict, so that every watch stays as it was.
-fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>, m0: usize, nl: usize) -> (Vec<Vec<Lit>>, Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>) {
+fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, uf: Vec<bool>, pos: Vec<usize>, rs: Vec<usize>, m0: usize, nl: usize) -> (Vec<Vec<Lit>>, Vec<usize>, Vec<bool>, Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>) {
     let m = db.len();
     let mut locked: Vec<bool> = vec![false; m];
     let mut i: usize = 0;
@@ -1350,7 +1356,7 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>
     let mut cand: usize = 0;
     c = m0;
     while c < m {
-        if !locked[c] && lbd[c - m0] > 2 {
+        if !locked[c] && lbd[c - m0] > 2 && !(lbd[c - m0] <= TIER2 && uf[c - m0]) {
             hist[lbd[c - m0]] += 1;
             cand += 1;
         }
@@ -1369,7 +1375,7 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>
     while c > m0 {
         c -= 1;
         let b = lbd[c - m0];
-        if !locked[c] && b > 2 && b >= t {
+        if !locked[c] && b > 2 && b >= t && !(b <= TIER2 && uf[c - m0]) {
             if b == t && left > 0 {
                 left -= 1;
             } else {
@@ -1380,6 +1386,7 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>
     let mut map: Vec<usize> = vec![0; m];
     let mut db2: Vec<Vec<Lit>> = Vec::new();
     let mut lbd2: Vec<usize> = Vec::new();
+    let mut uf2: Vec<bool> = Vec::new();
     let mut pos2: Vec<usize> = Vec::new();
     c = 0;
     while c < m {
@@ -1390,6 +1397,7 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>
             pos2.push(pos[2 * c + 1]);
             if c >= m0 {
                 lbd2.push(lbd[c - m0]);
+                uf2.push(false);
             }
         }
         c += 1;
@@ -1418,7 +1426,7 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>
         }
         i += 1;
     }
-    (db2, lbd2, rs, pos2, next2, head2)
+    (db2, lbd2, uf2, rs, pos2, next2, head2)
 }
 
 /// A total assignment of the `n` variables that satisfies the clauses, if there is one.
@@ -1484,6 +1492,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut lbd: Vec<usize> = Vec::new();
     let mut lmark: Vec<usize> = vec![0; n + 1];
     let mut stamp: usize = 0;
+    let mut uflag: Vec<bool> = Vec::new();
     let mut total: usize = 0;
     let mut reductions: usize = 0;
     let mut next_reduce: usize = 2000;
@@ -1499,9 +1508,10 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         q = q1;
         tp = set_pos(tp, &trail, q0);
         if REDUCE && ok && learn && total >= next_reduce {
-            let (d2, l2, r2, p2, n2, h2) = reduce_db(db, lbd, pos, rs, m0, head.len());
+            let (d2, l2, u2, r2, p2, n2, h2) = reduce_db(db, lbd, uflag, pos, rs, m0, head.len());
             db = d2;
             lbd = l2;
+            uflag = u2;
             rs = r2;
             pos = p2;
             next = n2;
@@ -1562,6 +1572,13 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     lmark = m2;
                     stamp = st2;
                 }
+                let mut k: usize = 0;
+                while k < u1.len() {
+                    if u1[k] >= m0 && u1[k] - m0 < uflag.len() {
+                        uflag[u1[k] - m0] = true;
+                    }
+                    k += 1;
+                }
                 c = c1;
                 seen = s1;
                 found = f1;
@@ -1604,6 +1621,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 let (d1, p1, n1, h1) = add_clause_watched(db, pos, next, head, c);
                 rs.push(d1.len() - 1);
                 lbd.push(b);
+                uflag.push(true);
                 db = d1;
                 pos = p1;
                 next = n1;

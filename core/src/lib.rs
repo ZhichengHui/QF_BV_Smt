@@ -868,6 +868,9 @@ fn heap_bumped(heap: Vec<usize>, hp: Vec<usize>, act: &Vec<usize>, rev: bool, c:
 /// The `i`-th element (from 0) of the Luby sequence 1, 1, 2, 1, 1, 2, 4, ...
 const RESTARTS: bool = true;
 
+/// Whether the search reduces the learned clauses (`reduce_db`).
+const REDUCE: bool = true;
+
 fn luby(i: usize) -> usize {
     let mut size: usize = 1;
     let mut seq: usize = 0;
@@ -1255,6 +1258,139 @@ fn add_clause_watched(cs: Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head
     (cs, pos, next, head)
 }
 
+/// The decision level of trail position `p`: the number of decision positions in `lim`
+/// (increasing) at or below `p`, by binary search.
+fn level_at(lim: &Vec<usize>, p: usize) -> usize {
+    let mut lo: usize = 0;
+    let mut hi: usize = lim.len();
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if lim[mid] <= p {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
+/// The number of distinct decision levels of the literals of `c`, all assigned (its LBD). `mark`
+/// holds a stamp per level; the levels counted get the stamp `st`, which no level holds yet.
+fn clause_lbd(c: &Vec<Lit>, tp: &Vec<usize>, lim: &Vec<usize>, mark: Vec<usize>, st: usize) -> (usize, Vec<usize>) {
+    let mut mark = mark;
+    let mut d: usize = 0;
+    let mut k: usize = 0;
+    while k < c.len() {
+        let v = level_at(lim, tp[c[k].var]);
+        if v < mark.len() && mark[v] != st {
+            mark[v] = st;
+            d += 1;
+        }
+        k += 1;
+    }
+    (d, mark)
+}
+
+/// Clause-database reduction. The learned clauses are the clauses from index `m0` on, `lbd[c - m0]`
+/// the LBD of clause `c`. Every learned clause of LBD at most 2 and every clause that is the reason
+/// of a trail entry (`rs`) is kept; of the other learned clauses, half are kept: those of lowest
+/// LBD and, among those of equal LBD, the newest. The clauses before `m0` are kept unchanged. The
+/// kept clauses keep their order and their watched positions (`pos`); the watch lists are rebuilt
+/// over `nl` literal indices, and the reasons are renumbered. Called after a propagation without
+/// conflict, so that every watch stays as it was.
+fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, pos: Vec<usize>, rs: Vec<usize>, m0: usize, nl: usize) -> (Vec<Vec<Lit>>, Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>) {
+    let m = db.len();
+    let mut locked: Vec<bool> = vec![false; m];
+    let mut i: usize = 0;
+    while i < rs.len() {
+        if rs[i] < m {
+            locked[rs[i]] = true;
+        }
+        i += 1;
+    }
+    let mut top: usize = 3;
+    let mut c: usize = m0;
+    while c < m {
+        if lbd[c - m0] >= top {
+            top = lbd[c - m0] + 1;
+        }
+        c += 1;
+    }
+    let mut hist: Vec<usize> = vec![0; top];
+    let mut cand: usize = 0;
+    c = m0;
+    while c < m {
+        if !locked[c] && lbd[c - m0] > 2 {
+            hist[lbd[c - m0]] += 1;
+            cand += 1;
+        }
+        c += 1;
+    }
+    let quota = cand / 2;
+    let mut t: usize = 3;
+    let mut acc: usize = 0;
+    while t < top && acc + hist[t] <= quota {
+        acc += hist[t];
+        t += 1;
+    }
+    let mut keep: Vec<bool> = vec![true; m];
+    let mut left = quota - acc;
+    c = m;
+    while c > m0 {
+        c -= 1;
+        let b = lbd[c - m0];
+        if !locked[c] && b > 2 && b >= t {
+            if b == t && left > 0 {
+                left -= 1;
+            } else {
+                keep[c] = false;
+            }
+        }
+    }
+    let mut map: Vec<usize> = vec![0; m];
+    let mut db2: Vec<Vec<Lit>> = Vec::new();
+    let mut lbd2: Vec<usize> = Vec::new();
+    let mut pos2: Vec<usize> = Vec::new();
+    c = 0;
+    while c < m {
+        if keep[c] {
+            map[c] = db2.len();
+            db2.push(db[c].clone());
+            pos2.push(pos[2 * c]);
+            pos2.push(pos[2 * c + 1]);
+            if c >= m0 {
+                lbd2.push(lbd[c - m0]);
+            }
+        }
+        c += 1;
+    }
+    let m2 = db2.len();
+    let mut next2: Vec<usize> = vec![usize::MAX; 2 * m2];
+    let mut head2: Vec<usize> = vec![usize::MAX; nl];
+    c = 0;
+    while c < m2 {
+        if db2[c].len() >= 2 {
+            let s = 2 * c;
+            let x0 = lit_index(db2[c][pos2[s]]);
+            next2[s] = head2[x0];
+            head2[x0] = s;
+            let x1 = lit_index(db2[c][pos2[s + 1]]);
+            next2[s + 1] = head2[x1];
+            head2[x1] = s + 1;
+        }
+        c += 1;
+    }
+    let mut rs = rs;
+    i = 0;
+    while i < rs.len() {
+        if rs[i] < m {
+            rs[i] = map[rs[i]];
+        }
+        i += 1;
+    }
+    (db2, lbd2, rs, pos2, next2, head2)
+}
+
 /// A total assignment of the `n` variables that satisfies the clauses, if there is one.
 ///
 /// Conflict-driven clause learning. The search assigns in place and records the true literals in
@@ -1271,7 +1407,11 @@ fn add_clause_watched(cs: Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head
 /// literal is implied there. Learning stops for good when the clauses reach `usize::MAX / 4` or the
 /// analysis finds no literal of the current level (neither happens in practice); from then on the
 /// last decision is undone on a conflict and its negation implied (chronological backtracking),
-/// without a reason, which is why no analysis may follow. The watches are
+/// without a reason, which is why no analysis may follow. While learning is on, after a
+/// propagation without conflict, once the conflicts reach `next_reduce` (first 2000, then 300
+/// more apart each time), `reduce_db` removes about half of the learned clauses: it keeps those of
+/// LBD at most 2 (the LBD of a clause is computed when it is learned) and the reasons of the trail.
+/// The watches are
 /// complete (every clause of at least two literals that is not satisfied watches two literals that
 /// are not false, or its unit literal is still to be propagated), so a total assignment reached
 /// without a conflict satisfies every clause.
@@ -1309,6 +1449,12 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut conflicts: usize = 0;
     let mut restarts: usize = 0;
     let mut budget: usize = 100 * luby(0);
+    let m0 = cs.len();
+    let mut lbd: Vec<usize> = Vec::new();
+    let mut lmark: Vec<usize> = vec![0; n + 1];
+    let mut total: usize = 0;
+    let mut reductions: usize = 0;
+    let mut next_reduce: usize = 2000;
     loop {
         let q0 = trail.len();
         let (p1, n1, h1, a1, t1, r1, q1, ok, cf) = wpropagate(&db, pos, next, head, a, trail, rs, q);
@@ -1320,6 +1466,17 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         rs = r1;
         q = q1;
         tp = set_pos(tp, &trail, q0);
+        if REDUCE && ok && learn && total >= next_reduce {
+            let (d2, l2, r2, p2, n2, h2) = reduce_db(db, lbd, pos, rs, m0, head.len());
+            db = d2;
+            lbd = l2;
+            rs = r2;
+            pos = p2;
+            next = n2;
+            head = h2;
+            reductions += 1;
+            next_reduce = total + 2000 + 300 * reductions;
+        }
         if RESTARTS && ok && learn && conflicts >= budget && restarts < 1 << 20 && lim.len() > 0 {
             let p = lim[0];
             lim = cut(lim, 0);
@@ -1372,6 +1529,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 found = f1;
                 act = ac1;
                 conflicts += 1;
+                total += 1;
                 let (hh, hq) = heap_bumped(heap, hp, &act, rev, &c, &trail, start);
                 heap = hh;
                 hp = hq;
@@ -1386,6 +1544,8 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 }
             }
             if found {
+                let (b, lm) = clause_lbd(&c, &tp, &lim, lmark, total);
+                lmark = lm;
                 let mut j: usize = 0;
                 if c.len() >= 2 {
                     c = second_watch(c, &tp);
@@ -1404,6 +1564,7 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 let l = c[0];
                 let (d1, p1, n1, h1) = add_clause_watched(db, pos, next, head, c);
                 rs.push(d1.len() - 1);
+                lbd.push(b);
                 db = d1;
                 pos = p1;
                 next = n1;

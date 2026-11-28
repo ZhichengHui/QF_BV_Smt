@@ -917,6 +917,168 @@ fn cut(v: Vec<usize>, p: usize) -> Vec<usize> {
     v
 }
 
+/// Records the trail position of every trail entry from position `k` on in `tp` (per variable).
+fn set_pos(tp: Vec<usize>, trail: &Vec<Lit>, k: usize) -> Vec<usize> {
+    let mut tp = tp;
+    let mut k = k;
+    while k < trail.len() {
+        tp[trail[k].var] = k;
+        k += 1;
+    }
+    tp
+}
+
+/// Marks the variables of clause `c` in `seen`: a variable assigned at the current decision level
+/// (trail position at or above `start`) is counted in `cnt`, any other literal is pushed on
+/// `learned`. Variables already marked are skipped.
+fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, learned: Vec<Lit>, cnt: usize) -> (Vec<bool>, Vec<Lit>, usize) {
+    let mut seen = seen;
+    let mut learned = learned;
+    let mut cnt = cnt;
+    let mut k: usize = 0;
+    while k < c.len() {
+        let l = c[k];
+        if !seen[l.var] {
+            seen[l.var] = true;
+            if tp[l.var] >= start {
+                cnt += 1;
+            } else {
+                learned.push(l);
+            }
+        }
+        k += 1;
+    }
+    (seen, learned, cnt)
+}
+
+/// The loop of `analyze`: the entries of the current decision level (trail positions from
+/// `start` on) are visited from the end of the trail backwards; the reason of every marked entry
+/// is resolved into the state (`analyze_clause`) until one marked entry of the current level is
+/// left, whose negation is returned as the first literal of the learned clause (otherwise the
+/// first literal of `learned` is returned). The flag is false once that entry is found, or if
+/// `cnt` is 0 on entry; it is true if the loop reached `start` first.
+fn analyze_loop(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, learned: Vec<Lit>, cnt: usize) -> (Vec<bool>, Vec<Lit>, usize, bool, Lit) {
+    let mut seen = seen;
+    let mut learned = learned;
+    let mut cnt = cnt;
+    let mut uip = learned[0];
+    let mut i = trail.len();
+    let mut ok = cnt > 0;
+    while ok && start < i {
+        i -= 1;
+        if seen[trail[i].var] {
+            if cnt <= 1 {
+                uip = lit_neg(trail[i]);
+                ok = false;
+            } else {
+                let (s2, l2, c2) = analyze_clause(&cs[rs[i]], tp, start, seen, learned, cnt - 1);
+                seen = s2;
+                learned = l2;
+                cnt = c2;
+            }
+        }
+    }
+    (seen, learned, cnt, ok, uip)
+}
+
+/// Clears the marks of the variables of the literals `ls`.
+fn clear_lits(seen: Vec<bool>, ls: &Vec<Lit>) -> Vec<bool> {
+    let mut seen = seen;
+    let mut k: usize = 0;
+    while k < ls.len() {
+        seen[ls[k].var] = false;
+        k += 1;
+    }
+    seen
+}
+
+/// Clears the marks of the variables of the trail entries from position `start` on.
+fn clear_trail(seen: Vec<bool>, trail: &Vec<Lit>, start: usize) -> Vec<bool> {
+    let mut seen = seen;
+    let mut j = start;
+    while j < trail.len() {
+        seen[trail[j].var] = false;
+        j += 1;
+    }
+    seen
+}
+
+/// The clause `c` (not empty) with the literal `l` first.
+fn set_first(c: Vec<Lit>, l: Lit) -> Vec<Lit> {
+    let mut c = c;
+    c[0] = l;
+    c
+}
+
+/// Conflict analysis (first unique implication point) of the clause `cf` in conflict; the current
+/// decision level starts at trail position `start`. The clause is resolved with the reasons of the
+/// entries of the current level, from the end of the trail backwards, until one marked entry of
+/// the current level is left; the learned clause is its negation, first, followed by the literals
+/// of lower levels. The flag is false if the conflict has no literal of the current level. `seen`
+/// is all false on entry and on exit.
+fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize) -> (Vec<Lit>, Vec<bool>, bool) {
+    let mut learned: Vec<Lit> = Vec::new();
+    learned.push(Lit { var: 0, neg: false });
+    let (s1, l1, c1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0);
+    let (s2, l2, c2, ok, u) = analyze_loop(cs, trail, rs, tp, start, s1, l1, c1);
+    let l3 = set_first(l2, u);
+    let found = c2 == 1 && !ok;
+    let s3 = clear_lits(s2, &l3);
+    let s4 = clear_trail(s3, trail, start);
+    (l3, s4, found)
+}
+
+/// Moves a literal of the learned clause `c` (at least two literals) whose trail position is the
+/// highest after the first literal to position 1.
+fn second_watch(c: Vec<Lit>, tp: &Vec<usize>) -> Vec<Lit> {
+    let mut c = c;
+    let mut b: usize = 1;
+    let mut k: usize = 2;
+    while k < c.len() {
+        if tp[c[k].var] > tp[c[b].var] {
+            b = k;
+        }
+        k += 1;
+    }
+    let l = c[1];
+    c[1] = c[b];
+    c[b] = l;
+    c
+}
+
+/// The number of decision positions in `lim` (increasing) at or below `p`.
+fn level_of(lim: &Vec<usize>, p: usize) -> usize {
+    let mut j: usize = 0;
+    while j < lim.len() && lim[j] <= p {
+        j += 1;
+    }
+    j
+}
+
+/// Appends the clause `c` to the clauses with its two slots; a clause of at least two literals
+/// watches its first two, at the heads of their lists.
+fn add_clause_watched(cs: Vec<Vec<Lit>>, pos: Vec<usize>, next: Vec<usize>, head: Vec<usize>, c: Vec<Lit>) -> (Vec<Vec<Lit>>, Vec<usize>, Vec<usize>, Vec<usize>) {
+    let mut cs = cs;
+    let mut pos = pos;
+    let mut next = next;
+    let mut head = head;
+    let s = next.len();
+    pos.push(0);
+    pos.push(1);
+    next.push(usize::MAX);
+    next.push(usize::MAX);
+    if c.len() >= 2 {
+        let x0 = lit_index(c[0]);
+        next[s] = head[x0];
+        head[x0] = s;
+        let x1 = lit_index(c[1]);
+        next[s + 1] = head[x1];
+        head[x1] = s + 1;
+    }
+    cs.push(c);
+    (cs, pos, next, head)
+}
+
 /// A total assignment of the `n` variables that satisfies the clauses, if there is one.
 ///
 /// The search assigns in place and records the true literals in order on the trail; `lim` holds

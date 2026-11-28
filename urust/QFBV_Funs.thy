@@ -1017,6 +1017,175 @@ definition "cut" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow
     * v
   \<rbrakk>\<close>
 
+(* Rust: set_pos *)
+definition "set_pos" :: \<open>((64 word) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, (64 word) rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>set_pos \<equiv> \<lambda>tp trail k. FunctionBody \<lbrakk>
+    let mut tp = { let init_1 = tp; \<llangle>init_1 :: (64 word) rvec\<rrangle> };
+    let mut k = k;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(trail) {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* k].Lit_var]) = * k;
+      * k += 1_usize;
+    };
+    * tp
+  \<rbrakk>\<close>
+
+(* Rust: analyze_clause *)
+definition "analyze_clause" :: \<open>(Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool rvec) \<times> (Lit rvec) \<times> (64 word) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze_clause \<equiv> \<lambda>c tp start seen learned cnt. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut learned = { let init_2 = learned; \<llangle>init_2 :: Lit rvec\<rrangle> };
+    let mut cnt = cnt;
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(c) {
+      let l = \<llangle>rvec_elems\<rrangle>\<^sub>1(c)[* k];
+      if !(\<llangle>rvec_elems\<rrangle>\<^sub>1(* seen)[l.Lit_var]) {
+        * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(seen)[l.Lit_var]) = true;
+        if (\<llangle>rvec_elems\<rrangle>\<^sub>1(tp)[l.Lit_var]) >= start {
+          * cnt += 1_usize;
+        } else {
+          rvec_push(learned, l);
+        }
+      };
+      * k += 1_usize;
+    };
+    (* seen, * learned, * cnt)
+  \<rbrakk>\<close>
+
+(* Rust: analyze_loop *)
+definition "analyze_loop" :: \<open>((Lit rvec) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool rvec) \<times> (Lit rvec) \<times> (64 word) \<times> bool \<times> Lit \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze_loop \<equiv> \<lambda>cs trail rs tp start seen learned cnt. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut learned = { let init_2 = learned; \<llangle>init_2 :: Lit rvec\<rrangle> };
+    let mut cnt = cnt;
+    let mut uip = \<llangle>rvec_elems\<rrangle>\<^sub>1(* learned)[0_usize];
+    let mut i = rvec_len(trail);
+    let mut ok_v = (* cnt) > 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* ok_v) && (start < (* i)) {
+      * i -= 1_usize;
+      if \<llangle>rvec_elems\<rrangle>\<^sub>1(* seen)[\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* i].Lit_var] {
+        if (* cnt) <= 1_usize {
+          * uip = lit_neg(\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* i]);
+          * ok_v = false;
+        } else {
+          let destr_3 = analyze_clause(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[\<llangle>rvec_elems\<rrangle>\<^sub>1(rs)[* i]], tp, start, * seen, * learned, (* cnt) - 1_usize);
+          let s2 = destr_3.0;
+          let l2 = destr_3.1;
+          let c2 = destr_3.2;
+          * seen = s2;
+          * learned = l2;
+          * cnt = c2;
+        }
+      }
+    };
+    (* seen, * learned, * cnt, * ok_v, * uip)
+  \<rbrakk>\<close>
+
+(* Rust: clear_lits *)
+definition "clear_lits" :: \<open>(bool rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>clear_lits \<equiv> \<lambda>seen ls. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut k = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(ls) {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(seen)[\<llangle>rvec_elems\<rrangle>\<^sub>1(ls)[* k].Lit_var]) = false;
+      * k += 1_usize;
+    };
+    * seen
+  \<rbrakk>\<close>
+
+(* Rust: clear_trail *)
+definition "clear_trail" :: \<open>(bool rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, bool rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>clear_trail \<equiv> \<lambda>seen trail start. FunctionBody \<lbrakk>
+    let mut seen = { let init_1 = seen; \<llangle>init_1 :: bool rvec\<rrangle> };
+    let mut j = start;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* j) < rvec_len(trail) {
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(seen)[\<llangle>rvec_elems\<rrangle>\<^sub>1(trail)[* j].Lit_var]) = false;
+      * j += 1_usize;
+    };
+    * seen
+  \<rbrakk>\<close>
+
+(* Rust: set_first *)
+definition "set_first" :: \<open>(Lit rvec) \<Rightarrow> Lit \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>set_first \<equiv> \<lambda>c l. FunctionBody \<lbrakk>
+    let mut c = { let init_1 = c; \<llangle>init_1 :: Lit rvec\<rrangle> };
+    * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(c)[0_usize]) = l;
+    * c
+  \<rbrakk>\<close>
+
+(* Rust: analyze *)
+definition "analyze" :: \<open>((Lit rvec) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> (bool rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((Lit rvec) \<times> (bool rvec) \<times> bool \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>analyze \<equiv> \<lambda>cs trail rs tp start seen cf. FunctionBody \<lbrakk>
+    let mut learned = { let init_3 = { let res_2 = { let vec_1 = rvec_new(\<llangle>make_elem_layout 16 8\<rrangle>); \<llangle>vec_1 :: Lit rvec\<rrangle> }; \<llangle>res_2 :: Lit rvec\<rrangle> }; \<llangle>init_3 :: Lit rvec\<rrangle> };
+    rvec_push(learned, Lit_mk { Lit_var: 0_usize, Lit_neg: false });
+    let destr_4 = analyze_clause(\<llangle>rvec_elems\<rrangle>\<^sub>1(cs)[cf], tp, start, seen, * learned, 0_usize);
+    let s1 = destr_4.0;
+    let l1 = destr_4.1;
+    let c1 = destr_4.2;
+    let destr_5 = analyze_loop(cs, trail, rs, tp, start, s1, l1, c1);
+    let s2 = destr_5.0;
+    let l2 = destr_5.1;
+    let c2 = destr_5.2;
+    let ok_v = destr_5.3;
+    let u = destr_5.4;
+    let l3 = set_first(l2, u);
+    let found = (c2 == 1_usize) && (!ok_v);
+    let s3 = clear_lits(s2, l3);
+    let s4 = clear_trail(s3, trail, start);
+    (l3, s4, found)
+  \<rbrakk>\<close>
+
+(* Rust: second_watch *)
+definition "second_watch" :: \<open>(Lit rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ('s, Lit rvec, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>second_watch \<equiv> \<lambda>c tp. FunctionBody \<lbrakk>
+    let mut c = { let init_1 = c; \<llangle>init_1 :: Lit rvec\<rrangle> };
+    let mut b = 1_usize;
+    let mut k = 2_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while (* k) < rvec_len(* c) {
+      if (\<llangle>rvec_elems\<rrangle>\<^sub>1(tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[* k].Lit_var]) > (\<llangle>rvec_elems\<rrangle>\<^sub>1(tp)[\<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[* b].Lit_var]) {
+        * b = * k;
+      };
+      * k += 1_usize;
+    };
+    let l = \<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[1_usize];
+    * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(c)[1_usize]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* c)[* b];
+    * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(c)[* b]) = l;
+    * c
+  \<rbrakk>\<close>
+
+(* Rust: level_of *)
+definition "level_of" :: \<open>((64 word) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, 64 word, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>level_of \<equiv> \<lambda>lim p. FunctionBody \<lbrakk>
+    let mut j = 0_usize;
+    #[fuel(\<epsilon>\<open>urust_fuel\<close>)] while ((* j) < rvec_len(lim)) && ((\<llangle>rvec_elems\<rrangle>\<^sub>1(lim)[* j]) <= p) {
+      * j += 1_usize;
+    };
+    * j
+  \<rbrakk>\<close>
+
+(* Rust: add_clause_watched *)
+definition "add_clause_watched" :: \<open>((Lit rvec) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> ((64 word) rvec) \<Rightarrow> (Lit rvec) \<Rightarrow> ('s, (((Lit rvec) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> ((64 word) rvec) \<times> tnil), 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
+  \<open>add_clause_watched \<equiv> \<lambda>cs pos next_v head c. FunctionBody \<lbrakk>
+    let mut cs = { let init_1 = cs; \<llangle>init_1 :: (Lit rvec) rvec\<rrangle> };
+    let mut pos = { let init_2 = pos; \<llangle>init_2 :: (64 word) rvec\<rrangle> };
+    let mut next_v = { let init_3 = next_v; \<llangle>init_3 :: (64 word) rvec\<rrangle> };
+    let mut head = { let init_4 = head; \<llangle>init_4 :: (64 word) rvec\<rrangle> };
+    let s = rvec_len(* next_v);
+    rvec_push(pos, 0_usize);
+    rvec_push(pos, 1_usize);
+    rvec_push(next_v, 18446744073709551615_usize);
+    rvec_push(next_v, 18446744073709551615_usize);
+    if rvec_len(c) >= 2_usize {
+      let x0 = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(c)[0_usize]);
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(next_v)[s]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x0];
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(head)[x0]) = s;
+      let x1 = lit_index(\<llangle>rvec_elems\<rrangle>\<^sub>1(c)[1_usize]);
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(next_v)[s + 1_usize]) = \<llangle>rvec_elems\<rrangle>\<^sub>1(* head)[x1];
+      * (\<llangle>focus_reference rvec_elems_focus\<rrangle>\<^sub>1(head)[x1]) = s + 1_usize;
+    };
+    rvec_push(cs, c);
+    (* cs, * pos, * next_v, * head)
+  \<rbrakk>\<close>
+
 (* Rust: dpll *)
 definition "dpll" :: \<open>((Lit rvec) rvec) \<Rightarrow> (64 word) \<Rightarrow> ('s, ((bool option) rvec) option, 'abort, 'i prompt, 'o prompt_output) function_body\<close> where
   \<open>dpll \<equiv> \<lambda>cs n. FunctionBody \<lbrakk>

@@ -17,6 +17,7 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
     QFBV_ReduceTier
     QFBV_Activity
     QFBV_Phase
+    QFBV_CdclRust
 
 session "QFBV_Smt" in "smt" = "QFBV_CoreSpec" +
   options [document = false]

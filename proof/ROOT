@@ -9,6 +9,13 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
     QFBV_Proof
     QFBV_Norm
     QFBV_Heap
+    QFBV_Luby
+    QFBV_Reduce
+    QFBV_ReduceCompact
+    QFBV_ReduceLbd
+    QFBV_ReduceTier
+    QFBV_Activity
+    QFBV_Phase
 
 session "QFBV_Smt" in "smt" = "QFBV_CoreSpec" +
   options [document = false]

@@ -21,9 +21,23 @@ no longer apply are removed. Progress entries are cited by the session prefix of
   scratch directory (0 placeholders, templates and locale unchanged against main's translation) and
   run the suite with a local hook. That shows the payoff, finds bugs before proofs depend on the
   code, and fixes the scope of the verification issues. A measurement-only PR (progress entry
-  only) with the scratch branches named is a normal result. Evidence: #51's `invert` bug found by
-  the suite (`d1d56686`), CDCL prototype 74/101 (`12ac712d`), #77 (`69be3427`), #81 (PR #82,
-  `c0a5fe8b`).
+  only) with the scratch branches named is a normal result. Fuzz instances rarely reach thresholds
+  such as "reduce every 2000 conflicts": also test a stress variant with tiny thresholds (it ran
+  the suite with no wrong answer). Measure whether a change binds at all: deletion gained an
+  instance and 15 % PAR-2, the flattening budget never binds on the suite (growth ≤ 1.053×) and
+  exists only so that the bound can be proved. Evidence: #51's `invert` bug found by the suite
+  (`d1d56686`), CDCL prototype 74/101 (`12ac712d`), #77 (`69be3427`), #81 (PR #82, `c0a5fe8b`),
+  `034a756b` (#108), `a9bb675b` (#114).
+- **State the model's lemmas from the later contract's obligations.** Reviews of faithful pure
+  models kept finding lemmas the contract will need and the model PR did not prove: that the
+  compaction map is onto, that histogram counters cannot overflow, a `level_at` bound without
+  `sorted` (#111, follow-up #120); a bucket invariant or relational spec for `lookup` (#103); and
+  that `fb_hyps q'` does not follow from `fb_hyps q` with `f = 2` but needs the slack of
+  `lower_fb_hyps` (#117). Before writing the model, list the obligations (the prototype's progress
+  entry often has them, as in `034a756b`): every index below its length, every counter and sum
+  below 2^64, maps onto/injective where lists are rebuilt, and the end-to-end bound composed with
+  the existing chain (`sizes_ok` → `lower_fb_hyps` → …). Evidence: `dd7cf7da`, reviews on PR #103,
+  #111, #117.
 - **A proof can replace a trusted shortcut later.** For #37 the watch lists were not trusted: every
   unit and conflict was re-checked and a final full check gave completeness; the invariant came
   later as #49. A cheaper proof is fine if `check_sat_correct` stays the same; say so on the issue so
@@ -53,14 +67,25 @@ no longer apply are removed. Progress entries are cited by the session prefix of
   such PRs open with a comment naming the blocking issue. Evidence: #63, #68, #70.
 - **A PR waiting only on the owner needs no more repair sessions.** PR #72 waits for the owner's
   `tools/spec.sha256` update (agents may not edit it); more than 60 repair sessions each re-checked it
-  and released it without a change. In a repair session, read the last repair comments first: if
-  they name the same owner-only blocker and neither the PR head nor the failing check has changed,
-  release at once without re-running checks or posting another long comment. Evidence: PR #72
-  comments (2026-11-23), PR #80, PR #82.
-- **Stacking on an unmerged PR inherits its blockers.** #80 is based on PR #72's branch, so it carries
-  #72's `spec/` changes, fails `spec unchanged` and cannot merge before #72. Do it only when the work
-  needs the base (here the rvec model); do not change the base's files, state "merge after #N" in
-  the PR body, and expect the same failing checks. Evidence: PR #80 (`038a092d`).
+  and released it without a change (2026-11-23). Repair sessions now post one "Needs an owner
+  decision" comment, label `needs-owner` and skip the PR afterwards. In a repair session, read the
+  last repair comments first: if they name the same owner-only blocker and neither the PR head nor
+  the failing check has changed, release at once without re-running checks. Evidence: PR #72
+  comments, PR #103, #111, #117, #119.
+- **Do not stack chains on an owner-blocked PR; prefer work that merges on `main`.** The owner merges
+  `main`-based PRs although `translation up to date` fails (#95, #99, #115 merged). Stacked PRs also
+  fail `spec unchanged` and cannot merge before their base: #72 → #80 → #103 → #117 now waits with
+  four PRs, each base needing its own review, and `proof/ROOT` conflicts needed fix issues (#104,
+  #120). The stack also froze duplication: #103 copies ~250 lines of `QFBV_Norm` and #117 another
+  ~160 because the base PRs may not be edited. Stack at most one level, and only when the work
+  needs the base (the rvec model); otherwise choose a pure model that imports `Main` or merged
+  theories only (`QFBV_Luby`, `QFBV_Activity`, `QFBV_Reduce` are on or based on `main`). If you
+  must stack, generalise the base first (parametrise `norm_loop` over `mk`), state "merge after #N"
+  in the PR body, and expect the base's failing checks. Evidence: PR #80 (`038a092d`), reviews on
+  #103 (`ab6e7b40`) and #117.
+- **Fixing another PR's branch:** it may be checked out in another worktree, so use a local branch
+  of another name: `git checkout -b tmp origin/<branch>`, merge, `git push origin tmp:<branch>`.
+  `coordination plan --help` creates an issue titled `--help` (#87). Evidence: `c878859a`, #87.
 - **Function order in `core/src/lib.rs` decides the prism order.** A new `Vec` type in a function
   above `read_model` renumbers the prisms of the locale. Keep functions with new mutable-local types
   below `read_model`, or accept the locale update in `spec/` (the one allowed change). Prefer
@@ -99,7 +124,10 @@ no longer apply are removed. Progress entries are cited by the session prefix of
   each check took seconds. The Pool Server's automatic import heap has parent `HOL` and lacks
   AutoCorrode: build the heap with parent `AutoCorrode` (`isabelle_build_heap` from a directory with
   its own `ROOT`, or a batch session), and import its theories qualified in a work copy. The build
-  call times out on the client after 10 min but keeps running. Evidence: `860aa6d2`, `d1d56686`,
+  call times out on the client after 10 min but keeps running. For `dev/` theories importing
+  `QFBV_Norm` or `QFBV_Bound` the automatic import heap fails outright (`Cannot load theory
+  "Micro_Rust_Std_Lib…"`, #80/#103/#117): go straight to a task heap or a scratch batch session
+  `AutoCorrode + <theory>` (2–3 min). Evidence: `860aa6d2`, `d1d56686`,
   `322d3567`, `12ac712d`, `4342c617`, `038a092d` (PR #80), `d33210fb` (PR #72).
 - **When the imports are too heavy, check against `sorry` copies of them.** The Pool Server ran out
   of memory or timed out loading the full `QFBV_Refine`. Copy the imports with every proof replaced
@@ -111,16 +139,29 @@ no longer apply are removed. Progress entries are cited by the session prefix of
 - **Pool Server habits.** `isabelle-devcopy` deletes everything in `dev/`: keep logs and scratch
   sessions in `target/`. Imported theories are cached by path: after changing one, check a renamed
   copy. `isabelle_multi_attempt` rechecks the whole prefix, so stash finished slow proofs while you
-  work on later ones. An idle session is reaped after ~10 min. Evidence: `6837961a`, `322d3567`,
-  `2023e589` (PR #72).
+  work on later ones. An idle session is reaped after ~10 min. To test a lemma without editing the
+  file (a review's corollary), `isabelle_multi_attempt` at the line of the final `end` with lemma
+  text that contains no `end`. Evidence: `6837961a`, `322d3567`, `2023e589` (PR #72), `78bbda65`,
+  `dd7cf7da`.
 - **`isabelle-check` only loads theories reachable from `QFBV_Top`.** A theory only listed in
   `proof/ROOT` is not checked by it. Import a new theory from one the top level imports and find it
   in the check log. A full check takes about 25 min. Evidence: `d323bcd4`.
 - **Imports change which theory a short name refers to.** Adding `QFBV_Elim` changed what
   `defs_wt_nth` resolves to and brought `lower_m.simps` back into the simpset; on a heap with many
-  theories, `ref_ok`, `env_ok`, `N` resolved to other constants. Add new imports last, qualify
-  clashing names, and re-declare `[simp del]` where needed. Evidence: `d1d56686`, `322d3567`,
-  `d33210fb` (PR #72).
+  theories, `ref_ok`, `env_ok`, `N` resolved to other constants; `QFBV_Bound` and `QFBV_Norm` both
+  define `mul_step`. Add new imports last, qualify clashing names, and re-declare `[simp del]` where
+  needed. Evidence: `d1d56686`, `322d3567`, `d33210fb` (PR #72), review on PR #117.
+
+## Pure models
+
+- **The shape reviews accept quickly.** One `function` per Rust loop (measure on the index), its
+  `.simps` `[simp del]`, a closed-form lemma for each loop, the Rust quoted next to it, and values
+  on `nat` with explicit `< 2^64` bounds instead of words (no word gap; saturating ops as `min (a +
+  b) USIZE_MAX`). A guard only needed for termination on `nat` is fine if a lemma shows it holds on
+  reachable states. Split a theory past ~500 lines. Evidence: `4123cad2`, `0003b1cb`, `8c00b4eb`,
+  review on PR #111.
+- **Do not let `simp` evaluate large powers.** `simp` on `2 ^ (seq + 1) ≤ 2 ^ 64` ran over 100 s; use
+  `power_le_imp_le_exp`/`metis` with the exponent kept symbolic. Evidence: `4123cad2`.
 
 ## Contract proofs (crush)
 

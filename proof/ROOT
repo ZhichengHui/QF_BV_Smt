@@ -7,6 +7,8 @@ session "QFBV_Proof" = "QFBV_CoreSpec" +
   options [document = false]
   theories
     QFBV_Proof
+    QFBV_Norm
+    QFBV_Distrib
     QFBV_Heap
     QFBV_Luby
     QFBV_Reduce

@@ -304,4 +304,21 @@ proof -
   show \<open>j < length rs \<Longrightarrow> \<not> rs ! j < ?m \<Longrightarrow> rs2 ! j = rs ! j\<close> using rn by simp
 qed
 
+text \<open>\<open>mp\<close> maps the kept clauses onto \<open>[0..<length db2]\<close>.\<close>
+
+lemma compact_m_onto:
+  assumes \<open>compact_m keep db lbd pos m0 = (mp, db2, lbd2, pos2)\<close> \<open>length keep = length db\<close> \<open>c' < length db2\<close>
+  shows \<open>\<exists>c < length db. keep ! c \<and> mp ! c = c'\<close>
+proof -
+  let ?ks = \<open>filter (nth keep) [0..<length db]\<close>
+  note r = compact_loop_eq[OF _ assms(1)[unfolded compact_m_def], simplified]
+  have l: \<open>c' < length ?ks\<close> using r assms(3) by simp
+  define c where \<open>c = ?ks ! c'\<close>
+  have c: \<open>c < length db\<close> \<open>keep ! c\<close> using nth_mem[OF l] unfolding c_def by auto
+  note nf = nth_filter_upt[OF le0 c(1), of \<open>nth keep\<close>, OF c(2)]
+  have \<open>length (filter (nth keep) [0..<c]) = c'\<close>
+    using nf l nth_eq_iff_index_eq[of ?ks] distinct_filter[of \<open>[0..<length db]\<close>] by (simp add: c_def)
+  then show ?thesis using r c by auto
+qed
+
 end

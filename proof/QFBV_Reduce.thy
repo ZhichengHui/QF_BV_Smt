@@ -676,4 +676,63 @@ proof -
     using sel_m_props[OF s] by auto
 qed
 
+text \<open>The bound of \<^const>\<open>level_at_m\<close> without \<^const>\<open>sorted\<close>.\<close>
+
+lemma la_loop_range: \<open>lo \<le> hi \<Longrightarrow> lo \<le> la_loop lim p lo hi \<and> la_loop lim p lo hi \<le> hi\<close>
+proof (induction lim p lo hi rule: la_loop.induct)
+  case (1 lim p lo hi)
+  show ?case
+  proof (cases \<open>lo < hi\<close>)
+    case True
+    note m = la_mid_range[OF True]
+    show ?thesis
+    proof (cases \<open>lim ! (lo + (hi - lo) div 2) \<le> p\<close>)
+      case le: True
+      have \<open>la_loop lim p lo hi = la_loop lim p (lo + (hi - lo) div 2 + 1) hi\<close>
+        using True le by (subst la_loop.simps) (simp add: Let_def)
+      then show ?thesis using "1.IH"(1)[OF True refl le] m by simp
+    next
+      case gt: False
+      have \<open>la_loop lim p lo hi = la_loop lim p lo (lo + (hi - lo) div 2)\<close>
+        using True gt by (subst la_loop.simps) (simp add: Let_def)
+      then show ?thesis using "1.IH"(2)[OF True refl gt] m by simp
+    qed
+  next
+    case False
+    then have \<open>la_loop lim p lo hi = lo\<close> by (subst la_loop.simps) simp
+    then show ?thesis using "1.prems" by simp
+  qed
+qed
+
+lemma level_at_m_le_any: \<open>level_at_m lim p \<le> length lim\<close>
+  using la_loop_range[of 0 \<open>length lim\<close> lim p] by (simp add: level_at_m_def)
+
+text \<open>No overflow in the histogram: \<open>hist ! b \<le> cand \<le> m - m0\<close>.\<close>
+
+lemma sel_m_hist:
+  assumes \<open>sel_m m lbd rs m0 = (locked, tb, hist, cand, quota, t, acc, keep)\<close>
+  shows \<open>\<forall>b < tb. hist ! b \<le> cand\<close> \<open>cand \<le> m - m0\<close>
+proof -
+  obtain hist' cand' where
+    h: \<open>hist_loop (locked_m rs m) lbd m0 m (replicate (top_m lbd m0 m) 0) 0 m0 = (hist', cand')\<close>
+    by (metis prod.exhaust)
+  have v: \<open>locked = locked_m rs m\<close> \<open>tb = top_m lbd m0 m\<close> \<open>hist = hist'\<close> \<open>cand = cand'\<close>
+    using assms h by (auto simp: sel_m_def Let_def split: prod.splits)
+  have e: \<open>hist_loop locked lbd m0 m (replicate tb 0) 0 m0 = (hist, cand)\<close> using h v by simp
+  note r = hist_loop_eq[of m0 m lbd m0 \<open>replicate tb 0\<close> locked 0, unfolded e]
+  have tb: \<open>\<forall>j. m0 \<le> j \<and> j < m \<longrightarrow> lbd ! (j - m0) < tb\<close> using top_m_bound v(2) by auto
+  have hc: \<open>hist = map (\<lambda>b. length (filter (\<lambda>j. isc locked lbd m0 j \<and> lbd ! (j - m0) = b) [m0..<m])) [0..<tb]\<close>
+    \<open>cand = length (filter (isc locked lbd m0) [m0..<m])\<close>
+    using r tb by simp_all
+  show \<open>\<forall>b < tb. hist ! b \<le> cand\<close>
+  proof (intro allI impI)
+    fix b assume \<open>b < tb\<close>
+    then have \<open>hist ! b = length (filter (\<lambda>j. isc locked lbd m0 j \<and> lbd ! (j - m0) = b) [m0..<m])\<close>
+      using hc(1) by simp
+    also have \<open>\<dots> \<le> cand\<close> unfolding hc(2) by (metis filter_filter length_filter_le)
+    finally show \<open>hist ! b \<le> cand\<close> .
+  qed
+  show \<open>cand \<le> m - m0\<close> unfolding hc(2) by (metis length_filter_le length_upt)
+qed
+
 end

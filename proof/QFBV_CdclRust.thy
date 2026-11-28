@@ -192,7 +192,7 @@ definition cdcl_analyze_clause_contract ::
      make_function_contract
        (can_alloc_reference \<star>
           \<langle>(\<forall>j < rvec_length c. lv (rvec_elems c ! j) < rvec_length sn \<and> lv (rvec_elems c ! j) < rvec_length tp) \<and>
-           rvec_length c + 2 \<le> urust_fuel \<and> vok c \<and> vok ln \<and>
+           rvec_length c + 2 \<le> urust_fuel \<and> rvec_length c < 2 ^ 64 \<and> vok ln \<and>
            rvec_elems ln \<noteq> [] \<and> (\<forall>l \<in> set (rvec_elems ln). lv l < rvec_length sn) \<and>
            unat k + rvec_length ln + count_list (rvec_elems sn) False < 2 ^ 56\<rangle>)
        (\<lambda>r. can_alloc_reference \<star>
@@ -228,7 +228,6 @@ lemma cdcl_analyze_clause_spec [crush_specs]:
         \<theta>=\<open>\<lambda>_. \<langle>False\<rangle>\<close>
       in wp_bounded_while_framedI\<close>)
     apply (crush_base simp add: word_less_nat_alt word_le_nat_alt dpll_unat_Suc dw_focus_modify)
-    apply (all \<open>(frule vok_length[of c])?\<close>)
     apply (auto simp add: unat_of_nat_eq ac_step_def dpll_unat_Suc push_not_None word_le_nat_alt ac_drop cl_upd_True ac_nil nth_append)
     apply (all \<open>(rule cl_upd_sum; assumption)\<close>)
     done
@@ -372,7 +371,7 @@ definition cdcl_analyze_loop_contract ::
        (can_alloc_reference \<star>
           \<langle>(\<forall>i < rvec_length cs. \<forall>j < rvec_length (rvec_elems cs ! i).
               lv (rvec_elems (rvec_elems cs ! i) ! j) < rvec_length sn \<and> lv (rvec_elems (rvec_elems cs ! i) ! j) < rvec_length tp) \<and>
-           (\<forall>i < rvec_length cs. rvec_length (rvec_elems cs ! i) + 2 \<le> urust_fuel) \<and> allvok cs \<and>
+           (\<forall>i < rvec_length cs. rvec_length (rvec_elems cs ! i) + 2 \<le> urust_fuel \<and> rvec_length (rvec_elems cs ! i) < 2 ^ 64) \<and>
            rvec_length rs = rvec_length t \<and> (\<forall>j < rvec_length t. unat (rvec_elems rs ! j) < rvec_length cs) \<and>
            (\<forall>j < rvec_length t. lv (rvec_elems t ! j) < rvec_length sn) \<and> rvec_length t + 2 \<le> urust_fuel \<and> vok t \<and>
            vok ln \<and> rvec_elems ln \<noteq> [] \<and> (\<forall>l \<in> set (rvec_elems ln). lv l < rvec_length sn) \<and>
@@ -446,7 +445,7 @@ definition cdcl_analyze_contract ::
        (can_alloc_reference \<star>
           \<langle>(\<forall>i < rvec_length cs. \<forall>j < rvec_length (rvec_elems cs ! i).
               lv (rvec_elems (rvec_elems cs ! i) ! j) < rvec_length sn \<and> lv (rvec_elems (rvec_elems cs ! i) ! j) < rvec_length tp) \<and>
-           (\<forall>i < rvec_length cs. rvec_length (rvec_elems cs ! i) + 2 \<le> urust_fuel) \<and> allvok cs \<and> unat cf < rvec_length cs \<and>
+           (\<forall>i < rvec_length cs. rvec_length (rvec_elems cs ! i) + 2 \<le> urust_fuel \<and> rvec_length (rvec_elems cs ! i) < 2 ^ 64) \<and> unat cf < rvec_length cs \<and>
            rvec_length rs = rvec_length t \<and> (\<forall>j < rvec_length t. unat (rvec_elems rs ! j) < rvec_length cs) \<and>
            (\<forall>j < rvec_length t. lv (rvec_elems t ! j) < rvec_length sn) \<and> rvec_length t + 2 \<le> urust_fuel \<and> vok t \<and>
            0 < rvec_length sn \<and> rvec_length sn < 2 ^ 55 \<and> rvec_length sn + 3 \<le> urust_fuel\<rangle>)

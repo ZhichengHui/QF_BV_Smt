@@ -715,6 +715,39 @@ fn copy_phases(tph: Vec<Option<bool>>, set: Vec<usize>, trail: &Vec<Lit>, nc: us
     (tph, set)
 }
 
+/// The saved phases after the `k`-th rephasing (from 0): CaDiCaL's schedule without local search,
+/// original (all true), inverted (all false), then best, original, best, inverted repeated; best
+/// sets the phases recorded in `bph` and leaves the others.
+fn rephase(ph: Vec<bool>, bph: &Vec<Option<bool>>, k: usize) -> Vec<bool> {
+    let mut ph = ph;
+    let mut kind: usize = 0;
+    if k == 1 {
+        kind = 1;
+    } else if k >= 2 {
+        let r = (k - 2) % 4;
+        if r == 0 || r == 2 {
+            kind = 2;
+        } else if r == 3 {
+            kind = 1;
+        }
+    }
+    let mut i: usize = 0;
+    while i < ph.len() {
+        if kind == 0 {
+            ph[i] = true;
+        } else if kind == 1 {
+            ph[i] = false;
+        } else if i < bph.len() {
+            match bph[i] {
+                Some(b) => ph[i] = b,
+                None => {}
+            }
+        }
+        i += 1;
+    }
+    ph
+}
+
 /// The unassigned variable of highest activity (the first of them), if there is one.
 fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
     let mut best: Option<usize> = None;
@@ -903,6 +936,11 @@ const TIER2: usize = 6;
 /// Whether decisions take the target phase: the sign of the variable in the largest trail without
 /// conflict since the last restart (CaDiCaL, Kissat), and the saved phase if it is not there.
 const TARGET: bool = true;
+
+/// Whether the saved phases are reset periodically (`rephase`), at the first restart after 1000,
+/// 2000, 3000, ... more conflicts (CaDiCaL's `rephaseint`); the best phases are the signs in the
+/// largest trail prefix without conflict since the last rephasing.
+const REPHASE: bool = true;
 
 /// Whether the LBD of a learned clause taking part in a conflict analysis is updated (Glucose).
 const LBD_UPDATE: bool = true;
@@ -1481,7 +1519,9 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, uf: Vec<bool>, pos: Vec<usize>,
 /// takes part in an analysis, `update_lbd`) and the reasons of the trail. A decision takes the
 /// target phase of its variable (`tph`): its sign in the largest trail prefix without conflict seen
 /// at a backjump since the last restart (`tsize` entries), else its saved phase (`ph`, the sign it
-/// had when it was last unassigned).
+/// had when it was last unassigned). At a restart after enough conflicts the saved phases are
+/// reset (`rephase`), among others to the best phases (`bph`), kept like the target phases but
+/// over the time since the last rephasing.
 /// The watches are
 /// complete (every clause of at least two literals that is not satisfied watches two literals that
 /// are not false, or its unit literal is still to be propagated), so a total assignment reached
@@ -1513,6 +1553,11 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut tset: Vec<usize> = Vec::new();
     let mut tsize: usize = 0;
     let mut nc: usize = 0;
+    let mut bph: Vec<Option<bool>> = vec![None; n];
+    let mut bset: Vec<usize> = Vec::new();
+    let mut bsize: usize = 0;
+    let mut rephased: usize = 0;
+    let mut next_rephase: usize = 1000;
     let mut heap: Vec<usize> = Vec::new();
     let mut hp: Vec<usize> = vec![usize::MAX; n];
     let mut v0: usize = 0;
@@ -1562,6 +1607,21 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             let p = lim[0];
             lim = cut(lim, 0);
             ph = save_phase(ph, &trail, p);
+            if REPHASE && nc > bsize {
+                let (b2, s2) = copy_phases(bph, bset, &trail, nc);
+                bph = b2;
+                bset = s2;
+                bsize = nc;
+            }
+            if REPHASE && total >= next_rephase && rephased < 1 << 20 {
+                ph = rephase(ph, &bph, rephased);
+                let (b2, s2) = copy_phases(bph, bset, &trail, 0);
+                bph = b2;
+                bset = s2;
+                bsize = 0;
+                rephased += 1;
+                next_rephase = total + 1000 * (rephased + 1);
+            }
             if TARGET {
                 let (t2, s2) = copy_phases(tph, tset, &trail, 0);
                 tph = t2;
@@ -1669,6 +1729,12 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     tset = s2;
                     tsize = nc;
                 }
+                if REPHASE && nc > bsize {
+                    let (b2, s2) = copy_phases(bph, bset, &trail, nc);
+                    bph = b2;
+                    bset = s2;
+                    bsize = nc;
+                }
                 if nc > p {
                     nc = p;
                 }
@@ -1704,6 +1770,12 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                             tph = t2;
                             tset = s2;
                             tsize = nc;
+                        }
+                        if REPHASE && nc > bsize {
+                            let (b2, s2) = copy_phases(bph, bset, &trail, nc);
+                            bph = b2;
+                            bset = s2;
+                            bsize = nc;
                         }
                         if nc > p {
                             nc = p;

@@ -951,27 +951,24 @@ fn analyze_clause(c: &Vec<Lit>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, 
     (seen, learned, cnt)
 }
 
-/// Conflict analysis (first unique implication point) of the clause `cf` in conflict; the current
-/// decision level starts at trail position `start`. The clause is resolved with the reasons of the
-/// entries of the current level, from the end of the trail backwards, until one marked entry of
-/// the current level is left; the learned clause is its negation, first, followed by the literals
-/// of lower levels. The flag is false if the conflict has no literal of the current level. `seen`
-/// is all false on entry and on exit.
-fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize) -> (Vec<Lit>, Vec<bool>, bool) {
+/// The loop of `analyze`: the entries of the current decision level (trail positions from
+/// `start` on) are visited from the end of the trail backwards; the reason of every marked entry
+/// is resolved into the state (`analyze_clause`) until one marked entry of the current level is
+/// left, whose negation is returned as the first literal of the learned clause (otherwise the
+/// first literal of `learned` is returned). The flag is false once that entry is found, or if
+/// `cnt` is 0 on entry; it is true if the loop reached `start` first.
+fn analyze_loop(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, learned: Vec<Lit>, cnt: usize) -> (Vec<bool>, Vec<Lit>, usize, bool, Lit) {
     let mut seen = seen;
-    let mut learned: Vec<Lit> = Vec::new();
-    learned.push(Lit { var: 0, neg: false });
-    let (s1, l1, c1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0);
-    seen = s1;
-    learned = l1;
-    let mut cnt = c1;
+    let mut learned = learned;
+    let mut cnt = cnt;
+    let mut uip = learned[0];
     let mut i = trail.len();
     let mut ok = cnt > 0;
     while ok && start < i {
         i -= 1;
         if seen[trail[i].var] {
             if cnt <= 1 {
-                learned[0] = lit_neg(trail[i]);
+                uip = lit_neg(trail[i]);
                 ok = false;
             } else {
                 let (s2, l2, c2) = analyze_clause(&cs[rs[i]], tp, start, seen, learned, cnt - 1);
@@ -981,18 +978,54 @@ fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize
             }
         }
     }
-    let found = cnt == 1 && !ok;
+    (seen, learned, cnt, ok, uip)
+}
+
+/// Clears the marks of the variables of the literals `ls`.
+fn clear_lits(seen: Vec<bool>, ls: &Vec<Lit>) -> Vec<bool> {
+    let mut seen = seen;
     let mut k: usize = 0;
-    while k < learned.len() {
-        seen[learned[k].var] = false;
+    while k < ls.len() {
+        seen[ls[k].var] = false;
         k += 1;
     }
+    seen
+}
+
+/// Clears the marks of the variables of the trail entries from position `start` on.
+fn clear_trail(seen: Vec<bool>, trail: &Vec<Lit>, start: usize) -> Vec<bool> {
+    let mut seen = seen;
     let mut j = start;
     while j < trail.len() {
         seen[trail[j].var] = false;
         j += 1;
     }
-    (learned, seen, found)
+    seen
+}
+
+/// The clause `c` (not empty) with the literal `l` first.
+fn set_first(c: Vec<Lit>, l: Lit) -> Vec<Lit> {
+    let mut c = c;
+    c[0] = l;
+    c
+}
+
+/// Conflict analysis (first unique implication point) of the clause `cf` in conflict; the current
+/// decision level starts at trail position `start`. The clause is resolved with the reasons of the
+/// entries of the current level, from the end of the trail backwards, until one marked entry of
+/// the current level is left; the learned clause is its negation, first, followed by the literals
+/// of lower levels. The flag is false if the conflict has no literal of the current level. `seen`
+/// is all false on entry and on exit.
+fn analyze(cs: &Vec<Vec<Lit>>, trail: &Vec<Lit>, rs: &Vec<usize>, tp: &Vec<usize>, start: usize, seen: Vec<bool>, cf: usize) -> (Vec<Lit>, Vec<bool>, bool) {
+    let mut learned: Vec<Lit> = Vec::new();
+    learned.push(Lit { var: 0, neg: false });
+    let (s1, l1, c1) = analyze_clause(&cs[cf], tp, start, seen, learned, 0);
+    let (s2, l2, c2, ok, u) = analyze_loop(cs, trail, rs, tp, start, s1, l1, c1);
+    let l3 = set_first(l2, u);
+    let found = c2 == 1 && !ok;
+    let s3 = clear_lits(s2, &l3);
+    let s4 = clear_trail(s3, trail, start);
+    (l3, s4, found)
 }
 
 /// Moves a literal of the learned clause `c` (at least two literals) whose trail position is the

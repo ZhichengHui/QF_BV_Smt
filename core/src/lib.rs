@@ -690,6 +690,31 @@ fn save_phase(ph: Vec<bool>, trail: &Vec<Lit>, p: usize) -> Vec<bool> {
     ph
 }
 
+/// Records the phases of the trail entries before position `nc` in `tph`, after clearing those of
+/// the variables in `set` (the ones recorded before); returns the recorded variables.
+fn copy_phases(tph: Vec<Option<bool>>, set: Vec<usize>, trail: &Vec<Lit>, nc: usize) -> (Vec<Option<bool>>, Vec<usize>) {
+    let mut tph = tph;
+    let mut set = set;
+    let mut i: usize = 0;
+    while i < set.len() {
+        if set[i] < tph.len() {
+            tph[set[i]] = None;
+        }
+        i += 1;
+    }
+    set = Vec::new();
+    let mut k: usize = 0;
+    while k < nc && k < trail.len() {
+        let v = trail[k].var;
+        if v < tph.len() {
+            tph[v] = Some(!trail[k].neg);
+            set.push(v);
+        }
+        k += 1;
+    }
+    (tph, set)
+}
+
 /// The unassigned variable of highest activity (the first of them), if there is one.
 fn pick(a: &Vec<Option<bool>>, act: &Vec<usize>) -> Option<usize> {
     let mut best: Option<usize> = None;
@@ -874,6 +899,10 @@ const REDUCE: bool = true;
 /// Learned clauses of LBD at most `TIER2` that took part in an analysis since the last reduction
 /// are kept by it (the middle tier of CaDiCaL; 0: no middle tier).
 const TIER2: usize = 6;
+
+/// Whether decisions take the target phase: the sign of the variable in the largest trail without
+/// conflict since the last restart (CaDiCaL, Kissat), and the saved phase if it is not there.
+const TARGET: bool = true;
 
 /// Whether the LBD of a learned clause taking part in a conflict analysis is updated (Glucose).
 const LBD_UPDATE: bool = true;
@@ -1449,7 +1478,10 @@ fn reduce_db(db: Vec<Vec<Lit>>, lbd: Vec<usize>, uf: Vec<bool>, pos: Vec<usize>,
 /// propagation without conflict, once the conflicts reach `next_reduce` (first 2000, then 300
 /// more apart each time), `reduce_db` removes about half of the learned clauses: it keeps those of
 /// LBD at most 2 (the LBD of a clause is computed when it is learned, and lowered when the clause
-/// takes part in an analysis, `update_lbd`) and the reasons of the trail.
+/// takes part in an analysis, `update_lbd`) and the reasons of the trail. A decision takes the
+/// target phase of its variable (`tph`): its sign in the largest trail prefix without conflict seen
+/// at a backjump since the last restart (`tsize` entries), else its saved phase (`ph`, the sign it
+/// had when it was last unassigned).
 /// The watches are
 /// complete (every clause of at least two literals that is not satisfied watches two literals that
 /// are not false, or its unit literal is still to be propagated), so a total assignment reached
@@ -1477,6 +1509,10 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
     let mut rev = false;
     let mut inc: usize = 1 << 10;
     let mut ph: Vec<bool> = vec![true; n];
+    let mut tph: Vec<Option<bool>> = vec![None; n];
+    let mut tset: Vec<usize> = Vec::new();
+    let mut tsize: usize = 0;
+    let mut nc: usize = 0;
     let mut heap: Vec<usize> = Vec::new();
     let mut hp: Vec<usize> = vec![usize::MAX; n];
     let mut v0: usize = 0;
@@ -1507,6 +1543,9 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
         rs = r1;
         q = q1;
         tp = set_pos(tp, &trail, q0);
+        if ok {
+            nc = trail.len();
+        }
         if REDUCE && ok && learn && total >= next_reduce {
             let (d2, l2, u2, r2, p2, n2, h2) = reduce_db(db, lbd, uflag, pos, rs, m0, head.len());
             db = d2;
@@ -1523,6 +1562,13 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             let p = lim[0];
             lim = cut(lim, 0);
             ph = save_phase(ph, &trail, p);
+            if TARGET {
+                let (t2, s2) = copy_phases(tph, tset, &trail, 0);
+                tph = t2;
+                tset = s2;
+                tsize = 0;
+                nc = p;
+            }
             let (hh, hq) = heap_back(heap, hp, &act, rev, &trail, p);
             heap = hh;
             hp = hq;
@@ -1549,10 +1595,17 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
             match pv {
                 None => return Some(a),
                 Some(v) => {
+                    let mut s = ph[v];
+                    if TARGET {
+                        match tph[v] {
+                            Some(b) => s = b,
+                            None => {}
+                        }
+                    }
                     lim.push(trail.len());
-                    a[v] = Some(ph[v]);
+                    a[v] = Some(s);
                     tp[v] = trail.len();
-                    trail.push(Lit { var: v, neg: !ph[v] });
+                    trail.push(Lit { var: v, neg: !s });
                     rs.push(0);
                 }
             }
@@ -1610,6 +1663,15 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                 let p = lim[j];
                 lim = cut(lim, j);
                 ph = save_phase(ph, &trail, p);
+                if TARGET && nc > tsize {
+                    let (t2, s2) = copy_phases(tph, tset, &trail, nc);
+                    tph = t2;
+                    tset = s2;
+                    tsize = nc;
+                }
+                if nc > p {
+                    nc = p;
+                }
                 let (hh, hq) = heap_back(heap, hp, &act, rev, &trail, p);
                 heap = hh;
                 hp = hq;
@@ -1637,6 +1699,15 @@ fn dpll(cs: &Vec<Vec<Lit>>, n: usize) -> Option<Vec<Option<bool>>> {
                     Some(p) => {
                         let d = trail[p];
                         ph = save_phase(ph, &trail, p);
+                        if TARGET && nc > tsize {
+                            let (t2, s2) = copy_phases(tph, tset, &trail, nc);
+                            tph = t2;
+                            tset = s2;
+                            tsize = nc;
+                        }
+                        if nc > p {
+                            nc = p;
+                        }
                         let (hh, hq) = heap_back(heap, hp, &act, rev, &trail, p);
                         heap = hh;
                         hp = hq;
